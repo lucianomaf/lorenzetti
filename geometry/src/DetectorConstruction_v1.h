@@ -117,8 +117,12 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
 
     bool m_checkOverlaps; // option to activate checking of volumes overlaps
     bool m_useMagneticField;
+    bool m_useSolenoidField;
     bool m_cutOnPhi;
     int m_outputLevel;
+
+    // Field volume of the solenoid (only built with UseSolenoidField)
+    G4LogicalVolume* m_solenoidLV = nullptr;
 
     static G4ThreadLocal G4GlobalMagFieldMessenger*  m_magFieldMessenger;
 };

@@ -38,13 +38,17 @@ class DetectorConstruction_v1( Cpp ):
 
   def __init__( self, 
                 name              : str, 
-                UseMagneticField  : bool=False, 
+                UseMagneticField  : bool=False,
+                UseSolenoidField  : bool=False,
                 CutOnPhi          : bool=False,
               ):
 
-    Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) ) 
-    
+    Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
+
     self.setProperty( "UseMagneticField", UseMagneticField  )
+    # 2 T field only inside the ATLAS central solenoid volume (R < 1.23 m, |z| < 2.9 m);
+    # cannot be combined with UseMagneticField (2 T in the whole world).
+    self.setProperty( "UseSolenoidField", UseSolenoidField  )
     self.setProperty( "CutOnPhi"        , CutOnPhi          )
 
     self.samplings = []

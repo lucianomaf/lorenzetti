@@ -46,6 +46,9 @@ G4ThreadLocal G4GlobalMagFieldMessenger* DetectorConstruction_v1::m_magFieldMess
  * 
  * Properties:
  * - UseMagneticField: Toggle global magnetic field (2 Tesla).
+ * - UseSolenoidField: Uniform 2 Tesla axial field confined to the volume inside the ATLAS
+ *   central solenoid (inner radius 1.23 m, axial length 5.8 m), with no field elsewhere.
+ *   Cannot be combined with UseMagneticField.
  * - CutOnPhi: Restrict the detector to a phi wedge (used for debugging/visualization).
  */
 DetectorConstruction_v1::DetectorConstruction_v1(std::string name)
@@ -55,7 +58,8 @@ DetectorConstruction_v1::DetectorConstruction_v1(std::string name)
    m_checkOverlaps(true)
 {
   declareProperty( "UseMagneticField"           , m_useMagneticField=true     );
-  declareProperty( "CutOnPhi"                   , m_cutOnPhi=false            );
+  declareProperty( "UseSolenoidField"           , m_useSolenoidField=false    );
+  declareProperty( "CutOnPhi"                 , m_cutOnPhi=false            );
   declareProperty( "OutputLevel"                , m_outputLevel=0             ); 
 }
 
@@ -128,7 +132,30 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
                  0,                // copy number
                  m_checkOverlaps);  // checking overlaps
 
-  
+  //
+  // Solenoid field volume
+  //
+  // Vacuum cylinder filling the inside of the ATLAS central solenoid, which carries the
+  // solenoid field (see ConstructSDandField). Dimensions from JINST 3 (2008) S08003, table 2.1:
+  // inner diameter 2.46 m, axial length 5.8 m. The coil and its cryostat are not modelled.
+  if (m_useSolenoidField){
+    if (m_useMagneticField){
+      MSG_FATAL("UseSolenoidField and UseMagneticField cannot be enabled together. Abort!");
+    }
+    const double solenoidInnerRadius = 1230*mm;
+    const double solenoidHalfLength  = 2900*mm;
+    G4VSolid* solenoidS = new G4Tubs( "SolenoidField",
+                                      0,
+                                      solenoidInnerRadius,
+                                      solenoidHalfLength,
+                                      0*deg,
+                                      (!m_cutOnPhi)?(360*deg):(235*deg) );
+    m_solenoidLV = new G4LogicalVolume( solenoidS, defaultMaterial, "SolenoidField" );
+    new G4PVPlacement( 0, G4ThreeVector(), m_solenoidLV, "SolenoidField", worldLV, false, 0, m_checkOverlaps );
+    MSG_INFO( "Creating solenoid field volume: R < " << solenoidInnerRadius/mm << " mm, |z| < "
+              << solenoidHalfLength/mm << " mm" );
+  }
+
 
   for (auto &volume : m_volumes){
 
@@ -560,7 +587,21 @@ void DetectorConstruction_v1::ConstructSDandField(){
     m_magFieldMessenger->SetVerboseLevel(1);
 
     // Register the field messenger for deleting
-    G4AutoDelete::Register(m_magFieldMessenger); 
+    G4AutoDelete::Register(m_magFieldMessenger);
+  }
+
+  if (m_useSolenoidField && m_solenoidLV){
+    MSG_INFO("Set solenoid magnetic field (2 T, only inside the solenoid volume)")
+    // Local field: attached to the solenoid volume only, so particles leaving it
+    // (and the showers in the calorimeters) are not bent.
+    auto solenoidField = new G4UniformMagField( G4ThreeVector(0.0, 0.0, 2*tesla) );
+    auto fieldManager  = new G4FieldManager();
+    fieldManager->SetDetectorField( solenoidField );
+    fieldManager->CreateChordFinder( solenoidField );
+    m_solenoidLV->SetFieldManager( fieldManager, true );
+    // The field manager is owned and deleted by the G4FieldManagerStore: registering it
+    // with G4AutoDelete as well deletes it twice at exit.
+    G4AutoDelete::Register( solenoidField );
   }
 
 }
