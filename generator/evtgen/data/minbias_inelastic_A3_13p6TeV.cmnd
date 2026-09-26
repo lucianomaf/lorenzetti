@@ -1,0 +1,55 @@
+! Minimum bias inelastico, pp a 13,6 TeV, tune ATLAS A3 (NNPDF2.3 LO).
+! Uma interacao por evento: gen_minbias.py --pileup-per-bunch-crossing 1 --bc-id-start 0 --bc-id-end 0
+!
+! Fonte do A3: athena, Generators/Pythia8_i/share/common/Pythia8_A3_NNPDF23LO_Common.py
+! (incluido pelo Pythia8_A3_NNPDF23LO_EvtGen_Common.py, a versao que o ATLAS usa no pileup).
+! Diferencas em relacao ao ATLAS:
+!  - PDF pela tabela interna do Pythia (PDF:pSet = 13 = NNPDF2.3 QCD+QED LO, alpha_s = 0,130),
+!    o mesmo conjunto que o ATLAS carrega pelo LHAPDF6 (NNPDF23_lo_as_0130_qed);
+!  - sem EvtGen (so muda a fragmentacao de hadrons b, rara em minimum bias);
+!  - A3 foi ajustado no Pythia 8.186; aqui roda no 8.313.
+
+! 1) Saida
+Init:showChangedSettings = on
+Init:showChangedParticleData = off
+Next:numberCount = 1000
+Next:numberShowInfo = 1
+Next:numberShowProcess = 0
+Next:numberShowEvent = 0
+
+! 2) Tune: tem de vir antes dos parametros, porque redefine valores ao ser lido
+Tune:ee = 7
+Tune:pp = 14
+
+! 3) Feixes
+Beams:idA = 2212
+Beams:idB = 2212
+Beams:eCM = 13600.
+
+! 4) Processo: so inelastico (sem o elastico do SoftQCD:all)
+SoftQCD:inelastic = on
+
+! 5) Parametros do A3
+PDF:pSet = 13
+MultipartonInteractions:bProfile = 2
+MultipartonInteractions:pT0Ref = 2.45
+MultipartonInteractions:ecmPow = 0.21
+MultipartonInteractions:coreRadius = 0.55
+MultipartonInteractions:coreFraction = 0.9
+SigmaDiffractive:PomFlux = 4
+SigmaDiffractive:PomFluxEpsilon = 0.07
+SigmaDiffractive:PomFluxAlphaPrime = 0.25
+SigmaElastic:rho = 0.0
+SigmaDiffractive:mode = 0
+SigmaTotal:sigmaAXB = 0
+SigmaDiffractive:OwnbMinDD = 5
+ColourReconnection:range = 1.8
+
+! 6) Base do ATLAS (Pythia8_Base_Fragment.py): particulas com c*tau0 > 10 mm
+!    (K0S, Lambda, ...) saem estaveis do Pythia e decaem no Geant4
+Main:timesAllowErrors = 500
+ParticleDecays:limitTau0 = on
+ParticleDecays:tau0Max = 10.0
+
+! 7) Semente: sobrescrita pela opcao -s do gen_minbias.py (Pythia8Gen.cxx)
+Random:setSeed = on
