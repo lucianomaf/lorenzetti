@@ -9,6 +9,8 @@
 #include "G4Kernel/constants.h"
 #include "TVector3.h"
 #include "G4SystemOfUnits.hh"
+#include "G4Step.hh"
+#include "G4Material.hh"
 
 #include "TH1F.h"
 #include "TH2F.h"
@@ -59,6 +61,9 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "DetailedHistograms"       , m_detailedHistograms=false            );
   declareProperty( "HistogramPath"            , m_histPath="/CaloHitMaker"            );
   declareProperty( "SamplingNoiseStd"         , m_noiseStd=0                          );
+  // When true, only steps in the active medium (liquid argon or plastic scintillator) are kept,
+  // as in the ATLAS hits; by default the whole energy deposited in the cell volume is kept.
+  declareProperty( "ActiveEnergyOnly"         , m_activeEnergyOnly=false              );
 
 
 
@@ -169,6 +174,16 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
 
   if( !collection.isValid() ){
     MSG_FATAL("It's not possible to retrieve the CaloHitCollection using this key: " << m_collectionKey);
+  }
+
+  // Active medium only: a Geant4 step never crosses a volume boundary, so the material
+  // of its pre-step point is the material where the energy was deposited.
+  if( m_activeEnergyOnly ){
+    const G4Material *material = step->GetPreStepPoint()->GetMaterial();
+    if( !material ) return StatusCode::SUCCESS;
+    const G4String &materialName = material->GetName();
+    if( materialName != "liquidArgon" && materialName != "PLASTIC SCINTILLATOR" )
+      return StatusCode::SUCCESS;
   }
 
   // Get the position

@@ -18,6 +18,7 @@ class CaloHitBuilder(Logger):
                  OutputHitsKey: str,
                  HistogramPath: str = "Expert",
                  OutputLevel: int = LoggingLevel.toC('INFO'),
+                 ActiveEnergyOnly: bool = False,
                  ):
 
         Logger.__init__(self, name)
@@ -25,6 +26,7 @@ class CaloHitBuilder(Logger):
         self.HistogramPath = HistogramPath
         self.OutputLevel = OutputLevel
         self.OutputHitsKey = OutputHitsKey
+        self.ActiveEnergyOnly = ActiveEnergyOnly
         self.OutputCollectionKeys = []
 
     def configure(self):
@@ -45,7 +47,8 @@ class CaloHitBuilder(Logger):
                                HistogramPath=histogramPath,
                                OutputLevel=self.OutputLevel,
                                # Use True when debug with only one thread
-                               DetailedHistograms=False
+                               DetailedHistograms=False,
+                               ActiveEnergyOnly=self.ActiveEnergyOnly
                                )
 
             self.__recoAlgs.append(alg)

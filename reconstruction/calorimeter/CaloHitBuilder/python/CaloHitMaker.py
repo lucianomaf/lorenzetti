@@ -17,6 +17,7 @@ class CaloHitMaker( Cpp ):
                 DetailedHistograms   : bool   = False,
                 HistogramPath        : str    = "/CaloHitMaker",
                 SamplingNoiseStd     : float  = 0,
+                ActiveEnergyOnly     : bool   = False,
               ):
                     
     Cpp.__init__(self, ROOT.CaloHitMaker(name) )
@@ -35,6 +36,8 @@ class CaloHitMaker( Cpp ):
     self.setProperty( "BunchIdEnd"              , sampling.BunchIdEnd         )
     self.setProperty( "BunchDuration"           , 25                          )
     self.setProperty( "SamplingNoiseStd"        , SamplingNoiseStd            )
+    # Keep only the energy deposited in the active medium (liquid argon, scintillator)
+    self.setProperty( "ActiveEnergyOnly"        , ActiveEnergyOnly            )
     self.setProperty( "DetailedHistograms"      , DetailedHistograms          )
     self.setProperty( "HistogramPath"           , HistogramPath               )
     self.setProperty( "OutputLevel"             , OutputLevel                 )

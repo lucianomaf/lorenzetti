@@ -55,6 +55,11 @@ def parse_args():
     parser.add_argument('--enable-magnetic-field', action='store_true',
                         dest='enable_magnetic_field', required=False,
                         help="Enable the magnetic field.")
+    parser.add_argument('--active-energy-only', action='store_true',
+                        dest='active_energy_only', required=False,
+                        help="Keep only the energy deposited in the active medium of the calorimeters "
+                             "(liquid argon, plastic scintillator), as in the ATLAS hits. By default the "
+                             "whole energy deposited in the cell volume, absorber included, is kept.")
     parser.add_argument('--enable-solenoid-field', action='store_true',
                         dest='enable_solenoid_field', required=False,
                         help="Enable a uniform 2 T axial field only inside the ATLAS central solenoid "
@@ -94,6 +99,7 @@ def main(logging_level: str,
          post_exec: str,
          enable_magnetic_field: bool,
          enable_solenoid_field: bool,
+         active_energy_only: bool,
          save_all_hits : bool,
          timeout: int,
          number_of_events: int,
@@ -118,6 +124,7 @@ def main(logging_level: str,
         post_exec (str): Python code to execute after the run loop.
         enable_magnetic_field (bool): Toggle for the detector magnetic field.
         enable_solenoid_field (bool): Toggle for the field confined to the solenoid volume.
+        active_energy_only (bool): Keep only the energy deposited in the active medium.
         save_all_hits (bool): If True, saves all hits regardless of Region of Interest (RoI).
         timeout (int): Timeout in minutes.
         number_of_events (int): Number of events to process.
@@ -150,7 +157,8 @@ def main(logging_level: str,
     calorimeter = CaloHitBuilder("CaloHitBuilder",
                                  HistogramPath="Expert/Hits",
                                  OutputLevel=outputLevel,
-                                 OutputHitsKey=recordable("Hits")
+                                 OutputHitsKey=recordable("Hits"),
+                                 ActiveEnergyOnly=active_energy_only
                                  )
     
     gun.merge(acc)
@@ -200,6 +208,7 @@ if __name__ == "__main__":
              post_exec             = args.post_exec,
              enable_magnetic_field = args.enable_magnetic_field,
              enable_solenoid_field = args.enable_solenoid_field,
+             active_energy_only    = args.active_energy_only,
              save_all_hits         = args.save_all_hits,
              timeout               = args.timeout,
              number_of_events      = args.number_of_events,
