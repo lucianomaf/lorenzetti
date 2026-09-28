@@ -11,6 +11,7 @@
 #include "G4SystemOfUnits.hh"
 #include "G4Step.hh"
 #include "G4Material.hh"
+#include <cmath>
 
 #include "TH1F.h"
 #include "TH2F.h"
@@ -64,6 +65,9 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   // When true, only steps in the active medium (liquid argon or plastic scintillator) are kept,
   // as in the ATLAS hits; by default the whole energy deposited in the cell volume is kept.
   declareProperty( "ActiveEnergyOnly"         , m_activeEnergyOnly=false              );
+  // When true, Birks' law is applied to the energy of each step in the scintillator and in the
+  // liquid argon, with the ATLAS simulation constants (see birksEnergy).
+  declareProperty( "BirksLaw"                 , m_birksLaw=false                      );
 
 
 
@@ -219,12 +223,59 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
 
   if(collection->retrieve(hash(bin), hit)){
     // hit->fill( step );
-    hit->fill( step , 1*m_noiseStd); // hit with tof selection sensible by 1*sigma of sampling noise.
+    if( m_birksLaw )
+      hit->fill( step , 1*m_noiseStd, birksEnergy(step) );
+    else
+      hit->fill( step , 1*m_noiseStd); // hit with tof selection sensible by 1*sigma of sampling noise.
   }else{
     MSG_FATAL( "Its not possible to retrieve the hit. Bin ("<< bin << ") not exist");
   }
   
   return StatusCode::SUCCESS;
+}
+
+//!=====================================================================
+
+//!=====================================================================
+
+// Energy of the step after Birks' law, following the ATLAS simulation (Athena):
+// - plastic scintillator (TileGeoG4SDCalc::BirkLaw): E / (1 + kB dE/dx), kB = 0.02002 g/(MeV cm2)
+//   ("value updated for G4 10.6.p03"), second-order term 0, only for charged particles,
+//   kB scaled by 7.2/12.6 for charge above 1;
+// - liquid argon (LArG4BirksLaw): E (1 + k/F 1.51) / (1 + k/F (dE/dx)/rho), k = 0.05832,
+//   rho = 1.396 g/cm3, F = 10 kV/cm (the constant field of the ATLAS barrel, presamplers and HEC),
+//   with the correction for heavily ionising particles above 969 MeV/cm.
+// Other materials are left unchanged.
+float CaloHitMaker::birksEnergy( const G4Step *step ) const
+{
+  const double edep = step->GetTotalEnergyDeposit();
+  const double length = step->GetStepLength();
+  const G4Material *material = step->GetPreStepPoint()->GetMaterial();
+  if( !material || edep <= 0 || length <= 0 ) return (float)edep;
+  const G4String &name = material->GetName();
+
+  if( name == "PLASTIC SCINTILLATOR" ){
+    const double charge = step->GetPreStepPoint()->GetCharge();
+    if( charge == 0. ) return (float)edep;
+    double kB = 0.02002 * g / (MeV * cm2);
+    if( std::abs(charge) > 1.0 ) kB *= 7.2 / 12.6;
+    const double dedx = edep / length / material->GetDensity();
+    return (float)( edep / (1. + kB * dedx) );
+  }
+
+  if( name == "liquidArgon" ){
+    const double dE = edep / MeV;
+    const double dX = length / cm;
+    if( dX < 1e-5 ) return (float)edep;
+    const double kOverField = 0.05832 / 10.;
+    double dEdX = dE / dX;
+    const double corrected = dE * (1 + kOverField * 1.51) / (1 + kOverField * dEdX / 1.396);
+    if( dEdX > 12000.0 ) dEdX = 12000.0;
+    const double kHIP = (dEdX > 969.) ? 0.000754 * dEdX + 0.2692 : 1.0;
+    return (float)( corrected * kHIP * MeV );
+  }
+
+  return (float)edep;
 }
 
 //!=====================================================================

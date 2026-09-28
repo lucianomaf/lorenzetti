@@ -41,6 +41,8 @@ namespace xAOD{
       /*! Fill the deposit energy into the Hit */
       void fill( const G4Step * );
       void fill( const G4Step *, float sampNoiseStd ); // 
+      // Same as above, with the energy given by the caller (e.g. after Birks' law)
+      void fill( const G4Step *, float sampNoiseStd, float edep );
       /** Zeroize the pulse/sample vectors **/
       void clear();
 

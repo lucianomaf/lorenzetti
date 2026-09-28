@@ -73,7 +73,11 @@ void CaloHit::fill( const G4Step* step )
 void CaloHit::fill( const G4Step* step , float sampNoiseStd)
 {
   // Get total energy deposit
-  float edep = (float)step->GetTotalEnergyDeposit();
+  fill( step, sampNoiseStd, (float)step->GetTotalEnergyDeposit() );
+}
+
+void CaloHit::fill( const G4Step* step , float sampNoiseStd, float edep)
+{
   G4StepPoint* point = step->GetPreStepPoint();
   // Get the particle time
   float t = (float)point->GetGlobalTime() / ns;

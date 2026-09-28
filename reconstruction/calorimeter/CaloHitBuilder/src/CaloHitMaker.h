@@ -67,6 +67,9 @@ class CaloHitMaker : public Gaugi::Algorithm
     float m_noiseStd;
     // Keep only the energy deposited in the active medium (liquid argon, scintillator)
     bool m_activeEnergyOnly;
+    // Apply Birks' law to the energy of each step (scintillator and liquid argon), as in ATLAS
+    bool m_birksLaw;
+    float birksEnergy( const G4Step *step ) const;
 
     /*! Sampling id for this reconstruction */
     int m_sampling;

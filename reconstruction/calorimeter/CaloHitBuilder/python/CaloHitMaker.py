@@ -18,6 +18,7 @@ class CaloHitMaker( Cpp ):
                 HistogramPath        : str    = "/CaloHitMaker",
                 SamplingNoiseStd     : float  = 0,
                 ActiveEnergyOnly     : bool   = False,
+                BirksLaw             : bool   = False,
               ):
                     
     Cpp.__init__(self, ROOT.CaloHitMaker(name) )
@@ -38,6 +39,8 @@ class CaloHitMaker( Cpp ):
     self.setProperty( "SamplingNoiseStd"        , SamplingNoiseStd            )
     # Keep only the energy deposited in the active medium (liquid argon, scintillator)
     self.setProperty( "ActiveEnergyOnly"        , ActiveEnergyOnly            )
+    # Apply Birks' law in the scintillator and in the liquid argon (ATLAS constants)
+    self.setProperty( "BirksLaw"                , BirksLaw                    )
     self.setProperty( "DetailedHistograms"      , DetailedHistograms          )
     self.setProperty( "HistogramPath"           , HistogramPath               )
     self.setProperty( "OutputLevel"             , OutputLevel                 )
