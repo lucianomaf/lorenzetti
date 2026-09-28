@@ -84,6 +84,7 @@ class DetectorConstruction_v1( Cpp ):
                              pv.NofLayers, 
                              pv.AbsorberThickness, 
                              pv.GapThickness,
+                             pv.LayerClearance,
                              # dimensions
                              pv.RMin, pv.RMax, pv.ZSize, 
                              pv.X, pv.Y, pv.Z,

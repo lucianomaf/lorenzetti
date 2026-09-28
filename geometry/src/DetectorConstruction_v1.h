@@ -33,6 +33,7 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
       int nofLayers;
       double absoThickness;
       double gapThickness;
+      double layerClearance; // empty space (envelope material) per layer, vertical plates only
       double rMin;
       double rMax;
       double zSize;
@@ -62,6 +63,7 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
                    int nofLayers,
                    double absoThickness,
                    double gapThickness,
+                   double layerClearance,
                    double rMin,
                    double rMax,
                    double zSize,
@@ -106,6 +108,7 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
                                 int nofLayers,
                                 double absoThickness,
                                 double gapThickness,
+                                double layerClearance,
                                 double calorRmin,
                                 double calorRmax,
                                 double calorZ,

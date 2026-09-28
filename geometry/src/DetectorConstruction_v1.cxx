@@ -79,6 +79,7 @@ void DetectorConstruction_v1::AddVolume(std::string region,
                                         int nofLayers,
                                         double absoThickness,
                                         double gapThickness,
+                                        double layerClearance,
                                         double rMin,
                                         double rMax,
                                         double zSize,
@@ -92,7 +93,7 @@ void DetectorConstruction_v1::AddVolume(std::string region,
                                         double photonCut
                                         )
 {
-  m_volumes.push_back(Volume{region,plates,absorberMaterial,gapMaterial,nofLayers,absoThickness,gapThickness,rMin,rMax,zSize,x,y,z,
+  m_volumes.push_back(Volume{region,plates,absorberMaterial,gapMaterial,nofLayers,absoThickness,gapThickness,layerClearance,rMin,rMax,zSize,x,y,z,
                       electronCut,positronCut,gammaCut,photonCut});
 }
 
@@ -163,6 +164,9 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
 
     if(volume.plates == 0){ //Plates::Horizontal){
 
+      if (volume.layerClearance != 0){
+        MSG_FATAL("LayerClearance is only implemented for vertical plates (volume " << volume.name << "). Abort!");
+      }
       auto region = GetRegion(volume.name);
 
 
@@ -199,6 +203,7 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
                     volume.nofLayers, // ATLAS-like
                     volume.absoThickness, // abso
                     volume.gapThickness, // gap
+                    volume.layerClearance, // empty space per layer
                     volume.rMin, // start radio,
                     volume.rMax,
                     volume.zSize ,// z
@@ -426,6 +431,7 @@ void DetectorConstruction_v1::CreateVerticalPlates(  G4LogicalVolume *worldLV,
                                                   int nofLayers,
                                                   double absoThickness,
                                                   double gapThickness,
+                                                  double layerClearance,
                                                   double calorRmin,
                                                   double calorRmax,
                                                   double calorZ,
@@ -442,7 +448,13 @@ void DetectorConstruction_v1::CreateVerticalPlates(  G4LogicalVolume *worldLV,
   const bool evenNofLayers = !(nofLayers % 2);
   const bool invertOrder = center_pos.z() < 0.;
 
-  G4double layerThickness=absoThickness+gapThickness; 
+  // Each layer is absorber + gap + clearance. The absorber sits at one end of the layer and the
+  // gap at the other, so a non-zero clearance leaves an empty space (envelope material) between
+  // the gap and the absorber of the same layer: along the stacking axis the sequence is
+  // absorber, gap, clearance, absorber, ... With clearance = 0 the layout is unchanged.
+  // Used by the ATLAS-like tile calorimeter: 14 mm steel + 3 mm tile + 1 mm left by the 3 mm
+  // tile in its 4 mm pocket, period 18 mm (TILECAL, hep-ex/9904032; JINST 3 S08003, sec. 5.3.1.2).
+  G4double layerThickness=absoThickness+gapThickness+layerClearance; 
 
   G4VSolid* calorimeterS = new G4Tubs( name,// its name
                                  calorRmin,

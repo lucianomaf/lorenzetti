@@ -25,6 +25,7 @@ class PhysicalVolume(Logger):
                       "NofLayers",
                       "AbsorberThickness",
                       "GapThickness",
+                      "LayerClearance",
                       "RMin",
                       "RMax",
                       "ZSize",
@@ -39,6 +40,9 @@ class PhysicalVolume(Logger):
     def __init__(self, **kw):
 
         Logger.__init__(self)
+        # Empty space (envelope material) added to each layer after the gap, only for
+        # Plates.Vertical: layer = absorber + gap + clearance. Default 0 keeps the original layout.
+        self.LayerClearance = 0
         for key, value in kw.items():
           if key in self.__allow_keys:
             setattr(self, key, value )
