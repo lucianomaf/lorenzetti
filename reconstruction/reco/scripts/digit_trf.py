@@ -54,6 +54,11 @@ def parse_args():
                         dest='post_exec', required=False, default="''",
                         help="The postexec command")
 
+    parser.add_argument('--tile-atlas-geometry', action='store_true',
+                        dest='tile_atlas_geometry', required=False,
+                        help="Use the ATLAS-like tile calorimeter geometry (see simu_trf.py). It must match "
+                             "the option used in the simulation, since the tile cells depend on it.")
+
    
     parser = merge_args(parser)
 
@@ -67,6 +72,7 @@ def main(events : List[int],
          pre_init: str,
          pre_exec: str,
          post_exec: str,
+         tile_atlas_geometry: bool = False,
         ):
     """
     Main function for the digitization process.
@@ -83,6 +89,7 @@ def main(events : List[int],
         pre_init (str): Hook for pre-initialization code.
         pre_exec (str): Hook for pre-execution code.
         post_exec (str): Hook for post-execution code.
+        tile_atlas_geometry (bool): Use the ATLAS-like tile calorimeter geometry.
     """
 
     if isinstance(input_file, Path):
@@ -110,7 +117,7 @@ def main(events : List[int],
 
     # digitalization!    
     calorimeter = CaloCellBuilder("CaloCellBuilder", 
-                                  DetectorConstruction_v1("ATLAS"),
+                                  DetectorConstruction_v1("ATLAS", TileAtlasGeometry=tile_atlas_geometry),
                                   HistogramPath="Expert/Cells",
                                   OutputLevel=outputLevel,
                                   InputHitsKey=recordable("Hits"),
@@ -150,4 +157,5 @@ if __name__ == "__main__":
          pre_init         = args.pre_init,
          pre_exec         = args.pre_exec,
          post_exec        = args.post_exec,
+         tile_atlas_geometry = args.tile_atlas_geometry,
          )

@@ -11,17 +11,50 @@ from .SensitiveDetector import SensitiveDetector
 import os
 
 
+# ATLAS-like tile calorimeter (option TileAtlasGeometry, off by default).
+# In ATLAS the scintillating tiles are placed radially and normal to the beam line, stacked along z
+# in periods of 18 mm: 5 mm master plate + 4 mm spacer plate + 5 mm master plate (14 mm steel), a
+# 3 mm tile and 1 mm left by the 3 mm tile in its 4 mm pocket, steel:scintillator 4.67:1
+# (TILECAL, hep-ex/9904032, sec. 2; JINST 3 (2008) S08003, sec. 5.3.1.2). Here each layer is built
+# with vertical plates (Fe 14 mm + scintillator 3 mm + 1 mm empty clearance). The staggering of the
+# tiles between radial rows is not modelled, nor the support girder at the outer radius.
+# Layer radii (A, BC, D in the barrel; A, B, D in the extended barrel) from the ATLAS cell geometry;
+# with this period they give 1.45/4.07/1.84 interaction lengths in the barrel and 1.45/2.62/3.30 in
+# the extended barrel at normal incidence, against about 1.5/4.1/1.8 and 1.5/2.6/3.3 quoted in
+# JINST 3 (2008) S08003 (sec. 5.3.1.4 and chap. 1). The cells keep the eta x phi segmentation below.
+TILE_ATLAS_ABSORBER  = 14*mm
+TILE_ATLAS_TILE      = 3*mm
+TILE_ATLAS_CLEARANCE = 1*mm
+TILE_ATLAS_BARREL_RADII   = [2300*mm, 2600*mm, 3440*mm, 3820*mm]
+TILE_ATLAS_EXTENDED_RADII = [2300*mm, 2600*mm, 3140*mm, 3820*mm]
 
 
+def _getAtlasTileLayers(radii, zsize):
+    """
+    Layout of the three ATLAS-like tile layers: vertical plates with the ATLAS period, as many whole
+    periods as fit in zsize (the remainder is left empty, half at each end).
+    """
+    period = TILE_ATLAS_ABSORBER + TILE_ATLAS_TILE + TILE_ATLAS_CLEARANCE
+    nperiods = int(zsize // period)
+    return [ dict( Plates            = Plates.Vertical,
+                   NofLayers         = nperiods,
+                   AbsorberThickness = TILE_ATLAS_ABSORBER,
+                   GapThickness      = TILE_ATLAS_TILE,
+                   LayerClearance    = TILE_ATLAS_CLEARANCE,
+                   RMin              = radii[i],
+                   RMax              = radii[i+1] ) for i in range(3) ]
 
 
-
-def getTileBarrelCfg():
+def getTileBarrelCfg(atlas_geometry=False):
     """
     Defines the geometry and readout configuration for the Tile Calorimeter (TileCal) Barrel.
 
     Constructs the physical volumes (Iron absorber + Scintillator gap) for the
     three longitudinal layers of the Tile Barrel and assigns readout parameters.
+
+    Args:
+        atlas_geometry (bool): If True, builds the ATLAS-like layout (tiles normal to the beam line,
+                               18 mm period, ATLAS layer radii; see TILE_ATLAS_* above).
 
     Returns:
         List[Calorimeter]: A list of configured Calorimeter detector objects for the Tile Barrel.
@@ -36,46 +69,41 @@ def getTileBarrelCfg():
     tile_barrel_end = (endcap_start - gap_between_extended_barrel)
     tile_barrel_z = (tile_barrel_start + tile_barrel_end) * 2
 
+    if atlas_geometry:
+        layers = _getAtlasTileLayers( TILE_ATLAS_BARREL_RADII, tile_barrel_z )
+    else:
+        r1 = 228.3*cm + 4*(6.0*cm + 4.0*cm)
+        r2 = r1 + 11*(6.2*cm + 3.8*cm)
+        r3 = r2 + 5*(6.2*cm + 3.8*cm)
+        layers = [ dict( Plates=Plates.Horizontal, NofLayers=4 , AbsorberThickness=6.0*cm, GapThickness=4.0*cm, RMin=228.3*cm, RMax=r1 ),
+                   dict( Plates=Plates.Horizontal, NofLayers=11, AbsorberThickness=6.2*cm, GapThickness=3.8*cm, RMin=r1      , RMax=r2 ),
+                   dict( Plates=Plates.Horizontal, NofLayers=5 , AbsorberThickness=6.2*cm, GapThickness=3.8*cm, RMin=r2      , RMax=r3 ) ]
 
-    tilecal1_pv =  PhysicalVolume( Name               = "TILE::TileCal1", 
-                                   Plates             = Plates.Horizontal, # Logical type
+
+    tilecal1_pv =  PhysicalVolume( Name               = "TILE::TileCal1",
                                    AbsorberMaterial   = "G4_Fe", # absorber
                                    GapMaterial        = "PLASTIC SCINTILLATOR", # gap
-                                   NofLayers          = 4, # layers
-                                   AbsorberThickness  = 6.0*cm, # abso
-                                   GapThickness       = 4.0*cm, # gap
-                                   RMin               = 228.3*cm, # radio min,
-                                   RMax               = 228.3*cm + 4*(6.0*cm + 4.0*cm), # radio max 
+                                   **layers[0], # plates, layers, thicknesses and radii
                                    ZSize              = tile_barrel_z,
                                    X=0,Y=0,Z=0, # x,y,z (center in 0,0,0)
                                    Visualization = True,
                                    Color         = 'salmon'
                                    )
 
-    tilecal2_pv =  PhysicalVolume( Name               = "TILE::TileCal2", 
-                                   Plates             = Plates.Horizontal, # Logical type
+    tilecal2_pv =  PhysicalVolume( Name               = "TILE::TileCal2",
                                    AbsorberMaterial   = "G4_Fe", # absorber
                                    GapMaterial        = "PLASTIC SCINTILLATOR", # gap
-                                   NofLayers          = 11, # layers
-                                   AbsorberThickness  = 6.2*cm, # abso
-                                   GapThickness       = 3.8*cm, # gap
-                                   RMin               = tilecal1_pv.RMax, # radio min,
-                                   RMax               = tilecal1_pv.RMax + 11*(6.2*cm + 3.8*cm), # radio max 
+                                   **layers[1], # plates, layers, thicknesses and radii
                                    ZSize              = tile_barrel_z,
                                    X=0,Y=0,Z=0, # x,y,z (center in 0,0,0)
                                    Visualization = True,
                                    Color         = 'violetred'
                                    )
 
-    tilecal3_pv =  PhysicalVolume( Name               = "TILE::TileCal3", 
-                                   Plates             = Plates.Horizontal, # Logical type
+    tilecal3_pv =  PhysicalVolume( Name               = "TILE::TileCal3",
                                    AbsorberMaterial   = "G4_Fe", # absorber
                                    GapMaterial        = "PLASTIC SCINTILLATOR", # gap
-                                   NofLayers          = 5, # layers
-                                   AbsorberThickness  = 6.2*cm, # abso
-                                   GapThickness       = 3.8*cm, # gap
-                                   RMin               = tilecal2_pv.RMax, # radio min,
-                                   RMax               = tilecal2_pv.RMax + 5*(6.2*cm + 3.8*cm), # radio max 
+                                   **layers[2], # plates, layers, thicknesses and radii
                                    ZSize              = tile_barrel_z,
                                    X=0,Y=0,Z=0, # x,y,z (center in 0,0,0)
                                    Visualization = True,
@@ -140,7 +168,7 @@ def getTileBarrelCfg():
 
 
 
-def getTileExtendedCfg(left_side=False):
+def getTileExtendedCfg(left_side=False, atlas_geometry=False):
     """
     Defines the geometry and readout configuration for the Tile Calorimeter Extended Barrel.
 
@@ -151,6 +179,8 @@ def getTileExtendedCfg(left_side=False):
     Args:
         left_side (bool): If True, configures the C-side (negative z). 
                           If False, configures the A-side (positive z).
+        atlas_geometry (bool): If True, builds the ATLAS-like layout (tiles normal to the beam line,
+                               18 mm period, ATLAS layer radii; see TILE_ATLAS_* above).
 
     Returns:
         List[Calorimeter]: A list of configured Calorimeter detector objects for the Tile Extended Barrel.
@@ -165,48 +195,40 @@ def getTileExtendedCfg(left_side=False):
     sign = -1 if left_side else 1
     side_name = 'B' if left_side else 'A'
 
+    if atlas_geometry:
+        layers = _getAtlasTileLayers( TILE_ATLAS_EXTENDED_RADII, extended_barrel_zsize )
+    else:
+        r1 = 228.3*cm + 4*(6.0*cm + 4.0*cm)
+        r2 = r1 + 11*(6.2*cm + 3.8*cm)
+        r3 = r2 + 5*(6.2*cm + 3.8*cm)
+        layers = [ dict( Plates=Plates.Horizontal, NofLayers=4 , AbsorberThickness=6.0*cm, GapThickness=4.0*cm, RMin=228.3*cm, RMax=r1 ),
+                   dict( Plates=Plates.Horizontal, NofLayers=11, AbsorberThickness=6.2*cm, GapThickness=3.8*cm, RMin=r1      , RMax=r2 ),
+                   dict( Plates=Plates.Horizontal, NofLayers=5 , AbsorberThickness=6.2*cm, GapThickness=3.8*cm, RMin=r2      , RMax=r3 ) ]
 
-    nlayers=4; absorber=6.0*cm; gap=4.0*cm; rsize=nlayers*(absorber+gap)
-    tilecalExt1_pv =  PhysicalVolume( Name               = "TILE::TileCalExt1::"+side_name, 
-                                      Plates             = Plates.Horizontal, # Logical type
+
+    tilecalExt1_pv =  PhysicalVolume( Name               = "TILE::TileCalExt1::"+side_name,
                                       AbsorberMaterial   = "G4_Fe", # absorber
                                       GapMaterial        = "PLASTIC SCINTILLATOR", # gap
-                                      NofLayers          = nlayers, # layers
-                                      AbsorberThickness  = absorber, # abso
-                                      GapThickness       = gap, # gap
-                                      RMin               = 228.3*cm, # radio min,
-                                      RMax               = 228.3*cm + rsize, # radio max 
+                                      **layers[0], # plates, layers, thicknesses and radii
                                       ZSize              = extended_barrel_zsize  ,
                                       X=0,Y=0,Z=sign*(extended_barrel_start + 0.5*extended_barrel_zsize), # x,y,z 
                                       Visualization = True,
                                       Color         = 'salmon',
                                     )
-    nlayers=11; absorber=6.2*cm; gap=3.8*cm; rsize=nlayers*(absorber+gap)
-    tilecalExt2_pv =  PhysicalVolume( Name               = "TILE::TileCalExt2::"+side_name, 
-                                      Plates             = Plates.Horizontal, # Logical type
+    tilecalExt2_pv =  PhysicalVolume( Name               = "TILE::TileCalExt2::"+side_name,
                                       AbsorberMaterial   = "G4_Fe", # absorber
                                       GapMaterial        = "PLASTIC SCINTILLATOR", # gap
-                                      NofLayers          = 11, # layers
-                                      AbsorberThickness  = 6.2*cm, # abso
-                                      GapThickness       = 3.8*cm, # gap
-                                      RMin               = tilecalExt1_pv.RMax, # radio min,
-                                      RMax               = tilecalExt1_pv.RMax + rsize, # radio max 
+                                      **layers[1], # plates, layers, thicknesses and radii
                                       ZSize              = extended_barrel_zsize ,
                                       X=0,Y=0,Z=sign*(extended_barrel_start + 0.5*extended_barrel_zsize), # x,y,z 
                                       Visualization = True,
                                       Color         = 'violetred'
                                     )
 
-    nlayers=5; absorber=6.2*cm; gap=3.8*cm; rsize=nlayers*(absorber+gap)
-    tilecalExt3_pv =  PhysicalVolume( Name               = "TILE::TileCalExt3::"+side_name, 
-                                      Plates             = Plates.Horizontal, # Logical type
+    tilecalExt3_pv =  PhysicalVolume( Name               = "TILE::TileCalExt3::"+side_name,
                                       AbsorberMaterial   = "G4_Fe", # absorber
                                       GapMaterial        = "PLASTIC SCINTILLATOR", # gap
-                                      NofLayers          = 5, # layers
-                                      AbsorberThickness  = 6.2*cm, # abso
-                                      GapThickness       = 3.8*cm, # gap
-                                      RMin               = tilecalExt2_pv.RMax, # radio min,
-                                      RMax               = tilecalExt2_pv.RMax + rsize, # radio max 
+                                      **layers[2], # plates, layers, thicknesses and radii
                                       ZSize              = extended_barrel_zsize ,
                                       X=0,Y=0,Z=sign*(extended_barrel_start + 0.5*extended_barrel_zsize), # x,y,z 
                                       Visualization = True,

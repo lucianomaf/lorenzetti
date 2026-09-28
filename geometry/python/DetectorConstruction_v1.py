@@ -41,6 +41,7 @@ class DetectorConstruction_v1( Cpp ):
                 UseMagneticField  : bool=False,
                 UseSolenoidField  : bool=False,
                 CutOnPhi          : bool=False,
+                TileAtlasGeometry : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -57,15 +58,17 @@ class DetectorConstruction_v1( Cpp ):
     
     #volumes.extend( getPixelBarrelCfg()   )
     self.samplings.extend( getLArBarrelCfg()   )
-    self.samplings.extend( getTileBarrelCfg()  )
+    # ATLAS-like tile calorimeter (tiles normal to the beam line, 18 mm period, ATLAS layer radii;
+    # see geometry/python/v1/TILE.py). The same value must be used in simulation and digitization.
+    self.samplings.extend( getTileBarrelCfg(atlas_geometry=TileAtlasGeometry)  )
     self.volumes.extend( getDMVolumesCfg()      )
     # Right side (A)
-    self.samplings.extend( getTileExtendedCfg()    )
+    self.samplings.extend( getTileExtendedCfg(atlas_geometry=TileAtlasGeometry)    )
     self.samplings.extend( getLArEMECCfg()         ) 
     self.samplings.extend( getHECCfg()             )
     self.volumes.extend( getCrackVolumesCfg()      )
     # Left side (B)
-    self.samplings.extend( getTileExtendedCfg(left_side = True) )
+    self.samplings.extend( getTileExtendedCfg(left_side = True, atlas_geometry=TileAtlasGeometry) )
     self.samplings.extend( getLArEMECCfg(left_side=True)        ) 
     self.samplings.extend( getHECCfg(left_side=True)            )    
     self.volumes.extend( getCrackVolumesCfg(left_side=True)     )
