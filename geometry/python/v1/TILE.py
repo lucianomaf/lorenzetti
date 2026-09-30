@@ -27,6 +27,13 @@ TILE_ATLAS_TILE      = 3*mm
 TILE_ATLAS_CLEARANCE = 1*mm
 TILE_ATLAS_BARREL_RADII   = [2300*mm, 2600*mm, 3440*mm, 3820*mm]
 TILE_ATLAS_EXTENDED_RADII = [2300*mm, 2600*mm, 3140*mm, 3820*mm]
+# Longitudinal extent of the ATLAS-like tile calorimeter, from the ATLAS cell layout (JINST 3 (2008) S08003,
+# fig. 5.12: long barrel up to |z| = 2816 mm, extended barrel from 3554 to 6113 mm), rounded to whole 18 mm
+# periods so that no tile is cut: long barrel |z| < 2808 mm (312 periods), extended barrel 3554 < |z| < 6110 mm
+# (142 periods). The aluminium block that stands for the ITC fills the space in between (see DeadMaterials).
+TILE_ATLAS_BARREL_HALF_Z     = 2808*mm
+TILE_ATLAS_EXTENDED_Z_START  = 3554*mm
+TILE_ATLAS_EXTENDED_Z_END    = 6110*mm
 
 
 def _getAtlasTileLayers(radii, zsize):
@@ -70,6 +77,7 @@ def getTileBarrelCfg(atlas_geometry=False):
     tile_barrel_z = (tile_barrel_start + tile_barrel_end) * 2
 
     if atlas_geometry:
+        tile_barrel_z = 2*TILE_ATLAS_BARREL_HALF_Z
         layers = _getAtlasTileLayers( TILE_ATLAS_BARREL_RADII, tile_barrel_z )
     else:
         r1 = 228.3*cm + 4*(6.0*cm + 4.0*cm)
@@ -196,6 +204,8 @@ def getTileExtendedCfg(left_side=False, atlas_geometry=False):
     side_name = 'B' if left_side else 'A'
 
     if atlas_geometry:
+        extended_barrel_start = TILE_ATLAS_EXTENDED_Z_START
+        extended_barrel_zsize = TILE_ATLAS_EXTENDED_Z_END - TILE_ATLAS_EXTENDED_Z_START
         layers = _getAtlasTileLayers( TILE_ATLAS_EXTENDED_RADII, extended_barrel_zsize )
     else:
         r1 = 228.3*cm + 4*(6.0*cm + 4.0*cm)

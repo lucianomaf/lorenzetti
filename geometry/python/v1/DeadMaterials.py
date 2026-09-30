@@ -3,18 +3,30 @@ __all__ = ["getCrackVolumesCfg", "getDMVolumesCfg"]
 
 from GaugiKernel.constants import m,cm,mm
 from .PhysicalVolume import PhysicalVolume, Plates, ProductionCuts
+from .TILE import TILE_ATLAS_BARREL_HALF_Z, TILE_ATLAS_EXTENDED_Z_START
 
 
-def getCrackVolumesCfg(left_side=False):
+def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False):
+    """
+    Dead material in the crack between the barrel and the endcaps.
 
+    Args:
+        left_side (bool): If True, the C-side (negative z).
+        tile_atlas_geometry (bool): If True, the aluminium block that stands for the ITC fills the gap of the
+                                    ATLAS-like tile calorimeter (TILE_ATLAS_BARREL_HALF_Z to
+                                    TILE_ATLAS_EXTENDED_Z_START) instead of the default gap.
+    """
 
     sign = -1 if left_side else 1
     side_name = 'B' if left_side else 'A'
-    
+
     endcap_start = 3704.*mm
     gap_between_extended_barrel = 68.*cm
     crack_material_size = gap_between_extended_barrel
     crack_start = endcap_start - gap_between_extended_barrel
+    if tile_atlas_geometry:
+        crack_start = TILE_ATLAS_BARREL_HALF_Z
+        crack_material_size = TILE_ATLAS_EXTENDED_Z_START - TILE_ATLAS_BARREL_HALF_Z
     crack_em_start = 3400*mm + 35*mm/2
 
 
@@ -59,7 +71,14 @@ def getCrackVolumesCfg(left_side=False):
     return [crack_em_pv, crack_tile_pv]
 
 
-def getDMVolumesCfg():
+def getDMVolumesCfg(tile_atlas_geometry=False):
+    """
+    Dead material around the barrel calorimeters.
+
+    Args:
+        tile_atlas_geometry (bool): If True, the aluminium shell inside the tile barrel follows the length of the
+                                    ATLAS-like tile barrel (|z| < TILE_ATLAS_BARREL_HALF_Z).
+    """
 
     ecal_barrel_start = 0*m
     ecal_barrel_end   = 3.4*m
@@ -71,6 +90,8 @@ def getDMVolumesCfg():
     tile_barrel_start = 0*m
     tile_barrel_end = (endcap_start - gap_between_extended_barrel)
     tile_barrel_z = (tile_barrel_start + tile_barrel_end) * 2
+    if tile_atlas_geometry:
+        tile_barrel_z = 2*TILE_ATLAS_BARREL_HALF_Z
 
     psb_rmin = 1460*mm
 
