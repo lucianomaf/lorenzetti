@@ -75,8 +75,16 @@ def parse_args():
                         dest='tile_atlas_geometry', required=False,
                         help="Build the tile calorimeter as in ATLAS: scintillating tiles normal to the beam line, "
                              "stacked along z in periods of 18 mm (14 mm steel, 3 mm tile, 1 mm clearance), "
-                             "with the ATLAS layer radii. The cells keep the default eta x phi segmentation. "
-                             "Off by default. Use the same option in digit_trf.py.")
+                             "with the ATLAS layer radii and z extent (long barrel |z| < 2808 mm, extended barrel "
+                             "3554 < |z| < 6110 mm, the ITC aluminium block in between). Without --tile-atlas-cells "
+                             "the cells keep the default eta x phi segmentation. Off by default. Use the same option "
+                             "in digit_trf.py.")
+    parser.add_argument('--tile-atlas-cells', action='store_true',
+                        dest='tile_atlas_cells', required=False,
+                        help="Use the ATLAS tile cells (A1-A16, BC1-BC8, B9, D0-D6; JINST 3 (2008) S08003, fig. 5.12) "
+                             "instead of the eta x phi grid, so that every point of the tile volume belongs to a "
+                             "cell. Needs --tile-atlas-geometry. Hits only: the digitization does not support these "
+                             "cells yet. Off by default.")
     parser.add_argument('-t', '--timeout', action='store',
                         dest='timeout', required=False, type=int, default=240,
                         help="Event timeout in minutes")
@@ -111,6 +119,7 @@ def main(logging_level: str,
          enable_magnetic_field: bool,
          enable_solenoid_field: bool,
          tile_atlas_geometry: bool,
+         tile_atlas_cells: bool,
          active_energy_only: bool,
          birks_law: bool,
          save_all_hits : bool,
@@ -138,6 +147,7 @@ def main(logging_level: str,
         enable_magnetic_field (bool): Toggle for the detector magnetic field.
         enable_solenoid_field (bool): Toggle for the field confined to the solenoid volume.
         tile_atlas_geometry (bool): Build the ATLAS-like tile calorimeter.
+        tile_atlas_cells (bool): Use the ATLAS tile cells (needs tile_atlas_geometry).
         active_energy_only (bool): Keep only the energy deposited in the active medium.
         birks_law (bool): Apply Birks' law in the scintillator and in the liquid argon.
         save_all_hits (bool): If True, saves all hits regardless of Region of Interest (RoI).
@@ -159,7 +169,8 @@ def main(logging_level: str,
     acc = ComponentAccumulator("ComponentAccumulator", 
                                DetectorConstruction_v1( "ATLAS", UseMagneticField=enable_magnetic_field,
                                                         UseSolenoidField=enable_solenoid_field,
-                                                        TileAtlasGeometry=tile_atlas_geometry),
+                                                        TileAtlasGeometry=tile_atlas_geometry,
+                                                        TileAtlasCells=tile_atlas_cells),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
                                Timeout=timeout * MINUTES)
@@ -213,6 +224,8 @@ if __name__ == "__main__":
     print(f"input file: {args.input_file}")
     if args.enable_magnetic_field and args.enable_solenoid_field:
         parser.error("--enable-magnetic-field and --enable-solenoid-field cannot be used together")
+    if args.tile_atlas_cells and not args.tile_atlas_geometry:
+        parser.error("--tile-atlas-cells needs --tile-atlas-geometry")
     print(f"output file: {args.output_file}")
     print(f"number of threads: {args.number_of_threads}")
 
@@ -226,6 +239,7 @@ if __name__ == "__main__":
              enable_magnetic_field = args.enable_magnetic_field,
              enable_solenoid_field = args.enable_solenoid_field,
              tile_atlas_geometry   = args.tile_atlas_geometry,
+             tile_atlas_cells      = args.tile_atlas_cells,
              active_energy_only    = args.active_energy_only,
              birks_law             = args.birks_law,
              save_all_hits         = args.save_all_hits,

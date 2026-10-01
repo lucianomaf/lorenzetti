@@ -68,6 +68,15 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   // When true, Birks' law is applied to the energy of each step in the scintillator and in the
   // liquid argon, with the ATLAS simulation constants (see birksEnergy).
   declareProperty( "BirksLaw"                 , m_birksLaw=false                      );
+  // Cells as (r, z) boxes (ATLAS tile cells, set from geometry/python/v1/TILE.py). When CellEta is empty
+  // (the default) the cells are the eta x phi grid given by EtaBins and PhiBins.
+  declareProperty( "CellEta"                  , m_cellEta                             );
+  declareProperty( "CellDeltaEta"             , m_cellDeltaEta                        );
+  declareProperty( "CellBoxRMin"              , m_cellBoxRMin                         );
+  declareProperty( "CellBoxRMax"              , m_cellBoxRMax                         );
+  declareProperty( "CellBoxZMin"              , m_cellBoxZMin                         );
+  declareProperty( "CellBoxZMax"              , m_cellBoxZMax                         );
+  declareProperty( "CellBoxIndex"             , m_cellBoxIndex                        );
 
 
 
@@ -127,6 +136,27 @@ StatusCode CaloHitMaker::pre_execute( EventContext &ctx ) const
 
   float deltaEta = std::abs(m_etaBins[1] - m_etaBins[0]);
   float deltaPhi = std::abs(m_phiBins[1] - m_phiBins[0]);
+
+  // Cells given as (r, z) boxes: one hit per cell and phi slice, cells in the order of the table (increasing z),
+  // with the eta and delta eta of the table; the local hash follows the same rule as the eta x phi grid.
+  if( useCells() ){
+    for ( unsigned cell = 0; cell < m_cellEta.size(); ++cell ){
+      for ( unsigned phiBin = 0; phiBin < m_nPhiBins; ++phiBin ){
+        float phiCenter = m_phiBins[phiBin] + deltaPhi / 2;
+        unsigned bin = m_nPhiBins * cell + phiBin;
+        auto *hit = new xAOD::CaloHit( m_cellEta[cell], phiCenter, m_cellDeltaEta[cell], deltaPhi, hash(bin),
+                                       (CaloSampling)m_sampling,
+                                       (Detector)m_detector,
+                                       m_bc_duration, m_bcid_start, m_bcid_end );
+        if( !collection->insert( hit->hash(), hit) )
+        {
+          MSG_FATAL( "It is not possible to include hit hash ("<< hit->hash() << ") into the collection. hash already exist.");
+        }
+      }
+    }
+    MSG_DEBUG("Pre_execute done.");
+    return StatusCode::SUCCESS;
+  }
 
   //
   // Prepare all sensitive objects like a two dimensional histogram
@@ -207,9 +237,10 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
   if( !(pos.z() > m_zMin && pos.z() <= m_zMax))
     return StatusCode::SUCCESS;
 
-  int etaBin = find(m_etaBins, eta);
+  // Row of the cell: the eta bin of the grid, or the cell of the (r, z) boxes
+  int etaBin = useCells() ? findCell(radius, pos.z()) : find(m_etaBins, eta);
 
-  if(etaBin < 0) 
+  if(etaBin < 0)
     return StatusCode::SUCCESS;
 
   int phiBin = find(m_phiBins, phi);
@@ -326,7 +357,20 @@ StatusCode CaloHitMaker::fillHistograms( EventContext &ctx ) const
 
 //!=====================================================================
 
-int CaloHitMaker::find( const std::vector<float> &vec, float value) const 
+// Cell of the (r, z) boxes that contains the point (rmin < r <= rmax, zmin < z <= zmax), or -1
+int CaloHitMaker::findCell( float radius, float z ) const
+{
+  for ( unsigned box = 0; box < m_cellBoxIndex.size(); ++box ){
+    if( radius > m_cellBoxRMin[box] && radius <= m_cellBoxRMax[box] &&
+        z > m_cellBoxZMin[box] && z <= m_cellBoxZMax[box] )
+      return m_cellBoxIndex[box];
+  }
+  return -1;
+}
+
+//!=====================================================================
+
+int CaloHitMaker::find( const std::vector<float> &vec, float value) const
 {
   auto binIterator = std::adjacent_find( vec.begin(), vec.end(), [=](float left, float right){ return left < value and value <= right; }  );
   if ( binIterator == vec.end() ) return -1;

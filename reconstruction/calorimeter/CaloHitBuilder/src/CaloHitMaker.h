@@ -90,6 +90,19 @@ class CaloHitMaker : public Gaugi::Algorithm
 
     unsigned int m_nEtaBins;
     unsigned int m_nPhiBins;
+
+    // Cells given as (r, z) boxes instead of the eta x phi grid (ATLAS tile cells; empty by default).
+    // One entry per cell: eta of its centre and its delta eta. One entry per box: r and z limits and the
+    // index of the cell it belongs to (a cell may be made of several boxes, as BC in the tile barrel).
+    std::vector<float> m_cellEta;
+    std::vector<float> m_cellDeltaEta;
+    std::vector<float> m_cellBoxRMin;
+    std::vector<float> m_cellBoxRMax;
+    std::vector<float> m_cellBoxZMin;
+    std::vector<float> m_cellBoxZMax;
+    std::vector<int>   m_cellBoxIndex;
+    bool useCells() const { return !m_cellEta.empty(); }
+    int findCell( float radius, float z ) const;
 };
 
 

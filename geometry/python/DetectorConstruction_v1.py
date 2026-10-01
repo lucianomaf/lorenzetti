@@ -42,6 +42,7 @@ class DetectorConstruction_v1( Cpp ):
                 UseSolenoidField  : bool=False,
                 CutOnPhi          : bool=False,
                 TileAtlasGeometry : bool=False,
+                TileAtlasCells    : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -61,15 +62,18 @@ class DetectorConstruction_v1( Cpp ):
     # ATLAS-like tile calorimeter (tiles normal to the beam line, 18 mm period, ATLAS layer radii and z extent;
     # see geometry/python/v1/TILE.py). The same value must be used in simulation and digitization. With it the
     # dead material next to the tile calorimeter (inner aluminium shell, ITC block) follows the ATLAS z extent.
-    self.samplings.extend( getTileBarrelCfg(atlas_geometry=TileAtlasGeometry)  )
+    # ATLAS tile cells (A1-A16, BC1-BC8, B9, D0-D6) instead of the eta x phi grid; needs TileAtlasGeometry.
+    if TileAtlasCells and not TileAtlasGeometry:
+      raise ValueError("TileAtlasCells needs TileAtlasGeometry.")
+    self.samplings.extend( getTileBarrelCfg(atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells)  )
     self.volumes.extend( getDMVolumesCfg(tile_atlas_geometry=TileAtlasGeometry) )
     # Right side (A)
-    self.samplings.extend( getTileExtendedCfg(atlas_geometry=TileAtlasGeometry)    )
+    self.samplings.extend( getTileExtendedCfg(atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells)    )
     self.samplings.extend( getLArEMECCfg()         ) 
     self.samplings.extend( getHECCfg()             )
     self.volumes.extend( getCrackVolumesCfg(tile_atlas_geometry=TileAtlasGeometry) )
     # Left side (B)
-    self.samplings.extend( getTileExtendedCfg(left_side = True, atlas_geometry=TileAtlasGeometry) )
+    self.samplings.extend( getTileExtendedCfg(left_side = True, atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells) )
     self.samplings.extend( getLArEMECCfg(left_side=True)        ) 
     self.samplings.extend( getHECCfg(left_side=True)            )    
     self.volumes.extend( getCrackVolumesCfg(left_side=True, tile_atlas_geometry=TileAtlasGeometry) )

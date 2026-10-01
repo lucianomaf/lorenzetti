@@ -1,5 +1,5 @@
 
-__all__ = ["getTileBarrelCfg","getTileExtendedCfg"]
+__all__ = ["getTileBarrelCfg","getTileExtendedCfg","getAtlasTileCells"]
 
 from GaugiKernel.constants import m,cm,mm,MeV,pi
 from CaloCell.CaloDefs import Detector, CaloSampling
@@ -9,6 +9,7 @@ from .PhysicalVolume import PhysicalVolume, Plates
 from .SensitiveDetector import SensitiveDetector
 
 import os
+import math
 
 
 # ATLAS-like tile calorimeter (option TileAtlasGeometry, off by default).
@@ -36,6 +37,114 @@ TILE_ATLAS_EXTENDED_Z_START  = 3554*mm
 TILE_ATLAS_EXTENDED_Z_END    = 6110*mm
 
 
+# ATLAS tile cells (option TileAtlasCells, off by default; needs TileAtlasGeometry). In ATLAS a cell is the group of
+# tiles read out by the same photomultiplier, with fixed z boundaries in each radial row (JINST 3 (2008) S08003,
+# sec. 5.3.1.4, "the fibre grouping is used to define a three-dimensional cell structure", and fig. 5.12). The
+# boundaries below were read from fig. 5.12 (vector drawing, z scale from its ruler; about 2 mm precision), in mm, on
+# the positive side; the negative side is the mirror image. Each boundary is moved to the nearest boundary between two
+# 18 mm periods, so that every tile belongs to a single cell, as in ATLAS.
+# Long barrel: A1-A10, B1-B9 and C1-C8 read together as BC1-BC8 (B9 only in the B row), D0 (across z = 0) to D3.
+# Extended barrel: A12-A16, B11-B15, D5 and D6. The gap/crack cells (C10, D4, E1-E4) are not built.
+TILE_ATLAS_CELLS_BARREL_A = [271.9, 510.4, 767.8, 1029.0, 1305.3, 1585.5, 1865.6, 2195.0, 2531.9]  # A1/A2 ... A9/A10
+TILE_ATLAS_CELLS_BARREL_B = [306.0, 593.7, 870.0, 1169.1, 1468.1, 1797.5, 2138.2, 2505.4]          # B1/B2 ... B8/B9
+TILE_ATLAS_CELLS_BARREL_C = [340.0, 669.4, 998.7, 1339.4, 1687.7, 2058.7, 2456.2]                  # C1/C2 ... C7/C8
+TILE_ATLAS_CELLS_BARREL_D = [389.2, 1127.4, 1903.5]                                                # D0 half length, D1/D2, D2/D3
+TILE_ATLAS_CELLS_BC_RADIUS = 2990*mm   # B/C row boundary inside the BC layer
+TILE_ATLAS_CELLS_EXT_A = [3720.6, 4174.8, 4682.1, 5234.8]   # A12/A13 ... A15/A16
+TILE_ATLAS_CELLS_EXT_B = [3803.8, 4320.2, 4886.5, 5473.3]   # B11/B12 ... B14/B15
+TILE_ATLAS_CELLS_EXT_D = [4742.7]                           # D5/D6
+
+
+def _roundToPeriod(z, z0):
+    """Nearest boundary between two 18 mm periods, for periods starting at z0."""
+    period = TILE_ATLAS_ABSORBER + TILE_ATLAS_TILE + TILE_ATLAS_CLEARANCE
+    return z0 + round((z - z0) / period) * period
+
+
+def _cellEta(boxes):
+    """Eta of the geometric centre of the cell (area centroid of its boxes in the r-z plane) and delta eta taken at
+    the mean radius of the cell, over the full z extent of the cell."""
+    area = sum((b[1]-b[0])*(b[3]-b[2]) for b in boxes)
+    rc = sum((b[1]-b[0])*(b[3]-b[2])*0.5*(b[0]+b[1]) for b in boxes) / area
+    zc = sum((b[1]-b[0])*(b[3]-b[2])*0.5*(b[2]+b[3]) for b in boxes) / area
+    rmean = 0.5*(min(b[0] for b in boxes) + max(b[1] for b in boxes))
+    zmin = min(b[2] for b in boxes); zmax = max(b[3] for b in boxes)
+    return math.asinh(zc/rc), math.asinh(zmax/rmean) - math.asinh(zmin/rmean)
+
+
+def _cellsFromRows(rows):
+    """
+    rows: list of (rmin, rmax, [(name, zmin, zmax), ...]); cells with the same name in different rows are one cell.
+    Returns the table used by CaloHitMaker: one entry per box (r and z limits, cell index) and one per cell (name,
+    eta, delta eta), cells in increasing z of their centre.
+    """
+    boxes = {}
+    for rmin, rmax, cells in rows:
+        for name, zmin, zmax in cells:
+            boxes.setdefault(name, []).append((rmin, rmax, zmin, zmax))
+    def zcentre(name):
+        b = boxes[name]; area = sum((x[1]-x[0])*(x[3]-x[2]) for x in b)
+        return sum((x[1]-x[0])*(x[3]-x[2])*0.5*(x[2]+x[3]) for x in b) / area
+    names = sorted(boxes, key=zcentre)
+    table = dict(Names=[], Eta=[], DeltaEta=[], BoxRMin=[], BoxRMax=[], BoxZMin=[], BoxZMax=[], BoxCell=[])
+    for i, name in enumerate(names):
+        eta, deta = _cellEta(boxes[name])
+        table['Names'].append(name); table['Eta'].append(round(eta, 5)); table['DeltaEta'].append(round(deta, 5))
+        for rmin, rmax, zmin, zmax in boxes[name]:
+            table['BoxRMin'].append(rmin); table['BoxRMax'].append(rmax)
+            table['BoxZMin'].append(zmin); table['BoxZMax'].append(zmax); table['BoxCell'].append(i)
+    return table
+
+
+def _barrelRow(prefix, edges, zend, first=1, crosses_zero=False):
+    """Cells of one barrel row, both sides. The side is in the name: '+' for z > 0, '-' for z < 0."""
+    e = [_roundToPeriod(x, -TILE_ATLAS_BARREL_HALF_Z) for x in edges]
+    cells = []
+    if crosses_zero:   # D0: one cell from -e[0] to e[0], no side
+        cells.append((f"{prefix}{first}", -e[0], e[0]))
+        first += 1
+        bounds = e + [zend]
+    else:
+        bounds = [0.0] + e + [zend]
+    for k in range(len(bounds)-1):
+        n = first + k
+        cells.append((f"{prefix}{n}+", bounds[k], bounds[k+1]))
+        cells.append((f"{prefix}{n}-", -bounds[k+1], -bounds[k]))
+    return cells
+
+
+def getAtlasTileCells(sampling_name, side=1):
+    """
+    ATLAS tile cells for one sampling of the ATLAS-like tile calorimeter, as the (r, z) boxes read by CaloHitMaker.
+    sampling_name: 'TileCal1', 'TileCal2', 'TileCal3' (long barrel) or 'TileExt1', 'TileExt2', 'TileExt3';
+    side: +1 or -1 for the extended barrel.
+    """
+    zb = TILE_ATLAS_BARREL_HALF_Z
+    rb = TILE_ATLAS_BARREL_RADII
+    re = TILE_ATLAS_EXTENDED_RADII
+    if sampling_name == 'TileCal1':
+        return _cellsFromRows([(rb[0], rb[1], _barrelRow('A', TILE_ATLAS_CELLS_BARREL_A, zb))])
+    if sampling_name == 'TileCal2':
+        brow = [(n.replace('B', 'BC', 1) if not n.startswith('B9') else n, z0, z1)
+                for n, z0, z1 in _barrelRow('B', TILE_ATLAS_CELLS_BARREL_B, zb)]
+        crow = [(n.replace('C', 'BC', 1), z0, z1) for n, z0, z1 in _barrelRow('C', TILE_ATLAS_CELLS_BARREL_C, zb)]
+        return _cellsFromRows([(rb[1], TILE_ATLAS_CELLS_BC_RADIUS, brow), (TILE_ATLAS_CELLS_BC_RADIUS, rb[2], crow)])
+    if sampling_name == 'TileCal3':
+        return _cellsFromRows([(rb[2], rb[3], _barrelRow('D', TILE_ATLAS_CELLS_BARREL_D, zb, first=0, crosses_zero=True))])
+    ext = {'TileExt1': ('A', TILE_ATLAS_CELLS_EXT_A, 12, re[0], re[1]),
+           'TileExt2': ('B', TILE_ATLAS_CELLS_EXT_B, 11, re[1], re[2]),
+           'TileExt3': ('D', TILE_ATLAS_CELLS_EXT_D, 5,  re[2], re[3])}
+    prefix, edges, first, rmin, rmax = ext[sampling_name]
+    z0, z1 = TILE_ATLAS_EXTENDED_Z_START, TILE_ATLAS_EXTENDED_Z_END
+    bounds = [z0] + [_roundToPeriod(x, z0) for x in edges] + [z1]
+    s = '+' if side > 0 else '-'
+    cells = []
+    for k in range(len(bounds)-1):
+        lo, hi = (bounds[k], bounds[k+1]) if side > 0 else (-bounds[k+1], -bounds[k])
+        cells.append((f"{prefix}{first+k}{s}", lo, hi))
+    return _cellsFromRows([(rmin, rmax, cells)])
+
+
 def _getAtlasTileLayers(radii, zsize):
     """
     Layout of the three ATLAS-like tile layers: vertical plates with the ATLAS period, as many whole
@@ -52,7 +161,7 @@ def _getAtlasTileLayers(radii, zsize):
                    RMax              = radii[i+1] ) for i in range(3) ]
 
 
-def getTileBarrelCfg(atlas_geometry=False):
+def getTileBarrelCfg(atlas_geometry=False, atlas_cells=False):
     """
     Defines the geometry and readout configuration for the Tile Calorimeter (TileCal) Barrel.
 
@@ -61,7 +170,9 @@ def getTileBarrelCfg(atlas_geometry=False):
 
     Args:
         atlas_geometry (bool): If True, builds the ATLAS-like layout (tiles normal to the beam line,
-                               18 mm period, ATLAS layer radii; see TILE_ATLAS_* above).
+                               18 mm period, ATLAS layer radii and z extent; see TILE_ATLAS_* above).
+        atlas_cells (bool): If True (needs atlas_geometry), the cells are the ATLAS cells A1-A10, BC1-BC8, B9 and
+                            D0-D3 (see TILE_ATLAS_CELLS_* above) instead of the eta x phi grid.
 
     Returns:
         List[Calorimeter]: A list of configured Calorimeter detector objects for the Tile Barrel.
@@ -127,6 +238,12 @@ def getTileBarrelCfg(atlas_geometry=False):
     tilecal1_sv = SensitiveDetector( tilecal1_pv, DeltaEta = 0.1  , DeltaPhi = pi/32 )
     tilecal2_sv = SensitiveDetector( tilecal2_pv, DeltaEta = 0.1  , DeltaPhi = pi/32 )
     tilecal3_sv = SensitiveDetector( tilecal3_pv, DeltaEta = 0.2  , DeltaPhi = pi/32 )
+    if atlas_cells:
+        if not atlas_geometry:
+            raise ValueError("The ATLAS tile cells (atlas_cells) need the ATLAS-like tile geometry (atlas_geometry).")
+        tilecal1_sv.Cells = getAtlasTileCells("TileCal1")
+        tilecal2_sv.Cells = getAtlasTileCells("TileCal2")
+        tilecal3_sv.Cells = getAtlasTileCells("TileCal3")
 
 
 
@@ -176,7 +293,7 @@ def getTileBarrelCfg(atlas_geometry=False):
 
 
 
-def getTileExtendedCfg(left_side=False, atlas_geometry=False):
+def getTileExtendedCfg(left_side=False, atlas_geometry=False, atlas_cells=False):
     """
     Defines the geometry and readout configuration for the Tile Calorimeter Extended Barrel.
 
@@ -188,7 +305,9 @@ def getTileExtendedCfg(left_side=False, atlas_geometry=False):
         left_side (bool): If True, configures the C-side (negative z). 
                           If False, configures the A-side (positive z).
         atlas_geometry (bool): If True, builds the ATLAS-like layout (tiles normal to the beam line,
-                               18 mm period, ATLAS layer radii; see TILE_ATLAS_* above).
+                               18 mm period, ATLAS layer radii and z extent; see TILE_ATLAS_* above).
+        atlas_cells (bool): If True (needs atlas_geometry), the cells are the ATLAS cells A12-A16, B11-B15, D5 and
+                            D6 (see TILE_ATLAS_CELLS_* above) instead of the eta x phi grid.
 
     Returns:
         List[Calorimeter]: A list of configured Calorimeter detector objects for the Tile Extended Barrel.
@@ -249,6 +368,12 @@ def getTileExtendedCfg(left_side=False, atlas_geometry=False):
     tilecalExt1_sv = SensitiveDetector( tilecalExt1_pv, DeltaEta = 0.1  , DeltaPhi = pi/32  )
     tilecalExt2_sv = SensitiveDetector( tilecalExt2_pv, DeltaEta = 0.1  , DeltaPhi = pi/32  )
     tilecalExt3_sv = SensitiveDetector( tilecalExt3_pv, DeltaEta = 0.2  , DeltaPhi = pi/32  )
+    if atlas_cells:
+        if not atlas_geometry:
+            raise ValueError("The ATLAS tile cells (atlas_cells) need the ATLAS-like tile geometry (atlas_geometry).")
+        tilecalExt1_sv.Cells = getAtlasTileCells("TileExt1", sign)
+        tilecalExt2_sv.Cells = getAtlasTileCells("TileExt2", sign)
+        tilecalExt3_sv.Cells = getAtlasTileCells("TileExt3", sign)
 
 
     # Configure the electronic frontend and the detector parameters

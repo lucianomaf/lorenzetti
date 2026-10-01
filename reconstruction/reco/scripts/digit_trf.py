@@ -58,6 +58,10 @@ def parse_args():
                         dest='tile_atlas_geometry', required=False,
                         help="Use the ATLAS-like tile calorimeter geometry (see simu_trf.py). It must match "
                              "the option used in the simulation, since the tile cells depend on it.")
+    parser.add_argument('--tile-atlas-cells', action='store_true',
+                        dest='tile_atlas_cells', required=False,
+                        help="Hits simulated with --tile-atlas-cells (ATLAS tile cells). Not supported yet: the "
+                             "digitization only knows the eta x phi grid, so the job stops with an error.")
 
    
     parser = merge_args(parser)
@@ -150,6 +154,9 @@ if __name__ == "__main__":
         parser.print_help()
         sys.exit(1)
     args = parser.parse_args()
+    if args.tile_atlas_cells:
+        parser.error("--tile-atlas-cells: the digitization of the ATLAS tile cells is not supported yet "
+                     "(the cells exist only in the hit file). Do not digitize these hits with the default cells.")
     args = update_args(args)
     pool  = create_parallel_job(args)
     pool( main, 

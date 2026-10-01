@@ -41,6 +41,18 @@ class CaloHitMaker( Cpp ):
     self.setProperty( "ActiveEnergyOnly"        , ActiveEnergyOnly            )
     # Apply Birks' law in the scintillator and in the liquid argon (ATLAS constants)
     self.setProperty( "BirksLaw"                , BirksLaw                    )
+    # Cells given as (r, z) boxes instead of the eta x phi grid (ATLAS tile cells, geometry/python/v1/TILE.py).
+    # Without them (the default) the properties stay empty and the eta x phi grid is used. Only set when present:
+    # setProperty cannot convert an empty list.
+    cells = getattr( sampling.sensitive(), "Cells", None )
+    if cells:
+      self.setProperty( "CellEta"               , [float(x) for x in cells["Eta"]]      )
+      self.setProperty( "CellDeltaEta"          , [float(x) for x in cells["DeltaEta"]] )
+      self.setProperty( "CellBoxRMin"           , [float(x) for x in cells["BoxRMin"]]  )
+      self.setProperty( "CellBoxRMax"           , [float(x) for x in cells["BoxRMax"]]  )
+      self.setProperty( "CellBoxZMin"           , [float(x) for x in cells["BoxZMin"]]  )
+      self.setProperty( "CellBoxZMax"           , [float(x) for x in cells["BoxZMax"]]  )
+      self.setProperty( "CellBoxIndex"          , [int(x) for x in cells["BoxCell"]]    )
     self.setProperty( "DetailedHistograms"      , DetailedHistograms          )
     self.setProperty( "HistogramPath"           , HistogramPath               )
     self.setProperty( "OutputLevel"             , OutputLevel                 )
