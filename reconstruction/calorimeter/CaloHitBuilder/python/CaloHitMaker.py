@@ -19,6 +19,7 @@ class CaloHitMaker( Cpp ):
                 SamplingNoiseStd     : float  = 0,
                 ActiveEnergyOnly     : bool   = False,
                 BirksLaw             : bool   = False,
+                TileDualReadout      : int    = 0,
               ):
                     
     Cpp.__init__(self, ROOT.CaloHitMaker(name) )
@@ -41,6 +42,8 @@ class CaloHitMaker( Cpp ):
     self.setProperty( "ActiveEnergyOnly"        , ActiveEnergyOnly            )
     # Apply Birks' law in the scintillator and in the liquid argon (ATLAS constants)
     self.setProperty( "BirksLaw"                , BirksLaw                    )
+    # Dual readout of the tile cells (two PMTs per cell): 0 = off, 1 = ATLAS U-shape, 2 = linear sharing
+    self.setProperty( "TileDualReadout"         , TileDualReadout             )
     # Cells given as (r, z) boxes instead of the eta x phi grid (ATLAS tile cells, geometry/python/v1/TILE.py).
     # Without them (the default) the properties stay empty and the eta x phi grid is used. Only set when present:
     # setProperty cannot convert an empty list.

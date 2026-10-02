@@ -45,6 +45,20 @@ CaloHit::CaloHit(     float eta,
 void CaloHit::clear()
 {
   m_edep.clear(); // zeroize deposit energy for all bunchs
+  m_edepPmt[0].clear();
+  m_edepPmt[1].clear();
+}
+
+void CaloHit::fillPmt( const G4Step* step, float edep_pmt0, float edep_pmt1 )
+{
+  // Same bunch crossing as fill(): the time of the pre-step point
+  float t = (float)step->GetPreStepPoint()->GetGlobalTime() / ns;
+  int samp = find(t);
+  if ( samp != -1 ){
+    int bcid = m_bcid_start + samp;
+    m_edepPmt[0][bcid] += (edep_pmt0/MeV);
+    m_edepPmt[1][bcid] += (edep_pmt1/MeV);
+  }
 }
 
 

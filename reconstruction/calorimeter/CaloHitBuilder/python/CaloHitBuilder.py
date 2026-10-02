@@ -20,6 +20,7 @@ class CaloHitBuilder(Logger):
                  OutputLevel: int = LoggingLevel.toC('INFO'),
                  ActiveEnergyOnly: bool = False,
                  BirksLaw: bool = False,
+                 TileDualReadout: int = 0,
                  ):
 
         Logger.__init__(self, name)
@@ -29,6 +30,7 @@ class CaloHitBuilder(Logger):
         self.OutputHitsKey = OutputHitsKey
         self.ActiveEnergyOnly = ActiveEnergyOnly
         self.BirksLaw = BirksLaw
+        self.TileDualReadout = TileDualReadout
         self.OutputCollectionKeys = []
 
     def configure(self):
@@ -51,7 +53,8 @@ class CaloHitBuilder(Logger):
                                # Use True when debug with only one thread
                                DetailedHistograms=False,
                                ActiveEnergyOnly=self.ActiveEnergyOnly,
-                               BirksLaw=self.BirksLaw
+                               BirksLaw=self.BirksLaw,
+                               TileDualReadout=self.TileDualReadout
                                )
 
             self.__recoAlgs.append(alg)

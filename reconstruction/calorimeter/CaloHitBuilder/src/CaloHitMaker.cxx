@@ -4,6 +4,8 @@
 #include "CaloHit/CaloHitCollection.h"
 #include "EventInfo/EventInfoContainer.h"
 #include "CaloHitMaker.h"
+#include "TileUShape.h"
+#include <algorithm>
 
 #include "G4Kernel/CaloPhiRange.h"
 #include "G4Kernel/constants.h"
@@ -77,6 +79,9 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "CellBoxZMin"              , m_cellBoxZMin                         );
   declareProperty( "CellBoxZMax"              , m_cellBoxZMax                         );
   declareProperty( "CellBoxIndex"             , m_cellBoxIndex                        );
+  // Dual readout of the tile cells (two PMTs per cell, as in ATLAS): 0 = off, 1 = ATLAS U-shape, 2 = linear.
+  // Only for the tile samplings and only with the ATLAS tile cells (CellEta not empty); see tilePmtWeights.
+  declareProperty( "TileDualReadout"          , m_tileDualReadout=0                   );
 
 
 
@@ -92,6 +97,9 @@ StatusCode CaloHitMaker::initialize()
   setMsgLevel( (MSG::Level)m_outputLevel );
   m_nEtaBins = m_etaBins.size() - 1;
   m_nPhiBins = m_phiBins.size() - 1;
+  if( m_tileDualReadout > 0 && isTile() && !useCells() ){
+    MSG_FATAL( "TileDualReadout needs the ATLAS tile cells (CellEta)." );
+  }
 
   return StatusCode::SUCCESS;
 }
@@ -148,6 +156,7 @@ StatusCode CaloHitMaker::pre_execute( EventContext &ctx ) const
                                        (CaloSampling)m_sampling,
                                        (Detector)m_detector,
                                        m_bc_duration, m_bcid_start, m_bcid_end );
+        hit->setDualReadout( m_tileDualReadout > 0 && isTile() );
         if( !collection->insert( hit->hash(), hit) )
         {
           MSG_FATAL( "It is not possible to include hit hash ("<< hit->hash() << ") into the collection. hash already exist.");
@@ -254,10 +263,17 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
 
   if(collection->retrieve(hash(bin), hit)){
     // hit->fill( step );
+    const float edep = m_birksLaw ? birksEnergy(step) : (float)step->GetTotalEnergyDeposit();
     if( m_birksLaw )
-      hit->fill( step , 1*m_noiseStd, birksEnergy(step) );
+      hit->fill( step , 1*m_noiseStd, edep );
     else
       hit->fill( step , 1*m_noiseStd); // hit with tof selection sensible by 1*sigma of sampling noise.
+    // Dual readout: the same energy shared between the two PMTs by the position across the module
+    if( hit->dualReadout() ){
+      float w0, w1;
+      tilePmtWeights( std::remainder( phi - hit->phi(), 2 * M_PI ), pos.z(), w0, w1 );
+      hit->fillPmt( step, edep * w0, edep * w1 );
+    }
   }else{
     MSG_FATAL( "Its not possible to retrieve the hit. Bin ("<< bin << ") not exist");
   }
@@ -266,6 +282,36 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
 }
 
 //!=====================================================================
+
+//!=====================================================================
+
+// Weights of the two PMTs of a tile cell for a step at the azimuthal distance phiLocal (rad) from the centre of the
+// module, following the ATLAS simulation (Athena, TileGeoG4SDCalc::MakePmtEdepTime):
+// - U-shape (TileDualReadout = 1, Ushape = 1 in Athena): the measured response of each PMT across the tile,
+//   TileGeoG4SDCalc::Tile_1D_profileRescaled, tables per layer (A, BC, D) for the long barrel and for each extended
+//   barrel (TileUShape.h). As in Athena, the PMT 1 reads the table at -phiLocal and the PMT 0 at +phiLocal, and the
+//   two weights do not add up exactly to 1.
+// - linear (TileDualReadout = 2, Ushape = 0 in Athena): w1 = 0.3 + 0.2 dy1/halfY = 0.5 + 0.2 u, w0 = 1 - w1, with
+//   u = tan(phiLocal)/tan(dphi/2) from -1 to 1 across the module (the tile edges taken as radial lines).
+// Convention (not checked against the orientation of the ATLAS local axes): the PMT 1 is the one on the side of
+// larger phi, on both sides of the detector.
+void CaloHitMaker::tilePmtWeights( float phiLocal, float z, float &w0, float &w1 ) const
+{
+  if( m_tileDualReadout == 1 ){
+    // layer: TileCal1/TileExt1 = A, TileCal2/TileExt2 = BC (B), TileCal3/TileExt3 = D
+    const int layer = (m_sampling - 5) % 3;
+    const int part  = (m_sampling <= 7) ? 0 : ( z > 0 ? 1 : 2 ); // LB, EBA (z > 0), EBC (z < 0)
+    const double *t = TileUShape::table( part, layer );
+    w1 = TileUShape::amplitude( t, -phiLocal );
+    w0 = TileUShape::amplitude( t,  phiLocal );
+    return;
+  }
+  const float halfDeltaPhi = std::abs( m_phiBins[1] - m_phiBins[0] ) / 2;
+  float u = std::tan( phiLocal ) / std::tan( halfDeltaPhi );
+  u = std::max( -1.f, std::min( 1.f, u ) );
+  w1 = 0.5 + 0.2 * u;
+  w0 = 1 - w1;
+}
 
 //!=====================================================================
 

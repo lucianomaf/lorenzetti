@@ -85,6 +85,18 @@ def parse_args():
                              "instead of the eta x phi grid, so that every point of the tile volume belongs to a "
                              "cell. Needs --tile-atlas-geometry. Hits only: the digitization does not support these "
                              "cells yet. Off by default.")
+    parser.add_argument('--tile-dual-readout', action='store_true',
+                        dest='tile_dual_readout', required=False,
+                        help="Read each tile cell with two photomultipliers, as in ATLAS: the energy of each step is "
+                             "shared between the PMT 0 and the PMT 1 (the one on the side of larger phi) according "
+                             "to its azimuthal position across the module, and both are stored with the cell "
+                             "(edep_pmt0, edep_pmt1). Needs --tile-atlas-cells. Off by default.")
+    parser.add_argument('--tile-pmt-split', action='store', choices=['ushape', 'linear'], default='ushape',
+                        dest='tile_pmt_split', required=False,
+                        help="Sharing between the two PMTs with --tile-dual-readout: 'ushape' (default), the "
+                             "measured U-shape of the ATLAS simulation (Athena, TileGeoG4SDCalc::"
+                             "Tile_1D_profileRescaled); 'linear', 0.5 +- 0.2 from the centre to the edges of the "
+                             "module, the two PMTs adding up to the cell energy.")
     parser.add_argument('-t', '--timeout', action='store',
                         dest='timeout', required=False, type=int, default=240,
                         help="Event timeout in minutes")
@@ -120,6 +132,7 @@ def main(logging_level: str,
          enable_solenoid_field: bool,
          tile_atlas_geometry: bool,
          tile_atlas_cells: bool,
+         tile_dual_readout: int,
          active_energy_only: bool,
          birks_law: bool,
          save_all_hits : bool,
@@ -148,6 +161,7 @@ def main(logging_level: str,
         enable_solenoid_field (bool): Toggle for the field confined to the solenoid volume.
         tile_atlas_geometry (bool): Build the ATLAS-like tile calorimeter.
         tile_atlas_cells (bool): Use the ATLAS tile cells (needs tile_atlas_geometry).
+        tile_dual_readout (int): Two PMTs per tile cell: 0 = off, 1 = ATLAS U-shape, 2 = linear (needs tile_atlas_cells).
         active_energy_only (bool): Keep only the energy deposited in the active medium.
         birks_law (bool): Apply Birks' law in the scintillator and in the liquid argon.
         save_all_hits (bool): If True, saves all hits regardless of Region of Interest (RoI).
@@ -186,7 +200,8 @@ def main(logging_level: str,
                                  OutputLevel=outputLevel,
                                  OutputHitsKey=recordable("Hits"),
                                  ActiveEnergyOnly=active_energy_only,
-                                 BirksLaw=birks_law
+                                 BirksLaw=birks_law,
+                                 TileDualReadout=tile_dual_readout
                                  )
     
     gun.merge(acc)
@@ -226,6 +241,8 @@ if __name__ == "__main__":
         parser.error("--enable-magnetic-field and --enable-solenoid-field cannot be used together")
     if args.tile_atlas_cells and not args.tile_atlas_geometry:
         parser.error("--tile-atlas-cells needs --tile-atlas-geometry")
+    if args.tile_dual_readout and not args.tile_atlas_cells:
+        parser.error("--tile-dual-readout needs --tile-atlas-cells")
     print(f"output file: {args.output_file}")
     print(f"number of threads: {args.number_of_threads}")
 
@@ -240,6 +257,8 @@ if __name__ == "__main__":
              enable_solenoid_field = args.enable_solenoid_field,
              tile_atlas_geometry   = args.tile_atlas_geometry,
              tile_atlas_cells      = args.tile_atlas_cells,
+             tile_dual_readout     = (0 if not args.tile_dual_readout else
+                                      (1 if args.tile_pmt_split == 'ushape' else 2)),
              active_energy_only    = args.active_energy_only,
              birks_law             = args.birks_law,
              save_all_hits         = args.save_all_hits,

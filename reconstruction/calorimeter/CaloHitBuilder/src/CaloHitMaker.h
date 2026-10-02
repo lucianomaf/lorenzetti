@@ -102,6 +102,13 @@ class CaloHitMaker : public Gaugi::Algorithm
     std::vector<float> m_cellBoxZMax;
     std::vector<int>   m_cellBoxIndex;
     bool useCells() const { return !m_cellEta.empty(); }
+
+    // Dual readout of the tile cells, as in ATLAS (TileGeoG4SDCalc::MakePmtEdepTime): each cell is read by two
+    // PMTs, one on each side of the tiles in phi, and the energy of each step is shared between them according
+    // to its azimuthal position across the module. 0 = off (default), 1 = ATLAS U-shape, 2 = linear sharing.
+    int m_tileDualReadout;
+    bool isTile() const { return m_sampling >= 5 && m_sampling <= 10; }
+    void tilePmtWeights( float phiLocal, float z, float &w0, float &w1 ) const;
     int findCell( float radius, float z ) const;
 };
 
