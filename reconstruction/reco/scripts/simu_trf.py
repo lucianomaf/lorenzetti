@@ -97,6 +97,13 @@ def parse_args():
                              "measured U-shape of the ATLAS simulation (Athena, TileGeoG4SDCalc::"
                              "Tile_1D_profileRescaled); 'linear', 0.5 +- 0.2 from the centre to the edges of the "
                              "module, the two PMTs adding up to the cell energy.")
+    parser.add_argument('--atlas-material-in-front', action='store_true',
+                        dest='atlas_material_in_front', required=False,
+                        help="Material in front of the barrel electromagnetic calorimeter as in ATLAS, in radiation "
+                             "lengths at normal incidence: the solenoid (0.66 X0), the cryostat wall in front of the "
+                             "presampler (0.76 X0 of aluminium instead of 0.45) and the material between the presampler "
+                             "and the accordion (0.60 X0); JINST 3 (2008) S08003, fig. 5.1 and sec. 2.1.1. The inner "
+                             "detector is not included. Simulation only (the cells do not change). Off by default.")
     parser.add_argument('-t', '--timeout', action='store',
                         dest='timeout', required=False, type=int, default=240,
                         help="Event timeout in minutes")
@@ -132,6 +139,7 @@ def main(logging_level: str,
          enable_solenoid_field: bool,
          tile_atlas_geometry: bool,
          tile_atlas_cells: bool,
+         atlas_material_in_front: bool,
          tile_dual_readout: int,
          active_energy_only: bool,
          birks_law: bool,
@@ -161,6 +169,7 @@ def main(logging_level: str,
         enable_solenoid_field (bool): Toggle for the field confined to the solenoid volume.
         tile_atlas_geometry (bool): Build the ATLAS-like tile calorimeter.
         tile_atlas_cells (bool): Use the ATLAS tile cells (needs tile_atlas_geometry).
+        atlas_material_in_front (bool): Material in front of the barrel EM calorimeter as in ATLAS.
         tile_dual_readout (int): Two PMTs per tile cell: 0 = off, 1 = ATLAS U-shape, 2 = linear (needs tile_atlas_cells).
         active_energy_only (bool): Keep only the energy deposited in the active medium.
         birks_law (bool): Apply Birks' law in the scintillator and in the liquid argon.
@@ -184,7 +193,8 @@ def main(logging_level: str,
                                DetectorConstruction_v1( "ATLAS", UseMagneticField=enable_magnetic_field,
                                                         UseSolenoidField=enable_solenoid_field,
                                                         TileAtlasGeometry=tile_atlas_geometry,
-                                                        TileAtlasCells=tile_atlas_cells),
+                                                        TileAtlasCells=tile_atlas_cells,
+                                                        AtlasMaterialInFront=atlas_material_in_front),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
                                Timeout=timeout * MINUTES)
@@ -257,6 +267,7 @@ if __name__ == "__main__":
              enable_solenoid_field = args.enable_solenoid_field,
              tile_atlas_geometry   = args.tile_atlas_geometry,
              tile_atlas_cells      = args.tile_atlas_cells,
+             atlas_material_in_front = args.atlas_material_in_front,
              tile_dual_readout     = (0 if not args.tile_dual_readout else
                                       (1 if args.tile_pmt_split == 'ushape' else 2)),
              active_energy_only    = args.active_energy_only,

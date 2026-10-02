@@ -43,6 +43,7 @@ class DetectorConstruction_v1( Cpp ):
                 CutOnPhi          : bool=False,
                 TileAtlasGeometry : bool=False,
                 TileAtlasCells    : bool=False,
+                AtlasMaterialInFront : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -66,7 +67,9 @@ class DetectorConstruction_v1( Cpp ):
     if TileAtlasCells and not TileAtlasGeometry:
       raise ValueError("TileAtlasCells needs TileAtlasGeometry.")
     self.samplings.extend( getTileBarrelCfg(atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells)  )
-    self.volumes.extend( getDMVolumesCfg(tile_atlas_geometry=TileAtlasGeometry) )
+    # Material in front of the barrel electromagnetic calorimeter as in ATLAS (solenoid, cryostat wall and the material
+    # between the presampler and the accordion; see geometry/python/v1/DeadMaterials.py). Simulation only.
+    self.volumes.extend( getDMVolumesCfg(tile_atlas_geometry=TileAtlasGeometry, atlas_material_in_front=AtlasMaterialInFront) )
     # Right side (A)
     self.samplings.extend( getTileExtendedCfg(atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells)    )
     self.samplings.extend( getLArEMECCfg()         ) 
