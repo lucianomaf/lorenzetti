@@ -6,7 +6,7 @@ from .PhysicalVolume import PhysicalVolume, Plates, ProductionCuts
 from .TILE import TILE_ATLAS_BARREL_HALF_Z, TILE_ATLAS_EXTENDED_Z_START
 
 
-def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False):
+def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_itc=False):
     """
     Dead material in the crack between the barrel and the endcaps.
 
@@ -15,6 +15,9 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False):
         tile_atlas_geometry (bool): If True, the aluminium block that stands for the ITC fills the gap of the
                                     ATLAS-like tile calorimeter (TILE_ATLAS_BARREL_HALF_Z to
                                     TILE_ATLAS_EXTENDED_Z_START) instead of the default gap.
+        tile_atlas_itc (bool): If True (needs tile_atlas_geometry), the gap between the tile barrel and the extended
+                               barrel is built as in ATLAS instead of the aluminium block: the plug of the ITC (D4 and
+                               C10, passive) and the cables and services (see getAtlasItcCfg).
     """
 
     sign = -1 if left_side else 1
@@ -68,7 +71,67 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False):
     crack_em_pv.Cuts     = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
     crack_tile_pv.Cuts   = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
 
+    if tile_atlas_itc:
+        if not tile_atlas_geometry:
+            raise ValueError("tile_atlas_itc needs tile_atlas_geometry.")
+        return [crack_em_pv] + getAtlasItcCfg(left_side=left_side)
     return [crack_em_pv, crack_tile_pv]
+
+
+# The gap between the tile barrel (|z| < 2808 mm) and the extended barrel (|z| > 3554 mm) as in ATLAS. The gap "is filled
+# with cables and services for the inner detector as well as power supplies and services for the barrel liquid-argon
+# calorimeter"; "at the outer radius of the detector, a reduced section of a standard tile-calorimeter sub-module, the
+# plug, provides additional coverage" (JINST 3 (2008) S08003, sec. 5.5). Boxes from fig. 5.12 of the same paper:
+# D4 z 3225-3535 mm, r 3461-3850 mm; C10 z 3444-3531 mm, r 2988-3457 mm.
+# - Plug: tiles normal to the beam line with the period of the ATLAS-like tile calorimeter (14 mm steel, 3 mm
+#   scintillator, 1 mm clearance), passive (no cells): D4 with 17 periods (z 3227-3533 mm), C10 with 4 (3451.5-3523.5 mm).
+# - Cables and services: the mass is not given by the paper; aluminium with 5% of the volume, from a fit of the
+#   interaction lengths at the end of the tile calorimeter to fig. 5.2 of the paper for |eta| = 0.85 to 1.05 (the fit
+#   gives 0 to 5%), in three boxes around the plug, in shells of 50 mm or less.
+# Not modelled: the gap and cryostat scintillators E1-E4.
+ATLAS_ITC_SERVICES_FRACTION = 0.05
+
+def getAtlasItcCfg(left_side=False):
+    sign = -1 if left_side else 1
+    side_name = 'B' if left_side else 'A'
+    period = 18*mm; steel = 14*mm; tile = 3*mm; clearance = 1*mm
+    volumes = []
+    for name, nper, zc, rmin, rmax in (("D4", 17, 3380*mm, 3461*mm, 3850*mm), ("C10", 4, 3487.5*mm, 2988*mm, 3457*mm)):
+        pv = PhysicalVolume( Name               = "DM::ITC::"+name+"::"+side_name,
+                             Plates             = Plates.Vertical,
+                             AbsorberMaterial   = "G4_Fe",
+                             GapMaterial        = "PLASTIC SCINTILLATOR",
+                             NofLayers          = nper,
+                             AbsorberThickness  = steel,
+                             GapThickness       = tile,
+                             LayerClearance     = clearance,
+                             RMin               = rmin,
+                             RMax               = rmax,
+                             ZSize              = nper*period,
+                             X=0,Y=0,Z=sign*zc,
+                             Visualization = True,
+                             Color         = 'gray' )
+        pv.Cuts = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
+        volumes.append(pv)
+    for i, (z1, z2, r1, r2) in enumerate(((2808*mm, 3225*mm, 2283*mm, 3850*mm), (3225*mm, 3444*mm, 2283*mm, 3461*mm),
+                                          (3444*mm, 3554*mm, 2283*mm, 2988*mm))):
+        nlayers = max(1, int(round((r2 - r1) / (50*mm)))); layer = (r2 - r1) / nlayers
+        pv = PhysicalVolume( Name               = "DM::ITC::Services%d::%s" % (i+1, side_name),
+                             Plates             = Plates.Horizontal,
+                             AbsorberMaterial   = "G4_Al",
+                             GapMaterial        = "Vacuum",
+                             NofLayers          = nlayers,
+                             AbsorberThickness  = ATLAS_ITC_SERVICES_FRACTION*layer,
+                             GapThickness       = (1 - ATLAS_ITC_SERVICES_FRACTION)*layer,
+                             RMin               = r1,
+                             RMax               = r2,
+                             ZSize              = z2 - z1,
+                             X=0,Y=0,Z=sign*(z1 + z2)/2,
+                             Visualization = True,
+                             Color         = 'gray' )
+        pv.Cuts = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
+        volumes.append(pv)
+    return volumes
 
 
 def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False):

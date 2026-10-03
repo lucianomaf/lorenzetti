@@ -104,6 +104,12 @@ def parse_args():
                              "presampler (0.76 X0 of aluminium instead of 0.45) and the material between the presampler "
                              "and the accordion (0.60 X0); JINST 3 (2008) S08003, fig. 5.1 and sec. 2.1.1. The inner "
                              "detector is not included. Simulation only (the cells do not change). Off by default.")
+    parser.add_argument('--tile-atlas-itc', action='store_true',
+                        dest='tile_atlas_itc', required=False,
+                        help="Build the gap between the tile barrel and the extended barrel as in ATLAS instead of the "
+                             "aluminium block: the plug of the ITC (D4 and C10, steel and scintillator, passive) and the "
+                             "cables and services (aluminium with 5%% of the volume); JINST 3 (2008) S08003, sec. 5.5 and "
+                             "fig. 5.12. Needs --tile-atlas-geometry. Simulation only. Off by default.")
     parser.add_argument('-t', '--timeout', action='store',
                         dest='timeout', required=False, type=int, default=240,
                         help="Event timeout in minutes")
@@ -140,6 +146,7 @@ def main(logging_level: str,
          tile_atlas_geometry: bool,
          tile_atlas_cells: bool,
          atlas_material_in_front: bool,
+         tile_atlas_itc: bool,
          tile_dual_readout: int,
          active_energy_only: bool,
          birks_law: bool,
@@ -170,6 +177,7 @@ def main(logging_level: str,
         tile_atlas_geometry (bool): Build the ATLAS-like tile calorimeter.
         tile_atlas_cells (bool): Use the ATLAS tile cells (needs tile_atlas_geometry).
         atlas_material_in_front (bool): Material in front of the barrel EM calorimeter as in ATLAS.
+        tile_atlas_itc (bool): The gap between the tile barrel and the extended barrel as in ATLAS.
         tile_dual_readout (int): Two PMTs per tile cell: 0 = off, 1 = ATLAS U-shape, 2 = linear (needs tile_atlas_cells).
         active_energy_only (bool): Keep only the energy deposited in the active medium.
         birks_law (bool): Apply Birks' law in the scintillator and in the liquid argon.
@@ -194,7 +202,8 @@ def main(logging_level: str,
                                                         UseSolenoidField=enable_solenoid_field,
                                                         TileAtlasGeometry=tile_atlas_geometry,
                                                         TileAtlasCells=tile_atlas_cells,
-                                                        AtlasMaterialInFront=atlas_material_in_front),
+                                                        AtlasMaterialInFront=atlas_material_in_front,
+                                                        TileAtlasItc=tile_atlas_itc),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
                                Timeout=timeout * MINUTES)
@@ -253,6 +262,8 @@ if __name__ == "__main__":
         parser.error("--tile-atlas-cells needs --tile-atlas-geometry")
     if args.tile_dual_readout and not args.tile_atlas_cells:
         parser.error("--tile-dual-readout needs --tile-atlas-cells")
+    if args.tile_atlas_itc and not args.tile_atlas_geometry:
+        parser.error("--tile-atlas-itc needs --tile-atlas-geometry")
     print(f"output file: {args.output_file}")
     print(f"number of threads: {args.number_of_threads}")
 
@@ -268,6 +279,7 @@ if __name__ == "__main__":
              tile_atlas_geometry   = args.tile_atlas_geometry,
              tile_atlas_cells      = args.tile_atlas_cells,
              atlas_material_in_front = args.atlas_material_in_front,
+             tile_atlas_itc        = args.tile_atlas_itc,
              tile_dual_readout     = (0 if not args.tile_dual_readout else
                                       (1 if args.tile_pmt_split == 'ushape' else 2)),
              active_energy_only    = args.active_energy_only,

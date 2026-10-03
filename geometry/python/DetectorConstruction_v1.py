@@ -44,6 +44,7 @@ class DetectorConstruction_v1( Cpp ):
                 TileAtlasGeometry : bool=False,
                 TileAtlasCells    : bool=False,
                 AtlasMaterialInFront : bool=False,
+                TileAtlasItc      : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -74,12 +75,14 @@ class DetectorConstruction_v1( Cpp ):
     self.samplings.extend( getTileExtendedCfg(atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells)    )
     self.samplings.extend( getLArEMECCfg()         ) 
     self.samplings.extend( getHECCfg()             )
-    self.volumes.extend( getCrackVolumesCfg(tile_atlas_geometry=TileAtlasGeometry) )
+    # The gap between the tile barrel and the extended barrel as in ATLAS (plug of the ITC and services) instead of the
+    # aluminium block; needs TileAtlasGeometry (see geometry/python/v1/DeadMaterials.py). Simulation only.
+    self.volumes.extend( getCrackVolumesCfg(tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc) )
     # Left side (B)
     self.samplings.extend( getTileExtendedCfg(left_side = True, atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells) )
     self.samplings.extend( getLArEMECCfg(left_side=True)        ) 
     self.samplings.extend( getHECCfg(left_side=True)            )    
-    self.volumes.extend( getCrackVolumesCfg(left_side=True, tile_atlas_geometry=TileAtlasGeometry) )
+    self.volumes.extend( getCrackVolumesCfg(left_side=True, tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc) )
     self.samplings = flatten(self.samplings)
     
   
