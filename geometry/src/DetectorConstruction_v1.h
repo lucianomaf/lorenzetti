@@ -9,6 +9,7 @@
 #include "G4Region.hh"
 #include "globals.hh"
 #include "G4Cache.hh"
+#include <map>
 
 
 //enum Plates{
@@ -77,9 +78,16 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
                    double photonCut
                    );
 
+    // Horizontal plates whose absorber changes for |z| > zSplit, with the same layer thickness (the gap takes the rest
+    // of the layer): used for the lead of the ATLAS barrel EM calorimeter (1.53 mm below |eta| = 0.8, 1.13 mm above;
+    // option AtlasEmb in geometry/python). Must be called after AddVolume for the same region.
+    void SetAbsorberSplit(std::string region, double zSplit, std::string absorberMaterial2, double absoThickness2);
+    struct AbsorberSplit{ double z; std::string material; double thickness; };
+
   private:
 
     std::vector<Volume> m_volumes;
+    std::map<std::string, AbsorberSplit> m_absorberSplit;
 
     // methods
     void DefineMaterials();

@@ -3,6 +3,7 @@ __all__ = ["getLArBarrelCfg"]
 
 
 import os
+import numpy as np
 from CaloCell.CaloDefs import Detector, CaloSampling
 from GaugiKernel.constants import m,cm,mm,MeV,pi
 
@@ -11,9 +12,13 @@ from .PhysicalVolume import PhysicalVolume, Plates
 from .SensitiveDetector import SensitiveDetector
 
 
-def getLArBarrelCfg():
+def getLArBarrelCfg(atlas_emb=False):
   """
   Defines the geometry and readout configuration for the Liquid Argon (LAr) Barrel Calorimeter.
+
+  Args:
+      atlas_emb (bool): If True, the three layers have the absorber composition and the depth of the ATLAS barrel
+                        (see the comment before the ATLAS layers below); the presampler and the readout do not change.
 
   Constructs the physical volumes (PreSampler, Back, Middle, Strips) and assigns
   readout parameters such as pulse shapes, noise levels, and Optimal Filter weights.
@@ -93,6 +98,37 @@ def getLArBarrelCfg():
                           )
 
 
+
+  # ATLAS-like barrel layers (option atlas_emb). Absorber of ATLAS (JINST 3 (2008) S08003, sec. 5.2.1): lead of 1.53 mm
+  # for |eta| < 0.8 and 1.13 mm for |eta| > 0.8, two 0.2 mm stainless-steel sheets (as iron) and the glue and the readout
+  # electrode as 0.832 mm of polyimide, fitted to the X0 of the accordion at eta = 0 in fig. 5.1 (22.4 X0); liquid argon of
+  # 2 x 2.1 mm (sec. 5.2.2). Radial shells with a period of 6.962 mm (the accordion is not modelled); where the lead is
+  # thinner the argon takes the room (the number of absorbers and the folds are fixed). The change of lead at |eta| = 0.8
+  # is a cut in z at the mean radius of each layer, z = r * sinh(0.8) (about +-0.04 in eta at the inner and outer
+  # radius). Layers as in the default geometry (14, 47 and 7 periods), ending at 1973.4 mm (470 mm of depth in fig. 5.4).
+  if atlas_emb:
+    period = 6.962*mm; abso153 = (1.53 + 0.4 + 0.832)*mm; abso113 = (1.13 + 0.4 + 0.832)*mm
+    rmin = 150*cm; layers = []
+    for name, nlayers, color in (("LAr::EMB1", 14, 'aquamarine'), ("LAr::EMB2", 47, 'cornflowerblue'), ("LAr::EMB3", 7, 'cyan')):
+      rmax = rmin + nlayers*period
+      layers.append( PhysicalVolume( Name               = name,
+                                     Plates             = Plates.Horizontal,
+                                     AbsorberMaterial   = "ATLAS_EMB_ABSORBER_153",
+                                     GapMaterial        = "liquidArgon",
+                                     NofLayers          = nlayers,
+                                     AbsorberThickness  = abso153,
+                                     GapThickness       = period - abso153,
+                                     AbsorberSplitZ     = 0.5*(rmin + rmax)*np.sinh(0.8),
+                                     AbsorberMaterial2  = "ATLAS_EMB_ABSORBER_113",
+                                     AbsorberThickness2 = abso113,
+                                     RMin               = rmin,
+                                     RMax               = rmax,
+                                     ZSize              = ecal_barrel_z,
+                                     X=0,Y=0,Z=0,
+                                     Visualization = True,
+                                     Color         = color ) )
+      rmin = rmax
+    emb1_pv, emb2_pv, emb3_pv = layers
 
   psb_sv  = SensitiveDetector( psb_pv , DeltaEta = 0.025  , DeltaPhi = pi/32  )
   emb1_sv = SensitiveDetector( emb1_pv, DeltaEta = 0.00325, DeltaPhi = pi/32  )

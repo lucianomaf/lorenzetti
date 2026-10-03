@@ -97,6 +97,12 @@ void DetectorConstruction_v1::AddVolume(std::string region,
                       electronCut,positronCut,gammaCut,photonCut});
 }
 
+void DetectorConstruction_v1::SetAbsorberSplit(std::string region, double zSplit, std::string absorberMaterial2,
+                                               double absoThickness2)
+{
+  m_absorberSplit[region] = AbsorberSplit{zSplit, absorberMaterial2, absoThickness2};
+}
+
 
 
 G4VPhysicalVolume* DetectorConstruction_v1::Construct()
@@ -255,6 +261,27 @@ void DetectorConstruction_v1::DefineMaterials()
   // Vacuum
   new G4Material("Vacuum", z=1., a=1.01*g/mole,density= universe_mean_density,kStateGas, 2.73*kelvin, 3.e-18*pascal);
 
+  // Absorbers of the ATLAS barrel EM calorimeter (option AtlasEmb, geometry/python/v1/ECAL.py), as homogeneous mixtures
+  // with the masses per unit area of one absorber: lead (1.53 mm below |eta| = 0.8, 1.13 mm above), two 0.2 mm sheets of
+  // stainless steel (taken as iron) and 0.832 mm of polyimide for the glue and the readout electrode (JINST 3 (2008)
+  // S08003, sec. 5.2.1; the polyimide thickness is not given there and is fitted to the X0 of fig. 5.1 at eta = 0).
+  // Not used by the default geometry.
+  {
+    G4Material *pb = nistManager->FindOrBuildMaterial("G4_Pb");
+    G4Material *fe = nistManager->FindOrBuildMaterial("G4_Fe");
+    G4Material *kapton = nistManager->FindOrBuildMaterial("G4_KAPTON");
+    const double tfe = 0.4, tkapton = 0.832; // mm
+    for( double tpb : {1.53, 1.13} ){
+      const double mpb = tpb*pb->GetDensity(), mfe = tfe*fe->GetDensity(), mk = tkapton*kapton->GetDensity();
+      const double m = mpb + mfe + mk;
+      const std::string matName = (tpb > 1.3) ? "ATLAS_EMB_ABSORBER_153" : "ATLAS_EMB_ABSORBER_113";
+      G4Material *mix = new G4Material(matName, m/(tpb + tfe + tkapton), 3);
+      mix->AddMaterial(pb, mpb/m);
+      mix->AddMaterial(fe, mfe/m);
+      mix->AddMaterial(kapton, mk/m);
+    }
+  }
+
   // Print materials
   G4cout << *(G4Material::GetMaterialTable()) << G4endl;
 }
@@ -336,6 +363,7 @@ void DetectorConstruction_v1::CreateHorizontalPlates(  G4LogicalVolume *worldLV,
 
 
 
+  auto split = m_absorberSplit.find(name);
   for (G4int layer=0; layer < nofLayers; ++layer){
 
     G4VSolid* layerS = new G4Tubs(name+ "_Layer",// its name
@@ -365,6 +393,7 @@ void DetectorConstruction_v1::CreateHorizontalPlates(  G4LogicalVolume *worldLV,
     
 
 
+    if( split == m_absorberSplit.end() ){
     G4VSolid* absorverS = new G4Tubs( name+"_Abso",// its name
                                  calorRmin + layer*(absoThickness + gapThickness) ,     // R min 1700mm
                                  calorRmin + layer*(absoThickness + gapThickness) + absoThickness,   // R max 48cm+1700mm
@@ -419,6 +448,31 @@ void DetectorConstruction_v1::CreateHorizontalPlates(  G4LogicalVolume *worldLV,
                  m_checkOverlaps);  // checking overlaps
 
 
+    } else {
+      // Absorber changing for |z| > zSplit (SetAbsorberSplit): three pieces in z, the same layer thickness, the gap
+      // taking the rest of the layer in each piece.
+      const AbsorberSplit &sp = split->second;
+      G4Material *absorberMaterial2 = G4Material::GetMaterial(sp.material);
+      const double zh = calorZ/2;
+      if( !absorberMaterial2 || sp.z <= 0 || sp.z >= zh || sp.thickness <= 0 || sp.thickness >= layerThickness ){
+        G4ExceptionDescription msg;
+        msg << "Invalid absorber split for " << name;
+        G4Exception("DetectorConstruction_v1::CreateHorizontalPlates()", "MyCode0002", FatalException, msg);
+      }
+      const double r0 = calorRmin + layer*layerThickness;
+      struct Piece { double halfz; double zc; G4Material *mat; double t; };
+      const Piece pieces[3] = { {sp.z, 0., absorberMaterial, absoThickness},
+                                {(zh - sp.z)/2,  (zh + sp.z)/2, absorberMaterial2, sp.thickness},
+                                {(zh - sp.z)/2, -(zh + sp.z)/2, absorberMaterial2, sp.thickness} };
+      for( const auto &piece : pieces ){
+        G4VSolid* aS = new G4Tubs( name+"_Abso", r0, r0 + piece.t, piece.halfz, 0*deg, (!m_cutOnPhi)?(360*deg):(235*deg) );
+        G4LogicalVolume* aLV = new G4LogicalVolume( aS, piece.mat, name+"_Abso" );
+        new G4PVPlacement( 0, G4ThreeVector(0,0,piece.zc), aLV, name+"_Abso", layerLV, false, 0, m_checkOverlaps );
+        G4VSolid* gS = new G4Tubs( name+"_Gap", r0 + piece.t, r0 + layerThickness, piece.halfz, 0*deg, (!m_cutOnPhi)?(360*deg):(235*deg) );
+        G4LogicalVolume* gLV = new G4LogicalVolume( gS, gapMaterial, name+"_Gap" );
+        new G4PVPlacement( 0, G4ThreeVector(0,0,piece.zc), gLV, name+"_Gap", layerLV, false, 0, m_checkOverlaps );
+      }
+    }
   }// Loop over calorimeter layers
 }
 

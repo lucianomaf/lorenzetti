@@ -26,6 +26,9 @@ class PhysicalVolume(Logger):
                       "AbsorberThickness",
                       "GapThickness",
                       "LayerClearance",
+                      "AbsorberSplitZ",
+                      "AbsorberMaterial2",
+                      "AbsorberThickness2",
                       "RMin",
                       "RMax",
                       "ZSize",
@@ -43,6 +46,11 @@ class PhysicalVolume(Logger):
         # Empty space (envelope material) added to each layer after the gap, only for
         # Plates.Vertical: layer = absorber + gap + clearance. Default 0 keeps the original layout.
         self.LayerClearance = 0
+        # Horizontal plates only: for |z| > AbsorberSplitZ the absorber is AbsorberMaterial2 with AbsorberThickness2, in
+        # layers of the same thickness (the gap takes the rest). 0 (the default) keeps one absorber in the whole volume.
+        self.AbsorberSplitZ = 0
+        self.AbsorberMaterial2 = ""
+        self.AbsorberThickness2 = 0
         for key, value in kw.items():
           if key in self.__allow_keys:
             setattr(self, key, value )

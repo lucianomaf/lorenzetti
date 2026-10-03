@@ -110,6 +110,12 @@ def parse_args():
                              "aluminium block: the plug of the ITC (D4 and C10, steel and scintillator, passive) and the "
                              "cables and services (aluminium with 5%% of the volume); JINST 3 (2008) S08003, sec. 5.5 and "
                              "fig. 5.12. Needs --tile-atlas-geometry. Simulation only. Off by default.")
+    parser.add_argument('--atlas-emb', action='store_true',
+                        dest='atlas_emb', required=False,
+                        help="Barrel EM calorimeter with the ATLAS absorber composition: lead of 1.53 mm below "
+                             "|eta| = 0.8 and 1.13 mm above, two 0.2 mm steel sheets, glue and electrode, liquid argon "
+                             "of 2 x 2.1 mm, 470 mm of depth (JINST 3 (2008) S08003, sec. 5.2 and fig. 5.1). Radial "
+                             "shells, not the accordion. Use the same option in digit_trf.py. Off by default.")
     parser.add_argument('-t', '--timeout', action='store',
                         dest='timeout', required=False, type=int, default=240,
                         help="Event timeout in minutes")
@@ -147,6 +153,7 @@ def main(logging_level: str,
          tile_atlas_cells: bool,
          atlas_material_in_front: bool,
          tile_atlas_itc: bool,
+         atlas_emb: bool,
          tile_dual_readout: int,
          active_energy_only: bool,
          birks_law: bool,
@@ -178,6 +185,7 @@ def main(logging_level: str,
         tile_atlas_cells (bool): Use the ATLAS tile cells (needs tile_atlas_geometry).
         atlas_material_in_front (bool): Material in front of the barrel EM calorimeter as in ATLAS.
         tile_atlas_itc (bool): The gap between the tile barrel and the extended barrel as in ATLAS.
+        atlas_emb (bool): Barrel EM calorimeter with the ATLAS absorber composition.
         tile_dual_readout (int): Two PMTs per tile cell: 0 = off, 1 = ATLAS U-shape, 2 = linear (needs tile_atlas_cells).
         active_energy_only (bool): Keep only the energy deposited in the active medium.
         birks_law (bool): Apply Birks' law in the scintillator and in the liquid argon.
@@ -203,7 +211,8 @@ def main(logging_level: str,
                                                         TileAtlasGeometry=tile_atlas_geometry,
                                                         TileAtlasCells=tile_atlas_cells,
                                                         AtlasMaterialInFront=atlas_material_in_front,
-                                                        TileAtlasItc=tile_atlas_itc),
+                                                        TileAtlasItc=tile_atlas_itc,
+                                                        AtlasEmb=atlas_emb),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
                                Timeout=timeout * MINUTES)
@@ -280,6 +289,7 @@ if __name__ == "__main__":
              tile_atlas_cells      = args.tile_atlas_cells,
              atlas_material_in_front = args.atlas_material_in_front,
              tile_atlas_itc        = args.tile_atlas_itc,
+             atlas_emb             = args.atlas_emb,
              tile_dual_readout     = (0 if not args.tile_dual_readout else
                                       (1 if args.tile_pmt_split == 'ushape' else 2)),
              active_energy_only    = args.active_energy_only,

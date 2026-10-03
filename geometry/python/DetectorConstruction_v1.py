@@ -45,6 +45,7 @@ class DetectorConstruction_v1( Cpp ):
                 TileAtlasCells    : bool=False,
                 AtlasMaterialInFront : bool=False,
                 TileAtlasItc      : bool=False,
+                AtlasEmb          : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -60,7 +61,9 @@ class DetectorConstruction_v1( Cpp ):
     # Center
     
     #volumes.extend( getPixelBarrelCfg()   )
-    self.samplings.extend( getLArBarrelCfg()   )
+    # Barrel EM calorimeter with the ATLAS absorber composition (lead 1.53/1.13 mm, steel, glue and electrode) and depth
+    # (see geometry/python/v1/ECAL.py). The same value must be used in simulation and digitization.
+    self.samplings.extend( getLArBarrelCfg(atlas_emb=AtlasEmb)   )
     # ATLAS-like tile calorimeter (tiles normal to the beam line, 18 mm period, ATLAS layer radii and z extent;
     # see geometry/python/v1/TILE.py). The same value must be used in simulation and digitization. With it the
     # dead material next to the tile calorimeter (inner aluminium shell, ITC block) follows the ATLAS z extent.
@@ -108,6 +111,8 @@ class DetectorConstruction_v1( Cpp ):
                              pv.Cuts.GammaCut, 
                              pv.Cuts.PhotonCut
                              )
+      if pv.AbsorberSplitZ > 0:
+        self._core.SetAbsorberSplit( pv.Name, pv.AbsorberSplitZ, pv.AbsorberMaterial2, pv.AbsorberThickness2 )
 
   def summary(self):
 
