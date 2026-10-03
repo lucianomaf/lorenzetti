@@ -19,7 +19,7 @@ from geometry.v1.ECAL             import getLArBarrelCfg
 from geometry.v1.TILE             import getTileBarrelCfg, getTileExtendedCfg
 from geometry.v1.EMEC             import getLArEMECCfg
 from geometry.v1.HEC              import getHECCfg
-from geometry.v1.DeadMaterials    import getDMVolumesCfg, getCrackVolumesCfg
+from geometry.v1.DeadMaterials    import getDMVolumesCfg, getCrackVolumesCfg, getAtlasEndcapCryostatCfg
 #from geometry.detectors.Tracking      import *
 
 
@@ -46,6 +46,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasMaterialInFront : bool=False,
                 TileAtlasItc      : bool=False,
                 AtlasEmb          : bool=False,
+                AtlasEndcapCryostat : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -86,6 +87,11 @@ class DetectorConstruction_v1( Cpp ):
     self.samplings.extend( getLArEMECCfg(left_side=True)        ) 
     self.samplings.extend( getHECCfg(left_side=True)            )    
     self.volumes.extend( getCrackVolumesCfg(left_side=True, tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc) )
+    # Outer cylinders of the end-cap cryostats as in ATLAS (warm and cold vessels and the liquid argon between the EMEC
+    # and the cold vessel; see geometry/python/v1/DeadMaterials.py). Simulation only.
+    if AtlasEndcapCryostat:
+      self.volumes.extend( getAtlasEndcapCryostatCfg() )
+      self.volumes.extend( getAtlasEndcapCryostatCfg(left_side=True) )
     self.samplings = flatten(self.samplings)
     
   

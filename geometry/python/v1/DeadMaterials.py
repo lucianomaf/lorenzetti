@@ -1,5 +1,5 @@
 
-__all__ = ["getCrackVolumesCfg", "getDMVolumesCfg"]
+__all__ = ["getCrackVolumesCfg", "getDMVolumesCfg", "getAtlasEndcapCryostatCfg"]
 
 from GaugiKernel.constants import m,cm,mm
 from .PhysicalVolume import PhysicalVolume, Plates, ProductionCuts
@@ -123,6 +123,55 @@ def getAtlasItcCfg(left_side=False):
                              NofLayers          = nlayers,
                              AbsorberThickness  = ATLAS_ITC_SERVICES_FRACTION*layer,
                              GapThickness       = (1 - ATLAS_ITC_SERVICES_FRACTION)*layer,
+                             RMin               = r1,
+                             RMax               = r2,
+                             ZSize              = z2 - z1,
+                             X=0,Y=0,Z=sign*(z1 + z2)/2,
+                             Visualization = True,
+                             Color         = 'gray' )
+        pv.Cuts = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
+        volumes.append(pv)
+    return volumes
+
+
+# The outer cylinders of the end-cap cryostat as in ATLAS. Each end-cap cryostat is made of two aluminium vessels, a cold
+# vessel filled with liquid argon inside a warm vessel (JINST 3 (2008) S08003, sec. 5.4 and fig. 5.25: outer radius
+# 2.25 m, length 3.17 m). The thicknesses come from the LAr calorimeter TDR (CERN/LHCC 96-41, fig. 3-3 and fig. 5-i):
+# - warm vessel: outer cylinder of 20 mm, outer diameter 4560 mm (r = 2260 to 2280 mm), 2630 mm long from the front
+#   face, which is at z = 3500 mm, nominal; front wall of 15 mm;
+# - cold vessel: outer cylinder of 35 mm, inner diameter 4280 mm (r = 2140 to 2175 mm), 3015 mm long, starting 3 mm
+#   behind the warm front wall; front wall of 65 mm, back wall of 88 mm;
+# - the end-cap cryostats sit 40 mm further from the interaction point than nominal (JINST 3 S08003, sec. 5.2).
+# The cold vessel is full of liquid argon: between the outer radius of the EMEC (2042 mm) and the cold cylinder the argon
+# is dead material (no cells). The cylinders start at the end of DM::Crack::EM (z = 3717.5 mm), which already stands for
+# the front walls. Aluminium alloy 5083 is taken as G4_Al.
+# Not modelled: the step of the warm vessel to an outer diameter of 4950 mm in its last 535 mm (behind the end of the
+# tile calorimeter), the thicker back part of the cold cylinder, the feed-throughs and the cables.
+ATLAS_ENDCAP_CRYOSTAT_SHIFT = 40*mm
+ATLAS_ENDCAP_CRYOSTAT_START = 3717.55*mm   # end of DM::Crack::EM (3717.5 mm)
+
+def getAtlasEndcapCryostatCfg(left_side=False):
+    """
+    Outer cylinders of the end-cap cryostat and the liquid argon between the EMEC and the cold vessel, as in ATLAS
+    (see above). Simulation only.
+    """
+    sign = -1 if left_side else 1
+    side_name = 'B' if left_side else 'A'
+    warm_front = 3500*mm + ATLAS_ENDCAP_CRYOSTAT_SHIFT
+    cold_front = warm_front + 15*mm + 3*mm
+    z1 = ATLAS_ENDCAP_CRYOSTAT_START
+    volumes = []
+    #                name      material        r1          r2          z2
+    for name, material, r1, r2, z2 in (("Warm",  "G4_Al",       2260*mm,    2280*mm, warm_front + 2630*mm),
+                                       ("Cold",  "G4_Al",       2140.05*mm, 2175*mm, cold_front + 3015*mm),
+                                       ("LAr",   "liquidArgon", 2042.05*mm, 2140*mm, cold_front + 3015*mm - 88*mm)):
+        pv = PhysicalVolume( Name               = "DM::EndcapCryostat::"+name+"::"+side_name,
+                             Plates             = Plates.Horizontal,
+                             AbsorberMaterial   = material,
+                             GapMaterial        = "Vacuum",
+                             NofLayers          = 1,
+                             AbsorberThickness  = (r2 - r1) - 0.01*mm,
+                             GapThickness       = 0.01*mm,
                              RMin               = r1,
                              RMax               = r2,
                              ZSize              = z2 - z1,
