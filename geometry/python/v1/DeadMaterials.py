@@ -1,12 +1,12 @@
 
-__all__ = ["getCrackVolumesCfg", "getDMVolumesCfg", "getAtlasEndcapCryostatCfg"]
+__all__ = ["getCrackVolumesCfg", "getDMVolumesCfg", "getAtlasEndcapCryostatCfg", "getAtlasBarrelCryostatCfg"]
 
 from GaugiKernel.constants import m,cm,mm
 from .PhysicalVolume import PhysicalVolume, Plates, ProductionCuts
 from .TILE import TILE_ATLAS_BARREL_HALF_Z, TILE_ATLAS_EXTENDED_Z_START
 
 
-def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_itc=False):
+def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_itc=False, atlas_barrel_cryostat=False):
     """
     Dead material in the crack between the barrel and the endcaps.
 
@@ -18,6 +18,8 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_it
         tile_atlas_itc (bool): If True (needs tile_atlas_geometry), the gap between the tile barrel and the extended
                                barrel is built as in ATLAS instead of the aluminium block: the plug of the ITC (D4 and
                                C10, passive) and the cables and services (see getAtlasItcCfg).
+        atlas_barrel_cryostat (bool): With tile_atlas_itc, the services leave room for the step of the warm vessel of the
+                               ATLAS barrel cryostat (see getAtlasBarrelCryostatCfg).
     """
 
     sign = -1 if left_side else 1
@@ -74,7 +76,7 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_it
     if tile_atlas_itc:
         if not tile_atlas_geometry:
             raise ValueError("tile_atlas_itc needs tile_atlas_geometry.")
-        return [crack_em_pv] + getAtlasItcCfg(left_side=left_side)
+        return [crack_em_pv] + getAtlasItcCfg(left_side=left_side, atlas_barrel_cryostat=atlas_barrel_cryostat)
     return [crack_em_pv, crack_tile_pv]
 
 
@@ -91,7 +93,12 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_it
 # Not modelled: the gap and cryostat scintillators E1-E4.
 ATLAS_ITC_SERVICES_FRACTION = 0.05
 
-def getAtlasItcCfg(left_side=False):
+def getAtlasItcCfg(left_side=False, atlas_barrel_cryostat=False):
+    """
+    Plug of the ITC and services of the gap (see above). With atlas_barrel_cryostat the services leave room for the step of
+    the warm vessel of the barrel cryostat (r = 2250 to 2775 mm, |z| = 2865 to 3405 mm; see getAtlasBarrelCryostatCfg),
+    keeping the same 5% of aluminium in the remaining volume.
+    """
     sign = -1 if left_side else 1
     side_name = 'B' if left_side else 'A'
     period = 18*mm; steel = 14*mm; tile = 3*mm; clearance = 1*mm
@@ -113,8 +120,12 @@ def getAtlasItcCfg(left_side=False):
                              Color         = 'gray' )
         pv.Cuts = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
         volumes.append(pv)
-    for i, (z1, z2, r1, r2) in enumerate(((2808*mm, 3225*mm, 2283*mm, 3850*mm), (3225*mm, 3444*mm, 2283*mm, 3461*mm),
-                                          (3444*mm, 3554*mm, 2283*mm, 2988*mm))):
+    caixas = ((2808*mm, 3225*mm, 2283*mm, 3850*mm), (3225*mm, 3444*mm, 2283*mm, 3461*mm), (3444*mm, 3554*mm, 2283*mm, 2988*mm))
+    if atlas_barrel_cryostat:
+        caixas = ((2808*mm, 2864.95*mm, 2283*mm, 3850*mm), (2865*mm, 3225*mm, 2775.05*mm, 3850*mm),
+                  (3225*mm, 3405*mm, 2775.05*mm, 3461*mm), (3405.05*mm, 3444*mm, 2283*mm, 3461*mm),
+                  (3444*mm, 3554*mm, 2283*mm, 2988*mm))
+    for i, (z1, z2, r1, r2) in enumerate(caixas):
         nlayers = max(1, int(round((r2 - r1) / (50*mm)))); layer = (r2 - r1) / nlayers
         pv = PhysicalVolume( Name               = "DM::ITC::Services%d::%s" % (i+1, side_name),
                              Plates             = Plates.Horizontal,
@@ -183,11 +194,14 @@ def getAtlasEndcapCryostatCfg(left_side=False):
     return volumes
 
 
-def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False):
+def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, atlas_barrel_cryostat=False):
     """
     Dead material around the barrel calorimeters.
 
     Args:
+        atlas_barrel_cryostat (bool): If True, the two 100 mm aluminium shells around the barrel (DM::LAr::Boundary and
+                                    DM::TILE::Boundary) are replaced by the outer part of the ATLAS barrel cryostat (see
+                                    getAtlasBarrelCryostatCfg). Needs the services of the gap of tile_atlas_itc.
         tile_atlas_geometry (bool): If True, the aluminium shell inside the tile barrel follows the length of the
                                     ATLAS-like tile barrel (|z| < TILE_ATLAS_BARREL_HALF_Z).
         atlas_material_in_front (bool): If True, the material in front of the barrel electromagnetic calorimeter
@@ -269,9 +283,72 @@ def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False):
     ecal_boundary_pv.Cuts       = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
     tilecal_boundary_pv.Cuts    = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
 
-    volumes = [dm_pv, ecal_boundary_pv, tilecal_boundary_pv]
+    if atlas_barrel_cryostat:
+        # The two 100 mm aluminium shells are replaced by the outer part of the ATLAS barrel cryostat
+        volumes = [dm_pv] + getAtlasBarrelCryostatCfg()
+    else:
+        volumes = [dm_pv, ecal_boundary_pv, tilecal_boundary_pv]
     if atlas_material_in_front:
         volumes.extend( getAtlasMaterialInFrontCfg() )
+    return volumes
+
+
+# The outer part of the barrel cryostat as in ATLAS: two aluminium vessels, a cold vessel filled with liquid argon inside a
+# warm vessel (JINST 3 (2008) S08003, sec. 5.4). Dimensions from the LAr calorimeter TDR (CERN/LHCC 96-41, fig. 3-2, p. 67):
+# - cold vessel: outer cylinder of 30 mm, inner diameter 4280 mm (r = 2140 to 2170 mm), inner length 6534 mm
+#   (|z| < 3267 mm), end walls of 30 mm (|z| = 3267 to 3297 mm), and at each end a step of 220 mm up to an outer diameter
+#   of 4577 mm (r = 2258.5 to 2288.5 mm, |z| = 3077 to 3297 mm) for the feed-throughs;
+# - warm vessel: outer cylinder of 30 mm, outer diameter 4500 mm (r = 2220 to 2250 mm), length 6810 mm (|z| < 3405 mm),
+#   end walls of 50 mm (|z| = 3355 to 3405 mm), and at each end a step of 540 mm up to a diameter of 5550 mm (r up to
+#   2775 mm, |z| = 2865 to 3405 mm);
+# - the cold vessel is full of liquid argon: between the EM calorimeter and the cold cylinder it is dead material (no cells).
+# The walls of the steps are not dimensioned in the figure and are taken as 30 mm like the other walls. The EM barrel of
+# Lorenzetti is 250 mm longer than in ATLAS (|z| < 3400 against 3150 mm): the end walls only cover r > 1980 mm, outside it.
+# Inside the warm step there is vacuum (the feed-throughs are not modelled). Needs tile_atlas_itc: the services of the gap
+# leave room for the warm step (see getAtlasItcCfg).
+ATLAS_BARREL_CRYOSTAT_LAR_RMIN = 1980.05*mm   # outside the EM barrel (r < 1980 mm by default, 1973.4 mm with atlas_emb)
+
+def getAtlasBarrelCryostatCfg():
+    """
+    Outer part of the barrel cryostat as in ATLAS (see above). Simulation only.
+    """
+    def pv(name, plates, material, r1, r2, z1, z2):
+        if plates == Plates.Horizontal:
+            absorber, gap = (r2 - r1) - 0.01*mm, 0.01*mm
+        else:
+            absorber, gap = (z2 - z1) - 0.01*mm, 0.01*mm
+        p = PhysicalVolume( Name               = "DM::BarrelCryostat::"+name,
+                            Plates             = plates,
+                            AbsorberMaterial   = material,
+                            GapMaterial        = "Vacuum",
+                            NofLayers          = 1,
+                            AbsorberThickness  = absorber,
+                            GapThickness       = gap,
+                            RMin               = r1,
+                            RMax               = r2,
+                            ZSize              = z2 - z1,
+                            X=0,Y=0,Z=(z1 + z2)/2,
+                            Visualization = True,
+                            Color         = 'gray' )
+        p.Cuts = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
+        return p
+    H, V = Plates.Horizontal, Plates.Vertical
+    rlar = ATLAS_BARREL_CRYOSTAT_LAR_RMIN
+    # the three long volumes span both sides
+    volumes = [pv("ColdCylinder", H, "G4_Al",       2140.05*mm, 2170*mm, -3076.95*mm, 3076.95*mm),
+               pv("WarmCylinder", H, "G4_Al",       2220*mm,    2250*mm, -2864.95*mm, 2864.95*mm),
+               pv("LAr",          H, "liquidArgon", rlar,       2140*mm, -3266.95*mm, 3266.95*mm)]
+    for sign, side in ((1, 'A'), (-1, 'B')):
+        for name, plates, material, r1, r2, z1, z2 in (
+                ("ColdStepWall",  V, "G4_Al",       2140.05*mm, 2258.5*mm,  3077*mm,    3107*mm),
+                ("ColdStepOuter", H, "G4_Al",       2258.5*mm,  2288.5*mm,  3077*mm,    3297*mm),
+                ("ColdStepLAr",   H, "liquidArgon", 2140.05*mm, 2258.45*mm, 3107.05*mm, 3266.95*mm),
+                ("ColdEndWall",   V, "G4_Al",       rlar,       2258.45*mm, 3267*mm,    3297*mm),
+                ("WarmStepWall",  V, "G4_Al",       2220*mm,    2745*mm,    2865*mm,    2895*mm),
+                ("WarmStepOuter", H, "G4_Al",       2745*mm,    2775*mm,    2865*mm,    3405*mm),
+                ("WarmEndWall",   V, "G4_Al",       rlar,       2744.95*mm, 3355*mm,    3405*mm)):
+            za, zb = (z1, z2) if sign > 0 else (-z2, -z1)
+            volumes.append(pv(name+"::"+side, plates, material, r1, r2, za, zb))
     return volumes
 
 

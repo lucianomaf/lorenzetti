@@ -123,6 +123,13 @@ def parse_args():
                              "the EMEC and the cold vessel (dead material), from z = 3717.5 mm to the back of each vessel; "
                              "LAr calorimeter TDR, CERN/LHCC 96-41, fig. 3-3 and 5-i, and JINST 3 (2008) S08003, sec. "
                              "5.4. Simulation only (the cells do not change). Off by default.")
+    parser.add_argument('--atlas-barrel-cryostat', action='store_true',
+                        dest='atlas_barrel_cryostat', required=False,
+                        help="Outer part of the barrel cryostat as in ATLAS instead of the two 100 mm aluminium shells: "
+                             "cold and warm outer cylinders of 30 mm (r = 2140-2170 and 2220-2250 mm), end walls, the "
+                             "steps for the feed-throughs and the dead liquid argon between the EM barrel and the cold "
+                             "vessel; LAr calorimeter TDR, CERN/LHCC 96-41, fig. 3-2. Needs --tile-atlas-itc. "
+                             "Simulation only (the cells do not change). Off by default.")
     parser.add_argument('-t', '--timeout', action='store',
                         dest='timeout', required=False, type=int, default=240,
                         help="Event timeout in minutes")
@@ -162,6 +169,7 @@ def main(logging_level: str,
          tile_atlas_itc: bool,
          atlas_emb: bool,
          atlas_endcap_cryostat: bool,
+         atlas_barrel_cryostat: bool,
          tile_dual_readout: int,
          active_energy_only: bool,
          birks_law: bool,
@@ -195,6 +203,7 @@ def main(logging_level: str,
         tile_atlas_itc (bool): The gap between the tile barrel and the extended barrel as in ATLAS.
         atlas_emb (bool): Barrel EM calorimeter with the ATLAS absorber composition.
         atlas_endcap_cryostat (bool): Outer cylinders of the end-cap cryostats as in ATLAS.
+        atlas_barrel_cryostat (bool): Outer part of the barrel cryostat as in ATLAS.
         tile_dual_readout (int): Two PMTs per tile cell: 0 = off, 1 = ATLAS U-shape, 2 = linear (needs tile_atlas_cells).
         active_energy_only (bool): Keep only the energy deposited in the active medium.
         birks_law (bool): Apply Birks' law in the scintillator and in the liquid argon.
@@ -222,7 +231,8 @@ def main(logging_level: str,
                                                         AtlasMaterialInFront=atlas_material_in_front,
                                                         TileAtlasItc=tile_atlas_itc,
                                                         AtlasEmb=atlas_emb,
-                                                        AtlasEndcapCryostat=atlas_endcap_cryostat),
+                                                        AtlasEndcapCryostat=atlas_endcap_cryostat,
+                                                        AtlasBarrelCryostat=atlas_barrel_cryostat),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
                                Timeout=timeout * MINUTES)
@@ -301,6 +311,7 @@ if __name__ == "__main__":
              tile_atlas_itc        = args.tile_atlas_itc,
              atlas_emb             = args.atlas_emb,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,
+             atlas_barrel_cryostat = args.atlas_barrel_cryostat,
              tile_dual_readout     = (0 if not args.tile_dual_readout else
                                       (1 if args.tile_pmt_split == 'ushape' else 2)),
              active_energy_only    = args.active_energy_only,
