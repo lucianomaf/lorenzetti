@@ -5,6 +5,7 @@ from GaugiKernel import Logger, LoggingLevel
 from GaugiKernel.macros import MSG_INFO
 from CaloHitBuilder import CaloHitMaker
 from CaloHitBuilder import CaloHitMerge
+from CaloHitBuilder import CaloFreeRunningHitWriter
 from G4Kernel import ComponentAccumulator
 
 
@@ -21,6 +22,10 @@ class CaloHitBuilder(Logger):
                  ActiveEnergyOnly: bool = False,
                  BirksLaw: bool = False,
                  TileDualReadout: int = 0,
+                 FreeRunningHits: bool = False,
+                 FreeRunningBinning: bool = True,
+                 FreeRunningNtupleName: str = "CollectionTree",
+                 InputEventKey: str = "Events",
                  ):
 
         Logger.__init__(self, name)
@@ -31,6 +36,12 @@ class CaloHitBuilder(Logger):
         self.ActiveEnergyOnly = ActiveEnergyOnly
         self.BirksLaw = BirksLaw
         self.TileDualReadout = TileDualReadout
+        # Free-running hits: the tile deposits also go, per PMT, to a list written in the layout of the ATLAS HITS ntuple
+        # (CaloFreeRunningHitWriter, tree FreeRunningNtupleName); see CaloHitMaker::freeRunningTile.
+        self.FreeRunningHits = FreeRunningHits
+        self.FreeRunningBinning = FreeRunningBinning
+        self.FreeRunningNtupleName = FreeRunningNtupleName
+        self.InputEventKey = InputEventKey
         self.OutputCollectionKeys = []
 
     def configure(self):
@@ -54,7 +65,9 @@ class CaloHitBuilder(Logger):
                                DetailedHistograms=False,
                                ActiveEnergyOnly=self.ActiveEnergyOnly,
                                BirksLaw=self.BirksLaw,
-                               TileDualReadout=self.TileDualReadout
+                               TileDualReadout=self.TileDualReadout,
+                               FreeRunningHits=self.FreeRunningHits,
+                               FreeRunningBinning=self.FreeRunningBinning
                                )
 
             self.__recoAlgs.append(alg)
@@ -72,6 +85,13 @@ class CaloHitBuilder(Logger):
                                 OutputHitsKey=self.OutputHitsKey,
                                 OutputLevel=self.OutputLevel)
         self.__recoAlgs.append(mergeAlg)
+
+        if self.FreeRunningHits:
+            MSG_INFO(self, "Create CaloFreeRunningHitWriter (tree %s)", self.FreeRunningNtupleName)
+            self.__recoAlgs.append( CaloFreeRunningHitWriter("CaloFreeRunningHitWriter",
+                                                             InputEventKey=self.InputEventKey,
+                                                             NtupleName=self.FreeRunningNtupleName,
+                                                             OutputLevel=self.OutputLevel) )
 
     def merge(self, acc: ComponentAccumulator):
         """

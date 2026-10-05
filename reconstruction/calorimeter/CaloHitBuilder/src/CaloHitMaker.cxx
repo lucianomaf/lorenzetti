@@ -4,6 +4,7 @@
 #include "CaloHit/CaloHitCollection.h"
 #include "EventInfo/EventInfoContainer.h"
 #include "CaloHitMaker.h"
+#include "CaloFreeRunningHitList.h"
 #include "TileUShape.h"
 #include <algorithm>
 
@@ -82,6 +83,16 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   // Dual readout of the tile cells (two PMTs per cell, as in ATLAS): 0 = off, 1 = ATLAS U-shape, 2 = linear.
   // Only for the tile samplings and only with the ATLAS tile cells (CellEta not empty); see tilePmtWeights.
   declareProperty( "TileDualReadout"          , m_tileDualReadout=0                   );
+  // Free-running hits (simu_trf.py --free-running-hits): the deposits of the ATLAS tile cells also go, per PMT and with
+  // the identifier and the time of the ATLAS simulation, to the list FreeRunningListKey (see freeRunningTile).
+  declareProperty( "FreeRunningHits"          , m_freeRunningHits=false               );
+  declareProperty( "FreeRunningListKey"       , m_freeRunningListKey="FreeRunningHits");
+  declareProperty( "FreeRunningBinning"       , m_freeRunningBinning=true             );
+  declareProperty( "CellAtlasSection"         , m_cellAtlasSection                    );
+  declareProperty( "CellAtlasTower"           , m_cellAtlasTower                      );
+  declareProperty( "CellAtlasSampling"        , m_cellAtlasSampling                   );
+  declareProperty( "CellRCentre"              , m_cellRCentre                         );
+  declareProperty( "CellZCentre"              , m_cellZCentre                         );
 
 
 
@@ -99,6 +110,10 @@ StatusCode CaloHitMaker::initialize()
   m_nPhiBins = m_phiBins.size() - 1;
   if( m_tileDualReadout > 0 && isTile() && !useCells() ){
     MSG_FATAL( "TileDualReadout needs the ATLAS tile cells (CellEta)." );
+  }
+  if( m_freeRunningHits && isTile() && ( !useCells() || m_tileDualReadout <= 0 ||
+                                        m_cellAtlasSection.size() != m_cellEta.size() ) ){
+    MSG_FATAL( "FreeRunningHits needs the ATLAS tile cells with their ATLAS identifier fields and the dual readout." );
   }
 
   return StatusCode::SUCCESS;
@@ -137,6 +152,12 @@ StatusCode CaloHitMaker::bookHistograms( SG::EventContext &ctx ) const
  */
 StatusCode CaloHitMaker::pre_execute( EventContext &ctx ) const
 {
+  // One free-running hit list per event, shared by every sampling: the first maker of the sequence creates it.
+  if( m_freeRunningHits && !ctx.exist(m_freeRunningListKey) ){
+    SG::WriteHandle<CaloFreeRunningHitList> list( m_freeRunningListKey, ctx );
+    list.record( std::unique_ptr<CaloFreeRunningHitList>(new CaloFreeRunningHitList()) );
+  }
+
   // Build the CaloHitCollection and attach into the EventContext
   // Create the hit collection into the event context
   SG::WriteHandle<xAOD::CaloHitCollection> collection( m_collectionKey, ctx );
@@ -273,6 +294,9 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
       float w0, w1;
       tilePmtWeights( std::remainder( phi - hit->phi(), 2 * M_PI ), pos.z(), w0, w1 );
       hit->fillPmt( step, edep * w0, edep * w1 );
+      // Free-running hits: the same deposit and PMT weights, with the ATLAS identifier and time
+      if( m_freeRunningHits && edep > 0 )
+        freeRunningTile( ctx, step, etaBin, phiBin, edep, w0, w1 );
     }
   }else{
     MSG_FATAL( "Its not possible to retrieve the hit. Bin ("<< bin << ") not exist");
@@ -311,6 +335,79 @@ void CaloHitMaker::tilePmtWeights( float phiLocal, float z, float &w0, float &w1
   u = std::max( -1.f, std::min( 1.f, u ) );
   w1 = 0.5 + 0.2 * u;
   w0 = 1 - w1;
+}
+
+//!=====================================================================
+
+// Free-running hits of the ATLAS tile cells, per PMT, with the identifier and the time of the ATLAS simulation.
+// Sources (Athena, public, Apache 2.0; copies and report in the F41/F39 notes of the group):
+// - identifier: the pmt_id of the ATLAS identifier dictionary (DetectorDescription/IdDictParser/data/
+//   IdDictTileCalorimeter.xml), packed in 64 bits as the IdDict code does (IdDictDictionary, IdentifierField):
+//   subdet (Tile = index 2) in bits 63-61, section 60-58, side 57-54 (index: -1 -> 0, +1 -> 2), module 53-46,
+//   tower 45-40, sampling 39-36, pmt 35-34 (adc 33-32 = 0); checked against Calorimeter/CaloIdentifier/share/TileID_test.ref.
+//   The PMT on the side of larger phi ("up") is pmt 1, the other pmt 0 (the convention of tilePmtWeights); D0 is side +1.
+// - module m covers phi in [m, m+1] * 2 pi / 64 (TileDetDescr); side +1 for z > 0.
+// - time (TileGeoG4SDCalc::MakePmtEdepTime, DoTOFCorrection = true, refraction index 1.59 of tile and fibre): the global
+//   time at the post-step point, plus [r_cell (n - 2 / sin(theta_cell)) + |x| (1 - n sin(theta_hit))] / c, where r_cell and
+//   theta_cell are those of the centre of the cell and x the post-step position; each PMT adds
+//   n (dy - r_cell tan(pi/64)) / c, dy the distance of the step to the edge of the tile on the side of the other PMT
+//   (here: the edges of the module at +-pi/64 around its centre, from the pre-step position, as for the PMT weights).
+//   If the time of a PMT passes TimeCut = 350.5 ns, both go to the late hit time 99995 ns without the PMT delays; the
+//   energy is kept.
+// - time binning (option FreeRunningBinning; TileGeoG4SDCalc::deltaT, DeltaTHit = {0.5, -75.25, 75.25, 5.}): bins of
+//   0.5 ns for -75.25 < t < 75.25 ns, 5 ns elsewhere (see CaloFreeRunningHitList::add).
+void CaloHitMaker::freeRunningTile( SG::EventContext &ctx, const G4Step *step, int cell, int phiBin, float edep,
+                                    float w0, float w1 ) const
+{
+  SG::ReadHandle<CaloFreeRunningHitList> list( m_freeRunningListKey, ctx );
+  if( !list.isValid() ){
+    MSG_FATAL("It's not possible to retrieve the CaloFreeRunningHitList using this key: " << m_freeRunningListKey);
+  }
+  const double n = 1.59, timeCut = 350.5, lateHitTime = 99995., tanPi64 = std::tan(M_PI / 64);
+  const double cLight = CLHEP::c_light;   // mm/ns
+
+  // identifier fields
+  const double twoPi = 2 * M_PI, modWidth = twoPi / 64;
+  double phiCentre = 0.5 * ( m_phiBins[phiBin] + m_phiBins[phiBin+1] );
+  double phi0 = phiCentre < 0 ? phiCentre + twoPi : phiCentre;
+  int module = (int)std::floor( phi0 / modWidth ) % 64;
+  double moduleCentre = std::remainder( (module + 0.5) * modWidth, twoPi );
+  int section  = m_cellAtlasSection[cell];
+  int tower    = m_cellAtlasTower[cell];
+  int sampling = m_cellAtlasSampling[cell];
+  int side     = ( m_cellZCentre[cell] >= 0 || (section == 1 && sampling == 2 && tower == 0) ) ? +1 : -1;
+  auto pmtId = [&]( int pmt ) -> long long {
+    unsigned long long id = (2ULL << 61) | ((unsigned long long)section << 58) | ((unsigned long long)(side > 0 ? 2 : 0) << 54)
+                          | ((unsigned long long)module << 46) | ((unsigned long long)tower << 40)
+                          | ((unsigned long long)sampling << 36) | ((unsigned long long)pmt << 34);
+    return (long long)id;
+  };
+
+  // time of the deposit (ns)
+  const G4ThreeVector post = step->GetPostStepPoint()->GetPosition();
+  const G4ThreeVector pre  = step->GetPreStepPoint()->GetPosition();
+  double tglobal = step->GetPostStepPoint()->GetGlobalTime() / ns;
+  double rCell = m_cellRCentre[cell], zCell = m_cellZCentre[cell];
+  double sinThCell = rCell / std::sqrt( rCell*rCell + zCell*zCell );
+  double cosThHit = post.cosTheta();
+  double t = tglobal + ( rCell * ( n - 2.0 / sinThCell ) + post.mag() * ( 1.0 - n * std::sqrt( 1.0 - cosThHit*cosThHit ) ) ) / cLight;
+  // PMT delays: light across the tile to each edge; local frame of the module from the pre-step position
+  double phiLocal = std::remainder( pre.phi() - moduleCentre, twoPi );
+  double rPre = pre.perp();
+  double xLocal = rPre * std::cos(phiLocal), yLocal = rPre * std::sin(phiLocal);
+  double halfWidth = xLocal * tanPi64;
+  double dyUp = halfWidth - yLocal;     // to the edge on the side of larger phi (PMT 1 reads there)
+  double dyDown = halfWidth + yLocal;
+  double dtUp   = n * ( dyUp   - rCell * tanPi64 ) / cLight;
+  double dtDown = n * ( dyDown - rCell * tanPi64 ) / cLight;
+  if( t + dtUp > timeCut || t + dtDown > timeCut ){
+    t = lateHitTime; dtUp = dtDown = 0.0;
+  }
+  double delta = m_freeRunningBinning ? ( ( t > -75.25 && t < 75.25 ) ? 0.5 : 5.0 ) : 0.0;
+
+  double eta = m_cellEta[cell];
+  if( w1 * edep > 0 ) list->add( pmtId(1), w1 * edep, t + dtUp,   tglobal, eta, moduleCentre, sampling, side, module, tower, delta );
+  if( w0 * edep > 0 ) list->add( pmtId(0), w0 * edep, t + dtDown, tglobal, eta, moduleCentre, sampling, side, module, tower, delta );
 }
 
 //!=====================================================================

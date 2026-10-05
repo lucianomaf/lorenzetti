@@ -86,10 +86,17 @@ def _cellsFromRows(rows):
         b = boxes[name]; area = sum((x[1]-x[0])*(x[3]-x[2]) for x in b)
         return sum((x[1]-x[0])*(x[3]-x[2])*0.5*(x[2]+x[3]) for x in b) / area
     names = sorted(boxes, key=zcentre)
-    table = dict(Names=[], Eta=[], DeltaEta=[], BoxRMin=[], BoxRMax=[], BoxZMin=[], BoxZMax=[], BoxCell=[])
+    table = dict(Names=[], Eta=[], DeltaEta=[], BoxRMin=[], BoxRMax=[], BoxZMin=[], BoxZMax=[], BoxCell=[],
+                 AtlasSection=[], AtlasTower=[], AtlasSampling=[], RCentre=[], ZCentre=[])
     for i, name in enumerate(names):
         eta, deta = _cellEta(boxes[name])
         table['Names'].append(name); table['Eta'].append(round(eta, 5)); table['DeltaEta'].append(round(deta, 5))
+        # ATLAS identifier fields and area centroid in (r, z) of the cell (free-running hits)
+        section, tower, sampling = atlasTileIdFields(name)
+        b = boxes[name]; area = sum((x[1]-x[0])*(x[3]-x[2]) for x in b)
+        table['AtlasSection'].append(section); table['AtlasTower'].append(tower); table['AtlasSampling'].append(sampling)
+        table['RCentre'].append(sum((x[1]-x[0])*(x[3]-x[2])*0.5*(x[0]+x[1]) for x in b) / area)
+        table['ZCentre'].append(zcentre(name))
         for rmin, rmax, zmin, zmax in boxes[name]:
             table['BoxRMin'].append(rmin); table['BoxRMax'].append(rmax)
             table['BoxZMin'].append(zmin); table['BoxZMax'].append(zmax); table['BoxCell'].append(i)
@@ -143,6 +150,35 @@ def getAtlasTileCells(sampling_name, side=1):
         lo, hi = (bounds[k], bounds[k+1]) if side > 0 else (-bounds[k+1], -bounds[k])
         cells.append((f"{prefix}{first+k}{s}", lo, hi))
     return _cellsFromRows([(rmin, rmax, cells)])
+
+
+# ATLAS identifier fields (section, tower, sampling) of each ATLAS tile cell, used by the free-running hits of simu_trf.py.
+# Fields and allowed combinations from the public ATLAS identifier dictionary, Athena (Apache 2.0),
+# DetectorDescription/IdDictParser/data/IdDictTileCalorimeter.xml: section 1 = long barrel, 2 = extended barrel;
+# sampling 0 = A, 1 = BC (B in the extended barrel), 2 = D; tower = the 0.1 eta tower of the cell. Allowed (section, tower):
+# samplings, from the same dictionary: barrel tower 0: 0-2 (D0 only on side +1), 1, 3, 5, 7, 8: 0-1, 2, 4, 6: 0-2, 9: 0;
+# extended barrel tower 10: 1-2, 11, 13, 14: 0-1, 12: 0-2, 15: 0.
+_ATLAS_TILE_ALLOWED = {1: {0: (0, 1, 2), 1: (0, 1), 2: (0, 1, 2), 3: (0, 1), 4: (0, 1, 2), 5: (0, 1), 6: (0, 1, 2), 7: (0, 1),
+                           8: (0, 1), 9: (0,)},
+                       2: {10: (1, 2), 11: (0, 1), 12: (0, 1, 2), 13: (0, 1), 14: (0, 1), 15: (0,)}}
+
+def atlasTileIdFields(name):
+    """(section, tower, sampling) of the ATLAS identifier of an ATLAS tile cell, from its name (with or without the side
+    sign): A1-A10, BC1-BC8, B9, D0-D3 in the long barrel; A12-A16, B11-B15, D5, D6 in the extended barrel."""
+    n = name.rstrip('+-')
+    letters = n.rstrip('0123456789'); number = int(n[len(letters):])
+    if letters == 'A':
+        fields = (1, number - 1, 0) if number <= 10 else (2, number - 1, 0)
+    elif letters in ('BC', 'B'):
+        fields = (1, number - 1, 1) if number <= 9 else (2, number - 1, 1)
+    elif letters == 'D':
+        fields = (1, 2*number, 2) if number <= 3 else (2, 10 + 2*(number - 5), 2)
+    else:
+        raise ValueError(f"not an ATLAS tile cell: {name}")
+    section, tower, sampling = fields
+    if sampling not in _ATLAS_TILE_ALLOWED.get(section, {}).get(tower, ()):
+        raise ValueError(f"{name}: ({section}, {tower}, {sampling}) is not in the ATLAS identifier dictionary")
+    return fields
 
 
 def _getAtlasTileLayers(radii, zsize):

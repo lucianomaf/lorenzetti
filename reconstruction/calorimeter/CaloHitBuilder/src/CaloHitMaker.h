@@ -110,6 +110,21 @@ class CaloHitMaker : public Gaugi::Algorithm
     bool isTile() const { return m_sampling >= 5 && m_sampling <= 10; }
     void tilePmtWeights( float phiLocal, float z, float &w0, float &w1 ) const;
     int findCell( float radius, float z ) const;
+
+    // Free-running hits (simu_trf.py --free-running-hits): every deposit of the ATLAS tile cells also goes, per PMT, with
+    // the identifier and the time of the ATLAS simulation, to a per-event list written in the layout of the ATLAS HITS
+    // ntuple (CaloFreeRunningHitWriter). See freeRunningTile.
+    bool m_freeRunningHits;
+    std::string m_freeRunningListKey;
+    bool m_freeRunningBinning;
+    // ATLAS identifier fields and (r, z) centre of each cell (same order as m_cellEta; geometry/python/v1/TILE.py)
+    std::vector<int>   m_cellAtlasSection;
+    std::vector<int>   m_cellAtlasTower;
+    std::vector<int>   m_cellAtlasSampling;
+    std::vector<float> m_cellRCentre;
+    std::vector<float> m_cellZCentre;
+    void freeRunningTile( SG::EventContext &ctx, const G4Step *step, int cell, int phiBin, float edep, float w0,
+                          float w1 ) const;
 };
 
 

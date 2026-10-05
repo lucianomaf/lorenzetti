@@ -20,6 +20,9 @@ class CaloHitMaker( Cpp ):
                 ActiveEnergyOnly     : bool   = False,
                 BirksLaw             : bool   = False,
                 TileDualReadout      : int    = 0,
+                FreeRunningHits      : bool   = False,
+                FreeRunningListKey   : str    = "FreeRunningHits",
+                FreeRunningBinning   : bool   = True,
               ):
                     
     Cpp.__init__(self, ROOT.CaloHitMaker(name) )
@@ -44,6 +47,12 @@ class CaloHitMaker( Cpp ):
     self.setProperty( "BirksLaw"                , BirksLaw                    )
     # Dual readout of the tile cells (two PMTs per cell): 0 = off, 1 = ATLAS U-shape, 2 = linear sharing
     self.setProperty( "TileDualReadout"         , TileDualReadout             )
+    # Free-running hits (simu_trf.py --free-running-hits): every deposit of the ATLAS tile cells also goes, per PMT, to a
+    # list written in the layout of the ATLAS HITS ntuple (CaloFreeRunningHitWriter); with FreeRunningBinning the deposits
+    # of a PMT are summed in the time bins of the ATLAS simulation (TileSimHit). Only the tile samplings with the ATLAS cells.
+    self.setProperty( "FreeRunningHits"         , FreeRunningHits             )
+    self.setProperty( "FreeRunningListKey"      , FreeRunningListKey          )
+    self.setProperty( "FreeRunningBinning"      , FreeRunningBinning          )
     # Cells given as (r, z) boxes instead of the eta x phi grid (ATLAS tile cells, geometry/python/v1/TILE.py).
     # Without them (the default) the properties stay empty and the eta x phi grid is used. Only set when present:
     # setProperty cannot convert an empty list.
@@ -56,6 +65,12 @@ class CaloHitMaker( Cpp ):
       self.setProperty( "CellBoxZMin"           , [float(x) for x in cells["BoxZMin"]]  )
       self.setProperty( "CellBoxZMax"           , [float(x) for x in cells["BoxZMax"]]  )
       self.setProperty( "CellBoxIndex"          , [int(x) for x in cells["BoxCell"]]    )
+      if "AtlasSection" in cells:
+        self.setProperty( "CellAtlasSection"    , [int(x) for x in cells["AtlasSection"]]  )
+        self.setProperty( "CellAtlasTower"      , [int(x) for x in cells["AtlasTower"]]    )
+        self.setProperty( "CellAtlasSampling"   , [int(x) for x in cells["AtlasSampling"]] )
+        self.setProperty( "CellRCentre"         , [float(x) for x in cells["RCentre"]]     )
+        self.setProperty( "CellZCentre"         , [float(x) for x in cells["ZCentre"]]     )
     self.setProperty( "DetailedHistograms"      , DetailedHistograms          )
     self.setProperty( "HistogramPath"           , HistogramPath               )
     self.setProperty( "OutputLevel"             , OutputLevel                 )

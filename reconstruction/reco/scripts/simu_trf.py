@@ -149,6 +149,24 @@ def parse_args():
     parser.add_argument('--save-all-hits', action='store_true',
                         dest='save_all_hits', required=False,
                         help="Save all hits into the output file.")
+    parser.add_argument('--free-running-hits', action='store_true',
+                        dest='free_running_hits', required=False,
+                        help="Write the tile hits in the layout of the ATLAS HITS ntuple (tree CollectionTree: "
+                             "EventNumber, TileCalHit_cellID/energy/time/eta/phi/sampling/side/module/tower, plus the "
+                             "extra TileCalHit_tglobal; the LAr branches are written empty) instead of the standard HIT "
+                             "stream. As in the ATLAS simulation: one entry per PMT, with the ATLAS identifier (pmt_id, "
+                             "64-bit), the visible energy (active medium and Birks' law, switched on by this option), the "
+                             "time of TileGeoG4SDCalc (time of flight and fibre corrections, PMT delays, hits after "
+                             "350.5 ns kept at 99995 ns) and its time bins (0.5 ns within +-75.25 ns, 5 ns outside). "
+                             "Needs --tile-atlas-geometry and --tile-atlas-cells; switches on --tile-dual-readout (U-shape). "
+                             "Off by default.")
+    parser.add_argument('--free-running-no-binning', action='store_true',
+                        dest='free_running_no_binning', required=False,
+                        help="With --free-running-hits: one entry per PMT and Geant4 step, without the time bins.")
+    parser.add_argument('--free-running-keep-hits', action='store_true',
+                        dest='free_running_keep_hits', required=False,
+                        help="With --free-running-hits, for checks: keep also the standard HIT stream (tree "
+                             "CollectionTree) and write the free-running hits in the tree FreeRunningTree.")
     parser.add_argument('--dry-run', action='store_true',
                         dest='dry_run', required=False,
                         help="Run the script without executing the main logic.")
@@ -174,6 +192,9 @@ def main(logging_level: str,
          active_energy_only: bool,
          birks_law: bool,
          save_all_hits : bool,
+         free_running_hits : bool,
+         free_running_binning : bool,
+         free_running_keep_hits : bool,
          timeout: int,
          number_of_events: int,
          number_of_threads: int,
@@ -208,6 +229,9 @@ def main(logging_level: str,
         active_energy_only (bool): Keep only the energy deposited in the active medium.
         birks_law (bool): Apply Birks' law in the scintillator and in the liquid argon.
         save_all_hits (bool): If True, saves all hits regardless of Region of Interest (RoI).
+        free_running_hits (bool): Write the tile hits in the layout of the ATLAS HITS ntuple instead of the HIT stream.
+        free_running_binning (bool): Time bins of the ATLAS simulation for the free-running hits.
+        free_running_keep_hits (bool): Keep also the standard HIT stream (free-running hits in the tree FreeRunningTree).
         timeout (int): Timeout in minutes.
         number_of_events (int): Number of events to process.
         number_of_threads (int): Number of Geant4 threads.
@@ -249,20 +273,29 @@ def main(logging_level: str,
                                  OutputHitsKey=recordable("Hits"),
                                  ActiveEnergyOnly=active_energy_only,
                                  BirksLaw=birks_law,
-                                 TileDualReadout=tile_dual_readout
+                                 TileDualReadout=tile_dual_readout,
+                                 FreeRunningHits=free_running_hits,
+                                 FreeRunningBinning=free_running_binning,
+                                 FreeRunningNtupleName=("FreeRunningTree" if free_running_keep_hits else "CollectionTree"),
+                                 InputEventKey=recordable("Events")
                                  )
     
     gun.merge(acc)
     calorimeter.merge(acc)
-    HIT = RootStreamHITMaker("RootStreamHITMaker",
-                             OutputLevel=outputLevel,
-                             OnlyRoI= not save_all_hits,
-                             InputHitsKey=recordable("Hits"),
-                             InputEventKey=recordable("Events"),
-                             InputTruthKey=recordable("Particles"),
-                             InputSeedsKey=recordable("Seeds"),
-                             )
-    acc += HIT
+    if free_running_hits and not free_running_keep_hits:
+        # only the free-running hits (CaloFreeRunningHitWriter, added by the CaloHitBuilder)
+        HIT = None
+    else:
+        HIT = RootStreamHITMaker("RootStreamHITMaker",
+                                 OutputLevel=outputLevel,
+                                 OnlyRoI= not save_all_hits,
+                                 InputHitsKey=recordable("Hits"),
+                                 InputEventKey=recordable("Events"),
+                                 InputTruthKey=recordable("Particles"),
+                                 InputSeedsKey=recordable("Seeds"),
+                                 )
+    if HIT is not None:
+        acc += HIT
     
     exec(pre_exec)
     if not dry_run:
@@ -293,6 +326,18 @@ if __name__ == "__main__":
         parser.error("--tile-dual-readout needs --tile-atlas-cells")
     if args.tile_atlas_itc and not args.tile_atlas_geometry:
         parser.error("--tile-atlas-itc needs --tile-atlas-geometry")
+    if args.free_running_hits:
+        # free-running hits as in the ATLAS simulation: ATLAS tile cells, active medium, Birks' law, U-shape dual readout
+        if not (args.tile_atlas_geometry and args.tile_atlas_cells):
+            parser.error("--free-running-hits needs --tile-atlas-geometry and --tile-atlas-cells")
+        if args.tile_dual_readout and args.tile_pmt_split != 'ushape':
+            parser.error("--free-running-hits uses the U-shape sharing of the ATLAS simulation (--tile-pmt-split ushape)")
+        args.active_energy_only = True
+        args.birks_law = True
+        args.tile_dual_readout = True
+        args.tile_pmt_split = 'ushape'
+    elif args.free_running_no_binning or args.free_running_keep_hits:
+        parser.error("--free-running-no-binning and --free-running-keep-hits need --free-running-hits")
     print(f"output file: {args.output_file}")
     print(f"number of threads: {args.number_of_threads}")
 
@@ -317,6 +362,9 @@ if __name__ == "__main__":
              active_energy_only    = args.active_energy_only,
              birks_law             = args.birks_law,
              save_all_hits         = args.save_all_hits,
+             free_running_hits     = args.free_running_hits,
+             free_running_binning  = not args.free_running_no_binning,
+             free_running_keep_hits = args.free_running_keep_hits,
              timeout               = args.timeout,
              number_of_events      = args.number_of_events,
              number_of_threads     = args.number_of_threads,
