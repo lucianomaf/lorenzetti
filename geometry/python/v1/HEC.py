@@ -219,7 +219,7 @@ def getHECCfg(left_side=False, atlas_hec=False):
 #   CalculateIdentifier): in each block the cells are radial segments of the pads, [ETA_k, ETA_k+1] of the HecPad row of
 #   the block (HECLongBlock constructor), numbered from the inside out by isegInner, isegOuter and nInReg, as in
 #   HECGeometry::initialize; 2027 mm stands for the outer radius of the block and 375 mm (block 1) or 478 mm (blocks 2-7)
-#   for its inner radius. The radius is measured on the axis of the module, r cos(phi - phi_c), with phi_c the centre of
+#   for its inner radius (the innermost box starts at r = 0, see atlasHecRadialSegments). The radius is measured on the axis of the module, r cos(phi - phi_c), with phi_c the centre of
 #   the module (32 modules from phi = 0), as moduleY in HECGeometry (CaloHitMaker property CellRadiusModules).
 # - The front-end parameters of HEC0 (pulse, noise, optimal filter) are those of HEC1; HEC1-HEC3 keep theirs.
 # Not modelled: the 32 modules (phi cracks, tie rods, spacers), the electrodes (kapton) in the gaps, the readout pads.
@@ -283,8 +283,10 @@ def atlasHecRadialSegments(block):
         if lo == hi:
             raise RuntimeError(f"HEC block {num_blk}: empty radial segment {iseg}")
         if hi == 2027.: hi = r_outer
-        if lo == 375. and block == 0: lo = r_inner
-        elif lo == 478. and block > 0: lo = r_inner
+        # Innermost cell of the block from r = 0 (decision of 06/10/2026, F45 conserto 15 point 1): a step inside the
+        # volume (true radius above the inner radius) whose radius on the module axis falls below the inner radius goes to
+        # the innermost cell, as ietaMin in HECGeometry::CalculateIdentifier, instead of being dropped.
+        if (lo == 375. and block == 0) or (lo == 478. and block > 0): lo = 0.0
         out.append((region, ieta, lo, hi))
     return out
 
