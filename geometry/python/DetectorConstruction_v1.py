@@ -18,7 +18,7 @@ from geometry.v1.PhysicalVolume   import Plates
 from geometry.v1.ECAL             import getLArBarrelCfg
 from geometry.v1.TILE             import getTileBarrelCfg, getTileExtendedCfg
 from geometry.v1.EMEC             import getLArEMECCfg
-from geometry.v1.HEC              import getHECCfg
+from geometry.v1.HEC              import getHECCfg, getAtlasHecPassiveCfg
 from geometry.v1.DeadMaterials    import getDMVolumesCfg, getCrackVolumesCfg, getAtlasEndcapCryostatCfg
 #from geometry.detectors.Tracking      import *
 
@@ -48,6 +48,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasEmb          : bool=False,
                 AtlasEndcapCryostat : bool=False,
                 AtlasBarrelCryostat : bool=False,
+                AtlasHec          : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -84,7 +85,9 @@ class DetectorConstruction_v1( Cpp ):
     # Right side (A)
     self.samplings.extend( getTileExtendedCfg(atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells)    )
     self.samplings.extend( getLArEMECCfg()         ) 
-    self.samplings.extend( getHECCfg()             )
+    # HEC as in ATLAS: four samplings (HEC0-HEC3) in two wheels with the nominal z, plates and cells of ATLAS (see
+    # geometry/python/v1/HEC.py). The cells depend on it: the same value must be used in simulation and digitization.
+    self.samplings.extend( getHECCfg(atlas_hec=AtlasHec) )
     # The gap between the tile barrel and the extended barrel as in ATLAS (plug of the ITC and services) instead of the
     # aluminium block; needs TileAtlasGeometry (see geometry/python/v1/DeadMaterials.py). Simulation only.
     self.volumes.extend( getCrackVolumesCfg(tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc,
@@ -92,7 +95,7 @@ class DetectorConstruction_v1( Cpp ):
     # Left side (B)
     self.samplings.extend( getTileExtendedCfg(left_side = True, atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells) )
     self.samplings.extend( getLArEMECCfg(left_side=True)        ) 
-    self.samplings.extend( getHECCfg(left_side=True)            )    
+    self.samplings.extend( getHECCfg(left_side=True, atlas_hec=AtlasHec) )
     self.volumes.extend( getCrackVolumesCfg(left_side=True, tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc,
                                             atlas_barrel_cryostat=AtlasBarrelCryostat) )
     # Outer cylinders of the end-cap cryostats as in ATLAS (warm and cold vessels and the liquid argon between the EMEC
@@ -100,6 +103,10 @@ class DetectorConstruction_v1( Cpp ):
     if AtlasEndcapCryostat:
       self.volumes.extend( getAtlasEndcapCryostatCfg() )
       self.volumes.extend( getAtlasEndcapCryostatCfg(left_side=True) )
+    # Passive volumes of the ATLAS-like HEC: the first copper plate of each wheel and the liquid argon between the wheels.
+    if AtlasHec:
+      self.volumes.extend( getAtlasHecPassiveCfg() )
+      self.volumes.extend( getAtlasHecPassiveCfg(left_side=True) )
     self.samplings = flatten(self.samplings)
     
   

@@ -65,6 +65,9 @@ class CaloHitMaker( Cpp ):
       self.setProperty( "CellBoxZMin"           , [float(x) for x in cells["BoxZMin"]]  )
       self.setProperty( "CellBoxZMax"           , [float(x) for x in cells["BoxZMax"]]  )
       self.setProperty( "CellBoxIndex"          , [int(x) for x in cells["BoxCell"]]    )
+      # radius on the axis of the module (ATLAS-like HEC, geometry/python/v1/HEC.py); absent: r
+      if "RadiusModules" in cells:
+        self.setProperty( "CellRadiusModules"   , int(cells["RadiusModules"])           )
       if "AtlasSection" in cells:
         self.setProperty( "CellAtlasSection"    , [int(x) for x in cells["AtlasSection"]]  )
         self.setProperty( "CellAtlasTower"      , [int(x) for x in cells["AtlasTower"]]    )

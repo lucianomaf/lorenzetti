@@ -116,6 +116,14 @@ def parse_args():
                              "|eta| = 0.8 and 1.13 mm above, two 0.2 mm steel sheets, glue and electrode, liquid argon "
                              "of 2 x 2.1 mm, 470 mm of depth (JINST 3 (2008) S08003, sec. 5.2 and fig. 5.1). Radial "
                              "shells, not the accordion. Use the same option in digit_trf.py. Off by default.")
+    parser.add_argument('--atlas-hec', action='store_true',
+                        dest='atlas_hec', required=False,
+                        help="HEC as in ATLAS, with the nominal values of the ATLAS geometry (without the shift of the installed detector): "
+                             "four samplings HEC0-HEC3 in two wheels (z = 4277-5093.5 and 5134-6095 mm), copper plates "
+                             "of 25 and 50 mm with first plates of 12.5 and 25 mm, 8.5 mm gaps, and the cells of the "
+                             "ATLAS identifier dictionary found from the radius of the readout pads of each block, as "
+                             "in the ATLAS simulation (JINST 3 (2008) S08003, sec. 5.3; Athena HECGeometry). "
+                             "Use the same option in digit_trf.py. Off by default.")
     parser.add_argument('--atlas-endcap-cryostat', action='store_true',
                         dest='atlas_endcap_cryostat', required=False,
                         help="Outer cylinders of the end-cap cryostats as in ATLAS: warm vessel of 20 mm of aluminium "
@@ -191,6 +199,7 @@ def main(logging_level: str,
          atlas_material_in_front: bool,
          tile_atlas_itc: bool,
          atlas_emb: bool,
+         atlas_hec: bool,
          atlas_endcap_cryostat: bool,
          atlas_barrel_cryostat: bool,
          tile_dual_readout: int,
@@ -229,6 +238,7 @@ def main(logging_level: str,
         atlas_material_in_front (bool): Material in front of the barrel EM calorimeter as in ATLAS.
         tile_atlas_itc (bool): The gap between the tile barrel and the extended barrel as in ATLAS.
         atlas_emb (bool): Barrel EM calorimeter with the ATLAS absorber composition.
+        atlas_hec (bool): HEC as in ATLAS (four samplings, nominal geometry and cells of ATLAS).
         atlas_endcap_cryostat (bool): Outer cylinders of the end-cap cryostats as in ATLAS.
         atlas_barrel_cryostat (bool): Outer part of the barrel cryostat as in ATLAS.
         tile_dual_readout (int): Two PMTs per tile cell: 0 = off, 1 = ATLAS U-shape, 2 = linear (needs tile_atlas_cells).
@@ -262,6 +272,7 @@ def main(logging_level: str,
                                                         AtlasMaterialInFront=atlas_material_in_front,
                                                         TileAtlasItc=tile_atlas_itc,
                                                         AtlasEmb=atlas_emb,
+                                                        AtlasHec=atlas_hec,
                                                         AtlasEndcapCryostat=atlas_endcap_cryostat,
                                                         AtlasBarrelCryostat=atlas_barrel_cryostat),
                                NumberOfThreads=number_of_threads,
@@ -365,6 +376,7 @@ if __name__ == "__main__":
              atlas_material_in_front = args.atlas_material_in_front,
              tile_atlas_itc        = args.tile_atlas_itc,
              atlas_emb             = args.atlas_emb,
+             atlas_hec             = args.atlas_hec,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,
              atlas_barrel_cryostat = args.atlas_barrel_cryostat,
              tile_dual_readout     = (0 if not args.tile_dual_readout else

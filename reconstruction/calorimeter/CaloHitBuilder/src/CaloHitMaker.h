@@ -110,6 +110,11 @@ class CaloHitMaker : public Gaugi::Algorithm
     bool isTile() const { return m_sampling >= 5 && m_sampling <= 10; }
     void tilePmtWeights( float phiLocal, float z, float &w0, float &w1 ) const;
     int findCell( float radius, float z ) const;
+    // Radius used to find the (r, z) box of a step: r itself (CellRadiusModules = 0, the default) or, with N modules,
+    // the radius on the axis of the module that contains phi, r cos(phi - phi_c), modules of 2 pi / N from phi = 0
+    // (moduleY of the ATLAS HEC simulation, LArG4HEC HECGeometry::CalculateIdentifier; ATLAS-like HEC, --atlas-hec).
+    int m_cellRadiusModules;
+    float cellRadius( float radius, float phi ) const;
 
     // Free-running hits (simu_trf.py --free-running-hits): every deposit of the ATLAS tile cells also goes, per PMT, with
     // the identifier and the time of the ATLAS simulation, to a per-event list written in the layout of the ATLAS HITS

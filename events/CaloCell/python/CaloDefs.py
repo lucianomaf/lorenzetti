@@ -34,5 +34,8 @@ class CaloSampling(EnumStringification):
     HEC1      = 14
     HEC2      = 15
     HEC3      = 16
+    # First sampling of the ATLAS-like HEC (--atlas-hec; not used by default). Outside the range of the others so that
+    # the hash (sampling + 17 side) 1e7 + segment 1e6 + bin stays unique (see enumeration.h).
+    HEC0      = 60
 
 

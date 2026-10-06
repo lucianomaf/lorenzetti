@@ -62,6 +62,10 @@ def parse_args():
                         dest='atlas_emb', required=False,
                         help="Barrel EM calorimeter with the ATLAS absorber composition (see simu_trf.py). It must "
                              "match the option used in the simulation, since the barrel cells depend on it.")
+    parser.add_argument('--atlas-hec', action='store_true',
+                        dest='atlas_hec', required=False,
+                        help="HEC as in ATLAS (see simu_trf.py). It must match the option used in the simulation, "
+                             "since the HEC samplings and cells depend on it.")
     parser.add_argument('--tile-atlas-cells', action='store_true',
                         dest='tile_atlas_cells', required=False,
                         help="Hits simulated with --tile-atlas-cells (ATLAS tile cells). Not supported yet: the "
@@ -82,6 +86,7 @@ def main(events : List[int],
          post_exec: str,
          tile_atlas_geometry: bool = False,
          atlas_emb: bool = False,
+         atlas_hec: bool = False,
         ):
     """
     Main function for the digitization process.
@@ -100,6 +105,7 @@ def main(events : List[int],
         post_exec (str): Hook for post-execution code.
         tile_atlas_geometry (bool): Use the ATLAS-like tile calorimeter geometry.
         atlas_emb (bool): Barrel EM calorimeter with the ATLAS absorber composition.
+        atlas_hec (bool): HEC as in ATLAS (four samplings, nominal geometry and cells of ATLAS).
     """
 
     if isinstance(input_file, Path):
@@ -127,7 +133,8 @@ def main(events : List[int],
 
     # digitalization!    
     calorimeter = CaloCellBuilder("CaloCellBuilder", 
-                                  DetectorConstruction_v1("ATLAS", TileAtlasGeometry=tile_atlas_geometry, AtlasEmb=atlas_emb),
+                                  DetectorConstruction_v1("ATLAS", TileAtlasGeometry=tile_atlas_geometry, AtlasEmb=atlas_emb,
+                                                          AtlasHec=atlas_hec),
                                   HistogramPath="Expert/Cells",
                                   OutputLevel=outputLevel,
                                   InputHitsKey=recordable("Hits"),
@@ -172,4 +179,5 @@ if __name__ == "__main__":
          post_exec        = args.post_exec,
          tile_atlas_geometry = args.tile_atlas_geometry,
          atlas_emb        = args.atlas_emb,
+         atlas_hec        = args.atlas_hec,
          )

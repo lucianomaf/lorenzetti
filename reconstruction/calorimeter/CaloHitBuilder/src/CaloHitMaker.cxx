@@ -80,6 +80,9 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "CellBoxZMin"              , m_cellBoxZMin                         );
   declareProperty( "CellBoxZMax"              , m_cellBoxZMax                         );
   declareProperty( "CellBoxIndex"             , m_cellBoxIndex                        );
+  // With N > 0, the box of a step is found with the radius on the axis of its module (N modules from phi = 0),
+  // r cos(phi - phi_c), as the ATLAS HEC simulation does (see cellRadius); 0 (the default) uses r.
+  declareProperty( "CellRadiusModules"        , m_cellRadiusModules=0                 );
   // Dual readout of the tile cells (two PMTs per cell, as in ATLAS): 0 = off, 1 = ATLAS U-shape, 2 = linear.
   // Only for the tile samplings and only with the ATLAS tile cells (CellEta not empty); see tilePmtWeights.
   declareProperty( "TileDualReadout"          , m_tileDualReadout=0                   );
@@ -268,7 +271,7 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
     return StatusCode::SUCCESS;
 
   // Row of the cell: the eta bin of the grid, or the cell of the (r, z) boxes
-  int etaBin = useCells() ? findCell(radius, pos.z()) : find(m_etaBins, eta);
+  int etaBin = useCells() ? findCell(cellRadius(radius, phi), pos.z()) : find(m_etaBins, eta);
 
   if(etaBin < 0)
     return StatusCode::SUCCESS;
@@ -513,6 +516,23 @@ int CaloHitMaker::findCell( float radius, float z ) const
 
 //!=====================================================================
 
+// Radius used to find the (r, z) box of a step. With CellRadiusModules = N > 0: the distance to the beam line measured
+// on the axis of the module that contains phi, r cos(phi - phi_c), with modules of 2 pi / N from phi = 0 and phi_c
+// the centre of the module. This is moduleY of the ATLAS HEC simulation (Athena, LArCalorimeter/LArG4/LArG4HEC/src/
+// HECGeometry.cc, CalculateIdentifier: |y| of the step in the frame of its module), for 32 modules with the first
+// one starting at phi = 0 (phi0 = 0 of the HEC in the ATLAS identifier dictionary). N = 0 (default): r.
+float CaloHitMaker::cellRadius( float radius, float phi ) const
+{
+  if( m_cellRadiusModules <= 0 ) return radius;
+  const double twoPi = 2 * M_PI, width = twoPi / m_cellRadiusModules;
+  double phi0 = phi < 0 ? phi + twoPi : phi;
+  int module = (int)std::floor( phi0 / width );
+  if( module >= m_cellRadiusModules ) module = m_cellRadiusModules - 1;
+  return (float)( radius * std::cos( phi0 - (module + 0.5) * width ) );
+}
+
+//!=====================================================================
+
 int CaloHitMaker::find( const std::vector<float> &vec, float value) const
 {
   auto binIterator = std::adjacent_find( vec.begin(), vec.end(), [=](float left, float right){ return left < value and value <= right; }  );
@@ -540,6 +560,7 @@ class CaloSampling(EnumStringification):
     HEC1      = 14
     HEC2      = 15
     HEC3      = 16
+    HEC0      = 60   (ATLAS-like HEC, --atlas-hec)
 */
 unsigned long int CaloHitMaker::hash(unsigned bin) const
 {

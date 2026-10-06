@@ -22,6 +22,10 @@ enum CaloSampling{
     HEC1      = 14,
     HEC2      = 15,
     HEC3      = 16,
+    // First sampling of the ATLAS-like HEC (option --atlas-hec of simu_trf.py/digit_trf.py; not used by default).
+    // Outside the range of the others so that the hash (sampling + 17 side) 1e7 + segment 1e6 + bin stays unique
+    // (77e7 on side A, 94e7 on side B; the other samplings use up to 50e7).
+    HEC0      = 60,
 };
 
 
