@@ -124,6 +124,16 @@ def parse_args():
                              "ATLAS identifier dictionary found from the radius of the readout pads of each block, as "
                              "in the ATLAS simulation (JINST 3 (2008) S08003, sec. 5.3; Athena HECGeometry). "
                              "Use the same option in digit_trf.py. Off by default.")
+    parser.add_argument('--atlas-emec', action='store_true',
+                        dest='atlas_emec', required=False,
+                        help="EM end-cap as in ATLAS, with the nominal values of the ATLAS geometry (without the shift of the "
+                             "installed detector): two wheels (1.375-2.5 and 2.5-3.2 in eta, 3 mm apart) from z = 3702 to "
+                             "4216 mm, the cones approximated by steps; radial bands of 100 mm made of layers of an "
+                             "equivalent absorber (lead of 1.7 or 2.2 mm, steel, prepreg and electrode) and liquid "
+                             "argon with the gap of ATLAS at each radius; EMEC3 only in the outer wheel; the cells of "
+                             "the ATLAS identifier dictionary found as in the ATLAS simulation (JINST 3 (2008) S08003, "
+                             "sec. 5.2; Athena LArG4EC EnergyCalculator). The end-cap presampler is moved to just in "
+                             "front of the EMEC (provisional). Use the same option in digit_trf.py. Off by default.")
     parser.add_argument('--atlas-endcap-cryostat', action='store_true',
                         dest='atlas_endcap_cryostat', required=False,
                         help="Outer cylinders of the end-cap cryostats as in ATLAS: warm vessel of 20 mm of aluminium "
@@ -200,6 +210,7 @@ def main(logging_level: str,
          tile_atlas_itc: bool,
          atlas_emb: bool,
          atlas_hec: bool,
+         atlas_emec: bool,
          atlas_endcap_cryostat: bool,
          atlas_barrel_cryostat: bool,
          tile_dual_readout: int,
@@ -239,6 +250,7 @@ def main(logging_level: str,
         tile_atlas_itc (bool): The gap between the tile barrel and the extended barrel as in ATLAS.
         atlas_emb (bool): Barrel EM calorimeter with the ATLAS absorber composition.
         atlas_hec (bool): HEC as in ATLAS (four samplings, nominal geometry and cells of ATLAS).
+        atlas_emec (bool): EM end-cap as in ATLAS (two wheels, nominal geometry, composition and cells of ATLAS).
         atlas_endcap_cryostat (bool): Outer cylinders of the end-cap cryostats as in ATLAS.
         atlas_barrel_cryostat (bool): Outer part of the barrel cryostat as in ATLAS.
         tile_dual_readout (int): Two PMTs per tile cell: 0 = off, 1 = ATLAS U-shape, 2 = linear (needs tile_atlas_cells).
@@ -273,6 +285,7 @@ def main(logging_level: str,
                                                         TileAtlasItc=tile_atlas_itc,
                                                         AtlasEmb=atlas_emb,
                                                         AtlasHec=atlas_hec,
+                                                        AtlasEmec=atlas_emec,
                                                         AtlasEndcapCryostat=atlas_endcap_cryostat,
                                                         AtlasBarrelCryostat=atlas_barrel_cryostat),
                                NumberOfThreads=number_of_threads,
@@ -377,6 +390,7 @@ if __name__ == "__main__":
              tile_atlas_itc        = args.tile_atlas_itc,
              atlas_emb             = args.atlas_emb,
              atlas_hec             = args.atlas_hec,
+             atlas_emec            = args.atlas_emec,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,
              atlas_barrel_cryostat = args.atlas_barrel_cryostat,
              tile_dual_readout     = (0 if not args.tile_dual_readout else

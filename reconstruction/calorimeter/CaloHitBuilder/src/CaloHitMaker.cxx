@@ -83,6 +83,21 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   // With N > 0, the box of a step is found with the radius on the axis of its module (N modules from phi = 0),
   // r cos(phi - phi_c), as the ATLAS HEC simulation does (see cellRadius); 0 (the default) uses r.
   declareProperty( "CellRadiusModules"        , m_cellRadiusModules=0                 );
+  // ATLAS-like EM end-cap (geometry/python/v1/EMEC.py, --atlas-emec): with EmecCompartment > 0 the maker takes only the
+  // steps inside the volumes of its wheel (EmecWheel*) whose compartment, found as in the ATLAS simulation, is its own
+  // (see emecFindCell); the cells are those of the table (CellEta). 0 (the default): off.
+  declareProperty( "EmecCompartment"          , m_emecCompartment=0                   );
+  declareProperty( "EmecEtaScale"             , m_emecEtaScale=0                      );
+  declareProperty( "EmecEtaOffset"            , m_emecEtaOffset=0                     );
+  declareProperty( "EmecMaxEta"               , m_emecMaxEta=0                        );
+  declareProperty( "EmecFocalShift"           , m_emecFocalShift=0                    );
+  declareProperty( "EmecZSep12"               , m_emecZSep12                          );
+  declareProperty( "EmecZSep23"               , m_emecZSep23                          );
+  declareProperty( "EmecZInner"               , m_emecZInner                          );
+  declareProperty( "EmecWheelRMin"            , m_emecWheelRMin                       );
+  declareProperty( "EmecWheelRMax"            , m_emecWheelRMax                       );
+  declareProperty( "EmecWheelZMin"            , m_emecWheelZMin                       );
+  declareProperty( "EmecWheelZMax"            , m_emecWheelZMax                       );
   // Dual readout of the tile cells (two PMTs per cell, as in ATLAS): 0 = off, 1 = ATLAS U-shape, 2 = linear.
   // Only for the tile samplings and only with the ATLAS tile cells (CellEta not empty); see tilePmtWeights.
   declareProperty( "TileDualReadout"          , m_tileDualReadout=0                   );
@@ -117,6 +132,14 @@ StatusCode CaloHitMaker::initialize()
   if( m_freeRunningHits && isTile() && ( !useCells() || m_tileDualReadout <= 0 ||
                                         m_cellAtlasSection.size() != m_cellEta.size() ) ){
     MSG_FATAL( "FreeRunningHits needs the ATLAS tile cells with their ATLAS identifier fields and the dual readout." );
+  }
+
+  if( m_emecCompartment > 0 && ( m_emecZSep12.size() != 44 || m_emecZSep23.size() != 22 || m_emecZInner.size() != 7 ||
+                                 m_emecWheelRMin.empty() || m_emecWheelRMin.size() != m_emecWheelRMax.size() ||
+                                 m_emecWheelRMin.size() != m_emecWheelZMin.size() ||
+                                 m_emecWheelRMin.size() != m_emecWheelZMax.size() ||
+                                 m_cellEta.size() != (unsigned)(m_emecMaxEta + 1) || m_nPhiBins % 2 ) ){
+    MSG_FATAL( "EmecCompartment needs the tables of the ATLAS-like EM end-cap (geometry/python/v1/EMEC.py)." );
   }
 
   return StatusCode::SUCCESS;
@@ -270,16 +293,23 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
   if( !(pos.z() > m_zMin && pos.z() <= m_zMax))
     return StatusCode::SUCCESS;
 
-  // Row of the cell: the eta bin of the grid, or the cell of the (r, z) boxes
-  int etaBin = useCells() ? findCell(cellRadius(radius, phi), pos.z()) : find(m_etaBins, eta);
+  int etaBin, phiBin;
+  if( m_emecCompartment > 0 ){
+    // ATLAS-like EM end-cap: the step is taken only inside the wheel of this maker and in its compartment
+    if( emecFindCell( pos.x(), pos.y(), pos.z(), etaBin, phiBin ) != m_emecCompartment )
+      return StatusCode::SUCCESS;
+  }else{
+    // Row of the cell: the eta bin of the grid, or the cell of the (r, z) boxes
+    etaBin = useCells() ? findCell(cellRadius(radius, phi), pos.z()) : find(m_etaBins, eta);
 
-  if(etaBin < 0)
-    return StatusCode::SUCCESS;
+    if(etaBin < 0)
+      return StatusCode::SUCCESS;
 
-  int phiBin = find(m_phiBins, phi);
+    phiBin = find(m_phiBins, phi);
 
-  if(phiBin < 0)
-    return StatusCode::SUCCESS;
+    if(phiBin < 0)
+      return StatusCode::SUCCESS;
+  }
 
   int bin = m_nPhiBins * etaBin + phiBin;
 
@@ -529,6 +559,80 @@ float CaloHitMaker::cellRadius( float radius, float phi ) const
   int module = (int)std::floor( phi0 / width );
   if( module >= m_cellRadiusModules ) module = m_cellRadiusModules - 1;
   return (float)( radius * std::cos( phi0 - (module + 0.5) * width ) );
+}
+
+//!=====================================================================
+
+// ATLAS-like EM end-cap (geometry/python/v1/EMEC.py, --atlas-emec). Compartment of the point (x, y, z), in mm, as in the
+// ATLAS simulation (Athena, LArCalorimeter/LArG4/LArG4EC/src/EnergyCalculator.cc, FindIdentifier_Default):
+// - the point is first required to be inside one of the volumes of the wheel of this maker (EmecWheel*); otherwise 0;
+// - pforcell = (x, y, |z| - EmecFocalShift): the point seen from the electric focal point of its side (side B mirrored);
+//   eta is its pseudorapidity (as CLHEP Hep3Vector::pseudoRapidity) and zf = |z| - EmecFocalShift;
+// - the tables ZIW, ZSEP12, ZSEP23 come in 1e-4 cm and are converted as ATLAS does (emecZ);
+// - inner wheel (compartments 1 and 2): ipad = int((eta - 2.5) / 0.1) within 0-6; compartment 1 if zf < ZIW[ipad], else 2;
+// - outer wheel: ipad = int((eta - 1.4) / 0.025) within 0-43; if zf < ZSEP12[ipad] the compartment follows eta (> 2.4: 3,
+//   > 2.0: 4, > 1.8: 5, > 1.5: 6, > 1.425: 7, else 10); else, if zf < ZSEP23[ipad / 2], 8 (eta > 1.425) or 11; else 9.
+// When the compartment is that of this maker: eta index int(eta EmecEtaScale - EmecEtaOffset) within [0, EmecMaxEta],
+// and the phi slice k of 2 pi / N from phi = 0 (N = number of phi bins), stored in the bin of the -pi..pi grid of the
+// same slice, (k + N/2) mod N. The rules of the ATLAS simulation at the edges (high-voltage buses, kapton at the edges of
+// the wheels, validhit = false) are not applied: the indices are kept within their limits as in ATLAS.
+int CaloHitMaker::emecFindCell( double x, double y, double z, int &etaBin, int &phiBin ) const
+{
+  etaBin = -1; phiBin = -1;
+  const double r = std::sqrt( x*x + y*y );
+  bool inWheel = false;
+  for ( unsigned box = 0; box < m_emecWheelRMin.size(); ++box ){
+    if( r > m_emecWheelRMin[box] && r <= m_emecWheelRMax[box] && z > m_emecWheelZMin[box] && z <= m_emecWheelZMax[box] ){
+      inWheel = true;
+      break;
+    }
+  }
+  if( !inWheel ) return 0;
+
+  const double zf = std::abs(z) - m_emecFocalShift;
+  const double mag = std::sqrt( x*x + y*y + zf*zf );
+  double eta;
+  if( mag == 0 ) eta = 0;
+  else if( mag == zf ) eta = 1.0E72;
+  else if( mag == -zf ) eta = -1.0E72;
+  else eta = 0.5 * std::log( (mag + zf) / (mag - zf) );
+
+  int compartment = 0;
+  if( m_emecCompartment <= 2 ){ // inner wheel
+    int ipad = (int)( (eta - 2.5) / 0.1 );
+    if( ipad < 0 ) ipad = 0;
+    if( ipad > 6 ) ipad = 6;
+    compartment = ( zf < emecZ(m_emecZInner[ipad]) ) ? 1 : 2;
+  }else{ // outer wheel
+    int ipad = (int)( (eta - 1.4) / 0.025 );
+    if( ipad < 0 ) ipad = 0;
+    if( ipad > 43 ) ipad = 43;
+    if( zf < emecZ(m_emecZSep12[ipad]) ){
+      if     ( eta > 2.4   ) compartment = 3;
+      else if( eta > 2.0   ) compartment = 4;
+      else if( eta > 1.8   ) compartment = 5;
+      else if( eta > 1.5   ) compartment = 6;
+      else if( eta > 1.425 ) compartment = 7;
+      else                   compartment = 10;
+    }else if( zf < emecZ(m_emecZSep23[ipad/2]) ){
+      compartment = ( eta > 1.425 ) ? 8 : 11;
+    }else{
+      compartment = 9;
+    }
+  }
+  if( compartment != m_emecCompartment ) return compartment;
+
+  etaBin = (int)( eta * (double)m_emecEtaScale - (double)m_emecEtaOffset );
+  if( etaBin < 0 ) etaBin = 0;
+  if( etaBin > m_emecMaxEta ) etaBin = m_emecMaxEta;
+
+  const int nPhi = (int)m_phiBins.size() - 1;
+  double phi = std::atan2( y, x );
+  if( phi < 0 ) phi += 2 * M_PI;
+  int k = (int)std::floor( phi / ( 2 * M_PI / nPhi ) );
+  if( k >= nPhi ) k = nPhi - 1;
+  phiBin = ( k + nPhi / 2 ) % nPhi;
+  return compartment;
 }
 
 //!=====================================================================

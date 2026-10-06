@@ -282,6 +282,30 @@ void DetectorConstruction_v1::DefineMaterials()
     }
   }
 
+  // Absorbers of the ATLAS-like EM end-cap (option AtlasEmec, geometry/python/v1/EMEC.py), as homogeneous mixtures with
+  // the masses per unit area of one absorber and one electrode: lead (1.7 mm in the outer wheel, 2.2 mm in the inner one;
+  // JINST 3 (2008) S08003, sec. 5.2.1), two 0.2 mm sheets of stainless steel (taken as iron), two 0.15 mm prepreg sheets
+  // (taken as polyimide; LAr TDR, CERN/LHCC 96-41, sec. 7.2) and the readout electrode of 0.275 mm, with 0.105 mm of
+  // copper and 0.170 mm of polyimide and glue (taken as polyimide; LAr TDR, fig. 6-16). Not used by the default geometry.
+  {
+    G4Material *pb = nistManager->FindOrBuildMaterial("G4_Pb");
+    G4Material *fe = nistManager->FindOrBuildMaterial("G4_Fe");
+    G4Material *kapton = nistManager->FindOrBuildMaterial("G4_KAPTON");
+    G4Material *cu = nistManager->FindOrBuildMaterial("G4_Cu");
+    const double tfe = 0.4, tkapton = 0.3 + 0.170, tcu = 0.105; // mm
+    for( double tpb : {1.7, 2.2} ){
+      const double mpb = tpb*pb->GetDensity(), mfe = tfe*fe->GetDensity(), mk = tkapton*kapton->GetDensity();
+      const double mcu = tcu*cu->GetDensity();
+      const double m = mpb + mfe + mk + mcu;
+      const std::string matName = (tpb < 2.0) ? "ATLAS_EMEC_ABSORBER_OUTER" : "ATLAS_EMEC_ABSORBER_INNER";
+      G4Material *mix = new G4Material(matName, m/(tpb + tfe + tkapton + tcu), 4);
+      mix->AddMaterial(pb, mpb/m);
+      mix->AddMaterial(fe, mfe/m);
+      mix->AddMaterial(kapton, mk/m);
+      mix->AddMaterial(cu, mcu/m);
+    }
+  }
+
   // Print materials
   G4cout << *(G4Material::GetMaterialTable()) << G4endl;
 }

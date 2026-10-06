@@ -50,6 +50,12 @@ class CaloHitMaker : public Gaugi::Algorithm
     
     virtual StatusCode finalize() override;
 
+    /*! ATLAS-like EM end-cap (EmecCompartment > 0; geometry/python/v1/EMEC.py, --atlas-emec): the compartment (1-11)
+        of the point (x, y, z), in mm, as in the ATLAS simulation (LArG4EC EnergyCalculator::FindIdentifier_Default),
+        and, when it is the compartment of this maker, the eta index and the phi bin of its cell; 0 when the point is
+        outside the wheel of this maker. Public so that the assignment can be tested from Python. */
+    int emecFindCell( double x, double y, double z, int &etaBin, int &phiBin ) const;
+
   private:
    
     int find( const std::vector<float> &vec, float value) const;
@@ -115,6 +121,26 @@ class CaloHitMaker : public Gaugi::Algorithm
     // (moduleY of the ATLAS HEC simulation, LArG4HEC HECGeometry::CalculateIdentifier; ATLAS-like HEC, --atlas-hec).
     int m_cellRadiusModules;
     float cellRadius( float radius, float phi ) const;
+
+    // ATLAS-like EM end-cap (see emecFindCell): the compartment read by this maker (1-11 as in the table s_geometry of
+    // EnergyCalculator.cc; 0 = off, the default), its eta scale, offset and last index, the distance from the
+    // mechanical to the electric focal point, the boundaries in z between the compartments (EmecSamplingSep: ZSEP12,
+    // ZSEP23, ZIW, from the electric focal point, integers in 1e-4 cm as in the database) and the volumes (r, z boxes)
+    // of the wheel of the compartment.
+    int m_emecCompartment;
+    float m_emecEtaScale;
+    float m_emecEtaOffset;
+    int m_emecMaxEta;
+    float m_emecFocalShift;
+    std::vector<int> m_emecZSep12;
+    std::vector<int> m_emecZSep23;
+    std::vector<int> m_emecZInner;
+    // z boundary (mm) from a table value in 1e-4 cm, as the ATLAS simulation reads it (value in cm times CLHEP::cm)
+    static double emecZ( int value ) { return ( value / 1e4 ) * 10.; }
+    std::vector<float> m_emecWheelRMin;
+    std::vector<float> m_emecWheelRMax;
+    std::vector<float> m_emecWheelZMin;
+    std::vector<float> m_emecWheelZMax;
 
     // Free-running hits (simu_trf.py --free-running-hits): every deposit of the ATLAS tile cells also goes, per PMT, with
     // the identifier and the time of the ATLAS simulation, to a per-event list written in the layout of the ATLAS HITS

@@ -60,11 +60,24 @@ class CaloHitMaker( Cpp ):
     if cells:
       self.setProperty( "CellEta"               , [float(x) for x in cells["Eta"]]      )
       self.setProperty( "CellDeltaEta"          , [float(x) for x in cells["DeltaEta"]] )
-      self.setProperty( "CellBoxRMin"           , [float(x) for x in cells["BoxRMin"]]  )
-      self.setProperty( "CellBoxRMax"           , [float(x) for x in cells["BoxRMax"]]  )
-      self.setProperty( "CellBoxZMin"           , [float(x) for x in cells["BoxZMin"]]  )
-      self.setProperty( "CellBoxZMax"           , [float(x) for x in cells["BoxZMax"]]  )
-      self.setProperty( "CellBoxIndex"          , [int(x) for x in cells["BoxCell"]]    )
+      if "BoxRMin" in cells:
+        self.setProperty( "CellBoxRMin"         , [float(x) for x in cells["BoxRMin"]]  )
+        self.setProperty( "CellBoxRMax"         , [float(x) for x in cells["BoxRMax"]]  )
+        self.setProperty( "CellBoxZMin"         , [float(x) for x in cells["BoxZMin"]]  )
+        self.setProperty( "CellBoxZMax"         , [float(x) for x in cells["BoxZMax"]]  )
+        self.setProperty( "CellBoxIndex"        , [int(x) for x in cells["BoxCell"]]    )
+      # ATLAS-like EM end-cap (geometry/python/v1/EMEC.py): the compartment of this maker, its eta index, the tables
+      # of the compartment boundaries and the volumes of its wheel (see CaloHitMaker::emecFindCell)
+      if "EmecCompartment" in cells:
+        self.setProperty( "EmecCompartment"     , int(cells["EmecCompartment"])           )
+        self.setProperty( "EmecEtaScale"        , float(cells["EmecEtaScale"])            )
+        self.setProperty( "EmecEtaOffset"       , float(cells["EmecEtaOffset"])           )
+        self.setProperty( "EmecMaxEta"          , int(cells["EmecMaxEta"])                )
+        self.setProperty( "EmecFocalShift"      , float(cells["EmecFocalShift"])          )
+        for key in ("EmecZSep12", "EmecZSep23", "EmecZInner"):   # integers, 1e-4 cm
+          self.setProperty( key                 , [int(x) for x in cells[key]]             )
+        for key in ("EmecWheelRMin", "EmecWheelRMax", "EmecWheelZMin", "EmecWheelZMax"):
+          self.setProperty( key                 , [float(x) for x in cells[key]]           )
       # radius on the axis of the module (ATLAS-like HEC, geometry/python/v1/HEC.py); absent: r
       if "RadiusModules" in cells:
         self.setProperty( "CellRadiusModules"   , int(cells["RadiusModules"])           )

@@ -17,7 +17,7 @@ from GaugiKernel.macros import *
 from geometry.v1.PhysicalVolume   import Plates
 from geometry.v1.ECAL             import getLArBarrelCfg
 from geometry.v1.TILE             import getTileBarrelCfg, getTileExtendedCfg
-from geometry.v1.EMEC             import getLArEMECCfg
+from geometry.v1.EMEC             import getLArEMECCfg, getAtlasEmecVolumesCfg
 from geometry.v1.HEC              import getHECCfg, getAtlasHecPassiveCfg
 from geometry.v1.DeadMaterials    import getDMVolumesCfg, getCrackVolumesCfg, getAtlasEndcapCryostatCfg
 #from geometry.detectors.Tracking      import *
@@ -49,6 +49,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasEndcapCryostat : bool=False,
                 AtlasBarrelCryostat : bool=False,
                 AtlasHec          : bool=False,
+                AtlasEmec         : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -84,7 +85,9 @@ class DetectorConstruction_v1( Cpp ):
                                          atlas_barrel_cryostat=AtlasBarrelCryostat) )
     # Right side (A)
     self.samplings.extend( getTileExtendedCfg(atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells)    )
-    self.samplings.extend( getLArEMECCfg()         ) 
+    # EMEC as in ATLAS: two wheels with the nominal z, composition and cells of ATLAS (see geometry/python/v1/EMEC.py).
+    # The cells depend on it: the same value must be used in simulation and digitization.
+    self.samplings.extend( getLArEMECCfg(atlas_emec=AtlasEmec) )
     # HEC as in ATLAS: four samplings (HEC0-HEC3) in two wheels with the nominal z, plates and cells of ATLAS (see
     # geometry/python/v1/HEC.py). The cells depend on it: the same value must be used in simulation and digitization.
     self.samplings.extend( getHECCfg(atlas_hec=AtlasHec) )
@@ -94,7 +97,7 @@ class DetectorConstruction_v1( Cpp ):
                                             atlas_barrel_cryostat=AtlasBarrelCryostat) )
     # Left side (B)
     self.samplings.extend( getTileExtendedCfg(left_side = True, atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells) )
-    self.samplings.extend( getLArEMECCfg(left_side=True)        ) 
+    self.samplings.extend( getLArEMECCfg(left_side=True, atlas_emec=AtlasEmec) )
     self.samplings.extend( getHECCfg(left_side=True, atlas_hec=AtlasHec) )
     self.volumes.extend( getCrackVolumesCfg(left_side=True, tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc,
                                             atlas_barrel_cryostat=AtlasBarrelCryostat) )
@@ -107,6 +110,10 @@ class DetectorConstruction_v1( Cpp ):
     if AtlasHec:
       self.volumes.extend( getAtlasHecPassiveCfg() )
       self.volumes.extend( getAtlasHecPassiveCfg(left_side=True) )
+    # Volumes of the ATLAS-like EMEC (radial bands and steps of the two wheels); their cells come from the samplings.
+    if AtlasEmec:
+      self.volumes.extend( getAtlasEmecVolumesCfg() )
+      self.volumes.extend( getAtlasEmecVolumesCfg(left_side=True) )
     self.samplings = flatten(self.samplings)
     
   
@@ -114,7 +121,8 @@ class DetectorConstruction_v1( Cpp ):
     # Create all volumes inside of the detector
     
     volumes = [pv for pv in self.volumes]
-    volumes.extend( [samp.volume() for samp in self.samplings] )
+    # The envelopes of the ATLAS-like EMEC (Envelope = True) only give the limits of its hit makers: not built.
+    volumes.extend( [samp.volume() for samp in self.samplings if not getattr(samp.volume(), 'Envelope', False)] )
           
     for pv in tqdm( volumes, desc="Compiling  volumes...", ncols=70):
       self._core.AddVolume( pv.Name, pv.Plates, pv.AbsorberMaterial, pv.GapMaterial, 
@@ -202,6 +210,7 @@ class DetectorConstruction_v1( Cpp ):
 
     for samp in self.samplings:
       vol = samp.volume()
+      if getattr(vol, 'Envelope', False): continue
       commands.extend( _add_volume_vis_commands( vol.name(), vol.Color, 'true' if vol.Visualization else 'false') )
     for vol in self.volumes:
       commands.extend( _add_volume_vis_commands( vol.name(), vol.Color, 'true' if vol.Visualization else 'false') )
