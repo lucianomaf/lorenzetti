@@ -24,6 +24,7 @@ class ComponentAccumulator(Cpp):
                  NumberOfThreads: int = 1,
                  Timeout: int = 120*MINUTES,
                  UseGUI: bool = False,
+                 NeutronTimeCut: float = 0,
                  #OutputLevel: int = LoggingLevel.toC('INFO'),
                  ):
 
@@ -39,6 +40,8 @@ class ComponentAccumulator(Cpp):
         self.setProperty("Timeout", Timeout)
         self.setProperty("Seed", Seed)
         self.setProperty("UseGUI", UseGUI)
+        # time limit (ns) after which neutrons are killed; 0 keeps the Geant4 default (10 us in FTFP_BERT)
+        self.setProperty("NeutronTimeCut", float(NeutronTimeCut))
 
         if UseGUI:
             [self._core.addUICommand(cmd) for cmd in detector.get_ui_commands()] 

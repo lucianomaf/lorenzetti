@@ -160,6 +160,11 @@ def parse_args():
                              "350.5 ns kept at 99995 ns) and its time bins (0.5 ns within +-75.25 ns, 5 ns outside). "
                              "Needs --tile-atlas-geometry and --tile-atlas-cells; switches on --tile-dual-readout (U-shape). "
                              "Off by default.")
+    parser.add_argument('--neutron-time-cut', action='store', type=float, default=None,
+                        dest='neutron_time_cut', required=False,
+                        help="Kill every neutron this time (ns) after the start of the event, as the ATLAS simulation does "
+                             "with 150 ns (Sim.NeutronTimeCut; arXiv:1005.4568, sec. 5.5). Without it, the default of "
+                             "Geant4 (10 us in FTFP_BERT). --free-running-hits sets 150 ns unless given here.")
     parser.add_argument('--free-running-no-binning', action='store_true',
                         dest='free_running_no_binning', required=False,
                         help="With --free-running-hits: one entry per PMT and Geant4 step, without the time bins.")
@@ -195,6 +200,7 @@ def main(logging_level: str,
          free_running_hits : bool,
          free_running_binning : bool,
          free_running_keep_hits : bool,
+         neutron_time_cut : float,
          timeout: int,
          number_of_events: int,
          number_of_threads: int,
@@ -232,6 +238,7 @@ def main(logging_level: str,
         free_running_hits (bool): Write the tile hits in the layout of the ATLAS HITS ntuple instead of the HIT stream.
         free_running_binning (bool): Time bins of the ATLAS simulation for the free-running hits.
         free_running_keep_hits (bool): Keep also the standard HIT stream (free-running hits in the tree FreeRunningTree).
+        neutron_time_cut (float): Time (ns) after which neutrons are killed; 0 keeps the Geant4 default.
         timeout (int): Timeout in minutes.
         number_of_events (int): Number of events to process.
         number_of_threads (int): Number of Geant4 threads.
@@ -259,7 +266,8 @@ def main(logging_level: str,
                                                         AtlasBarrelCryostat=atlas_barrel_cryostat),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
-                               Timeout=timeout * MINUTES)
+                               Timeout=timeout * MINUTES,
+                               NeutronTimeCut=neutron_time_cut)
 
     gun = EventReader("EventReader", input_file,
                       # outputs
@@ -336,6 +344,8 @@ if __name__ == "__main__":
         args.birks_law = True
         args.tile_dual_readout = True
         args.tile_pmt_split = 'ushape'
+        if args.neutron_time_cut is None:
+            args.neutron_time_cut = 150.
     elif args.free_running_no_binning or args.free_running_keep_hits:
         parser.error("--free-running-no-binning and --free-running-keep-hits need --free-running-hits")
     print(f"output file: {args.output_file}")
@@ -365,6 +375,7 @@ if __name__ == "__main__":
              free_running_hits     = args.free_running_hits,
              free_running_binning  = not args.free_running_no_binning,
              free_running_keep_hits = args.free_running_keep_hits,
+             neutron_time_cut      = args.neutron_time_cut or 0,
              timeout               = args.timeout,
              number_of_events      = args.number_of_events,
              number_of_threads     = args.number_of_threads,

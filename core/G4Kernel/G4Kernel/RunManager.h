@@ -41,6 +41,8 @@ class RunManager: public MsgService,
     int         m_nThreads;
     float       m_seed;
     bool        m_useGUI;
+    // Time limit of the neutron killer of the physics list, in ns (0 = the default of Geant4, 10 us in FTFP_BERT)
+    double      m_neutronTimeCut;
     std::string m_output;
 
     std::vector< Gaugi::Algorithm* >   m_acc;

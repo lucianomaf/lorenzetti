@@ -16,6 +16,8 @@
 #include "G4UImanager.hh"
 #include "G4UIcommand.hh"
 #include "FTFP_BERT.hh"
+#include "G4NeutronTrackingCut.hh"
+#include "G4SystemOfUnits.hh"
 #include "Randomize.hh"
 #include "G4VisExecutive.hh"
 #include "G4UIExecutive.hh"
@@ -39,6 +41,10 @@ RunManager::RunManager( std::string name ):
   declareProperty( "Seed"           , m_seed=0                  );
   declareProperty( "Timeout"        , m_timeout = 3*60          ); // 3 minutes as default
   declareProperty( "UseGUI"         , m_useGUI=false            );
+  // Time limit (ns) after which every neutron is killed (G4NeutronTrackingCut of the physics list). 0 keeps the Geant4
+  // default (10 us in FTFP_BERT). ATLAS uses 150 ns (Sim.NeutronTimeCut, Athena; ATLAS simulation paper, arXiv:1005.4568,
+  // sec. 5.5: "a Geant4 neutron time cut is applied which removes all neutrons 150 ns after the primary interaction").
+  declareProperty( "NeutronTimeCut" , m_neutronTimeCut=0       );
   MSG_INFO( "Run manager was created." );
 
 }
@@ -116,6 +122,15 @@ void RunManager::run( int evt )
   }
 
   G4VModularPhysicsList* physicsList = new FTFP_BERT;
+  if( m_neutronTimeCut > 0 ){
+    auto *neutronCut = dynamic_cast<G4NeutronTrackingCut*>( const_cast<G4VPhysicsConstructor*>(
+                         physicsList->GetPhysics("neutronTrackingCut") ) );
+    if( !neutronCut ){
+      MSG_FATAL( "The physics list has no neutronTrackingCut: the neutron time cut cannot be set." );
+    }
+    neutronCut->SetTimeLimit( m_neutronTimeCut * ns );
+    MSG_INFO( "Neutron time cut: " << m_neutronTimeCut << " ns" );
+  }
   runManager->SetUserInitialization(physicsList);
 
   MSG_INFO( "Creating the action initalizer..." );
