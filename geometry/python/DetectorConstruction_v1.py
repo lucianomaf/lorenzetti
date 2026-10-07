@@ -94,13 +94,13 @@ class DetectorConstruction_v1( Cpp ):
     # The gap between the tile barrel and the extended barrel as in ATLAS (plug of the ITC and services) instead of the
     # aluminium block; needs TileAtlasGeometry (see geometry/python/v1/DeadMaterials.py). Simulation only.
     self.volumes.extend( getCrackVolumesCfg(tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc,
-                                            atlas_barrel_cryostat=AtlasBarrelCryostat) )
+                                            atlas_barrel_cryostat=AtlasBarrelCryostat, atlas_emec=AtlasEmec) )
     # Left side (B)
     self.samplings.extend( getTileExtendedCfg(left_side = True, atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells) )
     self.samplings.extend( getLArEMECCfg(left_side=True, atlas_emec=AtlasEmec) )
     self.samplings.extend( getHECCfg(left_side=True, atlas_hec=AtlasHec) )
     self.volumes.extend( getCrackVolumesCfg(left_side=True, tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc,
-                                            atlas_barrel_cryostat=AtlasBarrelCryostat) )
+                                            atlas_barrel_cryostat=AtlasBarrelCryostat, atlas_emec=AtlasEmec) )
     # Outer cylinders of the end-cap cryostats as in ATLAS (warm and cold vessels and the liquid argon between the EMEC
     # and the cold vessel; see geometry/python/v1/DeadMaterials.py). Simulation only.
     if AtlasEndcapCryostat:

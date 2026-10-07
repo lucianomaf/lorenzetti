@@ -6,7 +6,8 @@ from .PhysicalVolume import PhysicalVolume, Plates, ProductionCuts
 from .TILE import TILE_ATLAS_BARREL_HALF_Z, TILE_ATLAS_EXTENDED_Z_START
 
 
-def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_itc=False, atlas_barrel_cryostat=False):
+def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_itc=False, atlas_barrel_cryostat=False,
+                       atlas_emec=False):
     """
     Dead material in the crack between the barrel and the endcaps.
 
@@ -20,6 +21,10 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_it
                                C10, passive) and the cables and services (see getAtlasItcCfg).
         atlas_barrel_cryostat (bool): With tile_atlas_itc, the services leave room for the step of the warm vessel of the
                                ATLAS barrel cryostat (see getAtlasBarrelCryostatCfg).
+        atlas_emec (bool): With the ATLAS-like EMEC (geometry/python/v1/EMEC.py), the EM crack block ends at the front of
+                           the moved end-cap presampler (|z| = 3697 mm) instead of 3717.5 mm, with the same two 43 mm
+                           aluminium plates and 96.75 mm of liquid argon in each layer instead of 107 mm (F41 conserto
+                           16, decision of 06/10/2026). The space up to the end-cap cryostat cylinders is left empty.
     """
 
     sign = -1 if left_side else 1
@@ -37,6 +42,10 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_it
 
 
     nlayers=2; absorber=4.3*cm; gap=10.7*cm; zsize=nlayers*(absorber+gap)
+    if atlas_emec:
+        # the block ends at the front of the moved presampler: 3697 mm = EMEC face 3702 mm - 5 mm (see above)
+        crack_em_end = 3697.0*mm
+        gap = (crack_em_end - crack_em_start - nlayers*absorber) / nlayers; zsize = nlayers*(absorber+gap)
     crack_em_pv =  PhysicalVolume( Name               = "DM::Crack::EM::"+side_name, 
                                     Plates             = Plates.Vertical, # Logical type
                                     AbsorberMaterial   = "G4_Al", # absorber
