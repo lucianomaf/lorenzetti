@@ -60,6 +60,8 @@ class CaloHitMaker : public Gaugi::Algorithm
         (index in the table CellEta) of the point (x, y, z), in mm, for the sampling and region of this maker, or -1 when
         the point has no cell of that region (see the .cxx). Public so that the assignment can be tested from Python. */
     int embFindCell( double x, double y, double z ) const;
+    /*! ATLAS-like barrel presampler (EmbMode = 3): the cell from the gap of the electrode (see the .cxx). */
+    int psbGapCell( double x, double y, double z ) const;
 
   private:
    
@@ -152,6 +154,8 @@ class CaloHitMaker : public Gaugi::Algorithm
     int m_embMode;
     int m_embSampling;
     int m_embRegion;
+    // EmbMode = 3: radius of the middle of the active layer of the barrel presampler (mm)
+    double m_psbR0;
 
     // Free-running hits (simu_trf.py --free-running-hits): every deposit of the ATLAS tile cells also goes, per PMT, with
     // the identifier and the time of the ATLAS simulation, to a per-event list written in the layout of the ATLAS HITS

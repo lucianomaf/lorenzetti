@@ -17,6 +17,7 @@ from GaugiKernel.macros import *
 from geometry.v1.PhysicalVolume   import Plates
 from CaloCell.CaloDefs            import CaloSampling
 from geometry.v1.ECAL             import getLArBarrelCfg, getAtlasEmbVolumesCfg, getAtlasPseCfg, getAtlasEmbEndCfg
+from geometry.v1.ECAL             import getAtlasPsbVolumesCfg, ATLAS_PS_ELECTRODE_MIXTURE
 from geometry.v1.TILE             import getTileBarrelCfg, getTileExtendedCfg
 from geometry.v1.EMEC             import getLArEMECCfg, getAtlasEmecVolumesCfg
 from geometry.v1.HEC              import getHECCfg, getAtlasHecPassiveCfg
@@ -87,6 +88,9 @@ class DetectorConstruction_v1( Cpp ):
     self.samplings.extend( getLArBarrelCfg(atlas_emb=AtlasEmb, atlas_emb_cells=AtlasEmbCells)   )
     if AtlasEmbCells:
       self.volumes.extend( getAtlasEmbVolumesCfg() )
+      # the modules of the ATLAS barrel presampler with their electrodes (the maker volume is an envelope)
+      self.volumes.extend( getAtlasPsbVolumesCfg() )
+      self.mixtures.update( ATLAS_PS_ELECTRODE_MIXTURE )
       # behind the end of the barrel: dead argon, LArElectronics, conical cold wall and, with the barrel cryostat, the end
       # wall of the cold vessel down to r = 1565.5 mm (see geometry/python/v1/ECAL.py)
       self.volumes.extend( getAtlasEmbEndCfg(atlas_barrel_cryostat=AtlasBarrelCryostat,

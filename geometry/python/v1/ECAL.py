@@ -446,14 +446,81 @@ def _presamplerCalorimeter(pv, sign, side_name, sampling, eta0, ncells, emb_mode
                         OFWeightsTime   = [-0.0000853580,   -12.870312690734863, -27.39136505126953, 8.075883865356445, 13.768877029418945] )
 
 
+# The eight modules of the ATLAS barrel presampler (LArGeoBarrel/src/BarrelPresamplerConstruction.cxx, mod[8][6]: length,
+# anodes, cathodes, tilt in degrees, pitch, position of the first cathode; LArG4Barrel/src/LArBarrelPresamplerGeometry.cxx for
+# the positions in z, with the contraction cmm and the safety eps of the code). F41 conserto 17c, choice 3, 09/10/2026.
+PSB_ATLAS_MODULES = ((286.4, 56, 56, -25., 4.987, 4.2), (295.74, 64, 64, -12., 4.621, 0.3), (321.1, 72, 72, 0., 4.46, 0.9),
+                     (356.8, 80, 80, 0., 4.46, 0.9), (404.8, 88, 88, 0., 4.6, 0.9), (478.4, 104, 104, 0., 4.6, 0.95),
+                     (563.2, 128, 128, 0., 4.4, 1.05), (380.6, 86, 87, 0., 4.4, 0.95))
+PSB_ATLAS_CMM, PSB_ATLAS_EPS = 1 - 0.0026, 0.007*mm
+PSB_ATLAS_CATHODE, PSB_ATLAS_ANODE = 0.270*mm, 0.330*mm
+# mean electrode: LAr::CathodeMat (3.73 g/cm3) and LAr::AnodeMat (3.06 g/cm3) of the public GeoModel geometry, 0.27 : 0.33 in volume
+ATLAS_PS_ELECTRODE_MIXTURE = {"ATLAS_PS_ELECTRODE": (3.361505, {"Cu": 0.551755, "H": 0.036312, "C": 0.247256, "O": 0.164677})}
+
+
+def atlasPsbModules():
+    """Per module (|z| in mm): start, end, first cathode, pitch, tilt (rad), cathodes, anodes, as in the ATLAS simulation."""
+    cmm, eps = PSB_ATLAS_CMM, PSB_ATLAS_EPS
+    out = []; end = PSB_ATLAS_Z[0]
+    for i, (length, nano, ncat, tilt, pitch, first) in enumerate(PSB_ATLAS_MODULES):
+        start = end
+        end = (length*cmm + 2*eps) + start + eps
+        out.append(dict(start=start, end=end, first=start + first*cmm + PSB_ATLAS_CATHODE*cmm/2 + 2*eps, pitch=pitch*cmm,
+                        tilt=np.radians(tilt), ncat=int(ncat), nano=int(nano)))
+    return out
+
+
+def getAtlasPsbVolumesCfg():
+    """The modules of the ATLAS barrel presampler, both sides: plates of the mean electrode, vertical where the electrodes
+    cross the middle of the active layer, period half a pitch (cathode, anode, ...), thickness / cos(tilt); liquid argon of
+    the active layer between them (see above)."""
+    vols = []
+    r0, r1 = PSB_ATLAS_R_ACTIVE, PSB_ATLAS_R_ACTIVE + PSB_ATLAS_ACTIVE
+    mods = atlasPsbModules()
+    for sign, side_name in ((1, 'A'), (-1, 'B')):
+        def place(name, plates, z0, z1, **kw):
+            za, zb = (z0, z1) if sign > 0 else (-z1, -z0)
+            if plates is None or plates == "electrode":
+                pv = _slab(f"LAr::PSB::{side_name}::{name}", Plates.Vertical,
+                           "liquidArgon" if plates is None else "ATLAS_PS_ELECTRODE", r0, r1, za, zb, color='orange', dead=False)
+            else:
+                pv = PhysicalVolume( Name = f"LAr::PSB::{side_name}::{name}", Plates = Plates.Vertical,
+                                     AbsorberMaterial = "ATLAS_PS_ELECTRODE", GapMaterial = "liquidArgon",
+                                     RMin = r0, RMax = r1, ZSize = zb - za, X=0,Y=0,Z=0.5*(za + zb), Visualization = True,
+                                     Color = 'orange', **kw )
+            vols.append(pv)
+        z = PSB_ATLAS_Z[0]
+        for i, md in enumerate(mods):
+            t = 0.5*(PSB_ATLAS_CATHODE + PSB_ATLAS_ANODE)*PSB_ATLAS_CMM/np.cos(md['tilt'])
+            half = md['pitch']/2; n = md['ncat'] + md['nano']
+            # the first cathode is a plate of its own; then n - 1 layers of half a pitch, in which the gap comes first and the
+            # absorber sits at the far end (CreateVerticalPlates), so that each absorber is centred on its electrode. (Starting
+            # the layers before the first cathode would cross into the previous module, where the space is < half a pitch.)
+            zc0 = md['first'] - t/2
+            if zc0 < z - 1e-9:
+                raise RuntimeError(f"PSB module {i}: first cathode before the previous volume")
+            if zc0 > z: place(f"Gap{i}", None, z, zc0)
+            place(f"Cathode{i}", "electrode", zc0, zc0 + t)
+            zp0 = zc0 + t
+            place(f"Module{i}", True, zp0, zp0 + (n - 1)*half, NofLayers = n - 1, AbsorberThickness = t, GapThickness = half - t)
+            z = zp0 + (n - 1)*half
+        place("Gap8", None, z, PSB_ATLAS_Z[1])
+    return vols
+
+
 def _getAtlasPsbCfg():
-    """Barrel presampler as in ATLAS, one hit maker per side (see above). The noise is that of the default presampler."""
+    """Barrel presampler as in ATLAS, one hit maker per side (see above). The noise is that of the default presampler. The
+    volume of the maker is an envelope (not built): the modules are built by getAtlasPsbVolumesCfg, and the cell comes from
+    the gap of the electrode (EmbMode = 3, CaloHitMaker::embFindCell; F41 conserto 17c, choice 3)."""
     dets = []
     for sign, side_name in ((1, 'A'), (-1, 'B')):
         z0, z1 = PSB_ATLAS_Z if sign > 0 else (-PSB_ATLAS_Z[1], -PSB_ATLAS_Z[0])
         pv = _slab(f"LAr::PSB::{side_name}", Plates.Horizontal, "liquidArgon", PSB_ATLAS_R_ACTIVE,
                    PSB_ATLAS_R_ACTIVE + PSB_ATLAS_ACTIVE, z0, z1, color='orange', dead=False)
-        dets.append( _presamplerCalorimeter(pv, sign, side_name, CaloSampling.PSB, 0.0, 61, 1, "PSB", 90*MeV) )
+        pv.Envelope = True
+        det = _presamplerCalorimeter(pv, sign, side_name, CaloSampling.PSB, 0.0, 61, 3, "PSB", 90*MeV)
+        det.sensitive().Cells['PsbR0'] = PSB_ATLAS_R_ACTIVE + PSB_ATLAS_ACTIVE/2
+        dets.append( det )
     return dets
 
 

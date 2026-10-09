@@ -105,6 +105,9 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "EmbMode"                  , m_embMode=0                           );
   declareProperty( "EmbSampling"              , m_embSampling=0                       );
   declareProperty( "EmbRegion"                , m_embRegion=0                         );
+  // EmbMode = 3: ATLAS-like barrel presampler with the cell from the gap of the electrode (see psbGapCell); radius of the
+  // middle of the active layer, in mm
+  declareProperty( "PsbR0"                    , m_psbR0=0.                            );
   // Dual readout of the tile cells (two PMTs per cell, as in ATLAS): 0 = off, 1 = ATLAS U-shape, 2 = linear.
   // Only for the tile samplings and only with the ATLAS tile cells (CellEta not empty); see tilePmtWeights.
   declareProperty( "TileDualReadout"          , m_tileDualReadout=0                   );
@@ -681,8 +684,62 @@ int CaloHitMaker::emecFindCell( double x, double y, double z, int &etaBin, int &
 //   simulation marks it inactive).
 // The cell is the index minus the first index of the region. The sampling is the volume of the maker: the radial
 // boundaries of ATLAS between the samplings and its rules at the edges of the barrel are not applied.
+// ATLAS-like barrel presampler (EmbMode = 3, F41 conserto 17c): the cell from the gap of the electrode, as in the ATLAS
+// simulation (Athena, LArCalorimeter/LArG4/LArG4Barrel/src/LArBarrelPresamplerGeometry.cxx, findCell, and the module table of
+// LArGeoBarrel/src/BarrelPresamplerConstruction.cxx): module from the first cathode of each module, gap from the distance in
+// z to the first cathode corrected by the tilt of the electrodes, cell = gap / gaps per cell (8 cells in modules 0-6, 5 in
+// module 7, 18 gaps per cell there), plus the cells of the previous modules. The distance to the middle of the active layer
+// is r - PsbR0 (the ATLAS code uses the normal of the flat sector; the Lorenzetti layer is a cylinder). -1 outside the modules.
+int CaloHitMaker::psbGapCell( double x, double y, double z ) const
+{
+  static const double mod[8][6] = { {286.4, 56, 56, -25., 4.987, 4.2}, {295.74, 64, 64, -12., 4.621, 0.3},
+                                    {321.1, 72, 72, 0., 4.46, 0.9}, {356.8, 80, 80, 0., 4.46, 0.9},
+                                    {404.8, 88, 88, 0., 4.6, 0.9}, {478.4, 104, 104, 0., 4.6, 0.95},
+                                    {563.2, 128, 128, 0., 4.4, 1.05}, {380.6, 86, 87, 0., 4.4, 0.95} };
+  static const double cmm = 1 - 0.0026, eps = 0.007, zmin = 3.0, cathode = 0.270;
+  static double endModule[8], firstCathode[8], pitch[8], tiltTan[8];
+  static int ncell[8], ngap[8];
+  static const bool init = [](){
+    for( int i = 0; i < 8; ++i ){
+      endModule[i] = (i == 0 ? zmin : endModule[i-1]) + (mod[i][0]*cmm + 2*eps) + eps;
+      firstCathode[i] = (i == 0 ? zmin : endModule[i-1]) + mod[i][5]*cmm + cathode*cmm/2. + 2*eps;
+      pitch[i] = mod[i][4]*cmm;
+      tiltTan[i] = std::tan( mod[i][3]*M_PI/180. );
+      ncell[i] = (i < 7) ? 8 : 5;
+      ngap[i] = (i < 7) ? (int)( (mod[i][1] + 0.1)/ncell[i] ) : 18;
+    }
+    return true;
+  }();
+  (void)init;
+  const double z2 = std::fabs( z );
+  if( z2 < zmin || z2 > endModule[7] ) return -1;
+  int module = 0;
+  for( int i = 1; i < 8; ++i ){
+    if( firstCathode[i] >= z2 ) break;
+    module++;
+  }
+  const double dist = std::sqrt( x*x + y*y ) - m_psbR0;
+  double deltaz = z2 - ( firstCathode[module] + dist*tiltTan[module] );
+  if( deltaz < 0 ){
+    if( module > 0 ){
+      module--;
+      deltaz = z2 - ( firstCathode[module] + dist*tiltTan[module] );
+    }else{
+      deltaz = 0;
+    }
+  }
+  const int gap = (int)( deltaz/pitch[module] );
+  int etaBin = gap/ngap[module];
+  if( etaBin >= ncell[module] ) etaBin = ncell[module] - 1;
+  for( int i = 0; i < module; ++i ) etaBin += ncell[i];
+  if( etaBin < 0 || etaBin > 60 ) return -1;
+  return etaBin;
+}
+
+
 int CaloHitMaker::embFindCell( double x, double y, double z ) const
 {
+  if( m_embMode == 3 ) return psbGapCell( x, y, z );
   const double mag = std::sqrt( x*x + y*y + z*z );
   double eta;
   if( mag == 0 ) eta = 0;

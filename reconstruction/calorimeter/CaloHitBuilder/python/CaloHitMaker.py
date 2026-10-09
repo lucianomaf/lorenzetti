@@ -84,6 +84,9 @@ class CaloHitMaker( Cpp ):
         self.setProperty( "EmbMode"             , int(cells["EmbMode"])                   )
         self.setProperty( "EmbSampling"         , int(cells["EmbSampling"])               )
         self.setProperty( "EmbRegion"           , int(cells["EmbRegion"])                 )
+      # ATLAS-like barrel presampler, cell from the gap of the electrode (EmbMode = 3): radius of the middle of the active layer
+      if "PsbR0" in cells:
+        self.setProperty( "PsbR0"               , float(cells["PsbR0"])                   )
       # radius on the axis of the module (ATLAS-like HEC, geometry/python/v1/HEC.py); absent: r
       if "RadiusModules" in cells:
         self.setProperty( "CellRadiusModules"   , int(cells["RadiusModules"])           )
