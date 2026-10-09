@@ -98,9 +98,11 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "EmecWheelRMax"            , m_emecWheelRMax                       );
   declareProperty( "EmecWheelZMin"            , m_emecWheelZMin                       );
   declareProperty( "EmecWheelZMax"            , m_emecWheelZMax                       );
-  // ATLAS-like barrel EM (geometry/python/v1/ECAL.py, --atlas-emb-cells): with EmbSampling > 0 the cell of a step inside the
-  // limits of the maker comes from its pseudorapidity, for the sampling (1-3) and region (0, 1) of the ATLAS identifier
-  // dictionary read by this maker (see embFindCell); the cells are those of the table (CellEta). 0 (the default): off.
+  // ATLAS-like barrel EM and presamplers (geometry/python/v1/ECAL.py, --atlas-emb-cells): with EmbMode > 0 (1 = barrel,
+  // 2 = end-cap presampler) the cell of a step inside the limits of the maker comes from its pseudorapidity, for the sampling
+  // (0-3) and region (0, 1) of the ATLAS identifier dictionary read by this maker (see embFindCell); the cells are those of
+  // the table (CellEta). 0 (the default): off.
+  declareProperty( "EmbMode"                  , m_embMode=0                           );
   declareProperty( "EmbSampling"              , m_embSampling=0                       );
   declareProperty( "EmbRegion"                , m_embRegion=0                         );
   // Dual readout of the tile cells (two PMTs per cell, as in ATLAS): 0 = off, 1 = ATLAS U-shape, 2 = linear.
@@ -147,14 +149,16 @@ StatusCode CaloHitMaker::initialize()
     MSG_FATAL( "EmecCompartment needs the tables of the ATLAS-like EM end-cap (geometry/python/v1/EMEC.py)." );
   }
 
-  if( m_embSampling > 0 ){
+  if( m_embMode > 0 ){
     // number of cells per side of each region of the dictionary
     int n = -1;
-    if     ( m_embSampling == 1 ) n = ( m_embRegion == 0 ) ? 447 : ( m_embRegion == 1 ? 3 : -1 );
+    if     ( m_embMode == 2 ) n = ( m_embSampling == 0 && m_embRegion == 0 ) ? 12 : -1;
+    else if( m_embSampling == 0 ) n = ( m_embRegion == 0 ) ? 61 : -1;
+    else if( m_embSampling == 1 ) n = ( m_embRegion == 0 ) ? 447 : ( m_embRegion == 1 ? 3 : -1 );
     else if( m_embSampling == 2 ) n = ( m_embRegion == 0 ) ? 56  : ( m_embRegion == 1 ? 1 : -1 );
     else if( m_embSampling == 3 ) n = ( m_embRegion == 0 ) ? 27  : -1;
     if( n < 0 || m_cellEta.size() != (unsigned)n || m_emecCompartment > 0 ){
-      MSG_FATAL( "EmbSampling needs the cell table of the ATLAS-like barrel EM (geometry/python/v1/ECAL.py)." );
+      MSG_FATAL( "EmbMode needs the cell table of the ATLAS-like barrel EM or presampler (geometry/python/v1/ECAL.py)." );
     }
   }
 
@@ -314,8 +318,8 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
     // ATLAS-like EM end-cap: the step is taken only inside the wheel of this maker and in its compartment
     if( emecFindCell( pos.x(), pos.y(), pos.z(), etaBin, phiBin ) != m_emecCompartment )
       return StatusCode::SUCCESS;
-  }else if( m_embSampling > 0 ){
-    // ATLAS-like barrel EM: the cell from the pseudorapidity of the step, within the region of this maker
+  }else if( m_embMode > 0 ){
+    // ATLAS-like barrel EM and presamplers: the cell from the pseudorapidity of the step, within the region of this maker
     etaBin = embFindCell( pos.x(), pos.y(), pos.z() );
     if(etaBin < 0)
       return StatusCode::SUCCESS;
@@ -661,7 +665,11 @@ int CaloHitMaker::emecFindCell( double x, double y, double z, int &etaBin, int &
 
 //!=====================================================================
 
-// ATLAS-like barrel EM cells (geometry/python/v1/ECAL.py, --atlas-emb-cells). Cell of the point (x, y, z), in mm, for the
+// ATLAS-like barrel EM and presampler cells (geometry/python/v1/ECAL.py, --atlas-emb-cells). End-cap presampler (EmbMode
+// = 2): as in the ATLAS simulation (LArCalorimeter/LArG4/LArG4EC/src/PresamplerGeometry.cc, CalculateIdentifier),
+// etaBin = int(|eta| * 40 - 60), 12 -> 11 when |eta| < 1.801, kept if 0-11. Barrel presampler (EmbMode = 1, EmbSampling = 0):
+// int(|eta|/0.025), 0-60 (the ATLAS simulation finds it from the electrode gap of each module, LArBarrelPresamplerGeometry;
+// not modelled). Barrel EM (EmbMode = 1, EmbSampling 1-3): cell of the point (x, y, z), in mm, for the
 // sampling (EmbSampling) and region (EmbRegion) of this maker, with the index formulas of the ATLAS simulation (Athena,
 // LArCalorimeter/LArG4/LArG4Barrel/src/LArBarrelGeometry.cxx, CalculateIdentifier), kept only within the regions of the
 // ATLAS identifier dictionary (IdDictLArCalorimeter):
@@ -684,7 +692,14 @@ int CaloHitMaker::embFindCell( double x, double y, double z ) const
   const double aeta = std::fabs( eta );
   const double deta = 0.025, etaMaxS1 = 1.4, etaMax = 1.475;
   int ieta = -1, first = 0, last = -1;
-  if( m_embRegion == 0 ){
+  if( m_embMode == 2 ){
+    ieta = (int)( aeta * 40. - 60. );
+    if( ieta == 12 && aeta < 1.801 ) ieta = 11;
+    first = 0; last = 11;
+  }else if( m_embSampling == 0 ){
+    if( !(aeta < 1.525) ) return -1;
+    ieta = (int)( aeta / deta ); first = 0; last = 60;
+  }else if( m_embRegion == 0 ){
     if( !(aeta < etaMaxS1) ) return -1;
     if     ( m_embSampling == 1 ){ ieta = (int)( aeta / deta * 8. );        first = 1; last = 447; }
     else if( m_embSampling == 2 ){ ieta = (int)( aeta / deta );             first = 0; last = 55;  }

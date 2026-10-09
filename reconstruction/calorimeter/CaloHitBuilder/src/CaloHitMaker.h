@@ -56,9 +56,9 @@ class CaloHitMaker : public Gaugi::Algorithm
         outside the wheel of this maker. Public so that the assignment can be tested from Python. */
     int emecFindCell( double x, double y, double z, int &etaBin, int &phiBin ) const;
 
-    /*! ATLAS-like barrel EM cells (EmbSampling > 0; geometry/python/v1/ECAL.py, --atlas-emb-cells): the cell (index in
-        the table CellEta) of the point (x, y, z), in mm, for the sampling and region of this maker, or -1 when the point
-        has no cell of that region (see the .cxx). Public so that the assignment can be tested from Python. */
+    /*! ATLAS-like barrel EM and presampler cells (EmbMode > 0; geometry/python/v1/ECAL.py, --atlas-emb-cells): the cell
+        (index in the table CellEta) of the point (x, y, z), in mm, for the sampling and region of this maker, or -1 when
+        the point has no cell of that region (see the .cxx). Public so that the assignment can be tested from Python. */
     int embFindCell( double x, double y, double z ) const;
 
   private:
@@ -147,8 +147,9 @@ class CaloHitMaker : public Gaugi::Algorithm
     std::vector<float> m_emecWheelZMin;
     std::vector<float> m_emecWheelZMax;
 
-    // ATLAS-like barrel EM cells (see embFindCell): sampling (1-3; 0 = off, the default) and region (0 or 1) of the
-    // ATLAS identifier dictionary read by this maker.
+    // ATLAS-like barrel EM and presampler cells (see embFindCell): mode (0 = off, the default; 1 = barrel; 2 = end-cap
+    // presampler), sampling (0-3) and region (0 or 1) of the ATLAS identifier dictionary read by this maker.
+    int m_embMode;
     int m_embSampling;
     int m_embRegion;
 

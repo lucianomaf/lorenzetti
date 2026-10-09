@@ -1,5 +1,6 @@
 
-__all__ = ["getLArBarrelCfg", "getAtlasEmbVolumesCfg", "atlasEmbCells", "atlasEmbLayers"]
+__all__ = ["getLArBarrelCfg", "getAtlasEmbVolumesCfg", "atlasEmbCells", "atlasEmbLayers", "getAtlasPseCfg",
+           "getAtlasEmbEndCfg", "atlasEmbConeSteps", "PSE_ATLAS_R", "PSE_ATLAS_Z", "PSB_ATLAS_Z"]
 
 
 import os
@@ -8,7 +9,7 @@ from CaloCell.CaloDefs import Detector, CaloSampling
 from GaugiKernel.constants import m,cm,mm,MeV,pi
 
 from .Calorimeter import Calorimeter
-from .PhysicalVolume import PhysicalVolume, Plates
+from .PhysicalVolume import PhysicalVolume, Plates, ProductionCuts
 from .SensitiveDetector import SensitiveDetector
 
 
@@ -22,7 +23,8 @@ def getLArBarrelCfg(atlas_emb=False, atlas_emb_cells=False):
       atlas_emb_cells (bool): Needs atlas_emb. The three layers end at |z| = 3165 mm as in ATLAS, with steps that follow
                         |eta| = 1.475 near the inner radius, and have the cells of the ATLAS identifier dictionary (see
                         _getAtlasEmbCellsCfg and the notes before it). Their volumes come from getAtlasEmbVolumesCfg.
-                        The presampler does not change.
+                        The barrel presampler is that of ATLAS (_getAtlasPsbCfg); the end-cap presampler and the
+                        volumes behind the end of the barrel come from getAtlasPseCfg and getAtlasEmbEndCfg.
 
   Constructs the physical volumes (PreSampler, Back, Middle, Strips) and assigns
   readout parameters such as pulse shapes, noise levels, and Optimal Filter weights.
@@ -191,8 +193,8 @@ def getLArBarrelCfg(atlas_emb=False, atlas_emb_cells=False):
 
 
   if atlas_emb_cells:
-    # ATLAS-like length and cells of the three layers (see _getAtlasEmbCellsCfg); the presampler is unchanged
-    return [psb_det] + _getAtlasEmbCellsCfg()
+    # ATLAS-like length and cells of the three layers (see _getAtlasEmbCellsCfg) and the ATLAS barrel presampler
+    return _getAtlasPsbCfg() + _getAtlasEmbCellsCfg()
   return [psb_det, emb1_det, emb2_det, emb3_det]
 
 
@@ -219,7 +221,7 @@ def getLArBarrelCfg(atlas_emb=False, atlas_emb_cells=False):
 #   eta and the rule of ATLAS that sends the back sampling above |eta| = 1.325 to the middle one are not modelled: the
 #   sampling is the layer of atlas_emb.
 # - phi: slices of 2 pi / N on the -pi..pi grid of the Lorenzetti barrel (no half-absorber shift).
-# Not changed by this option: the barrel presampler, the end-cap presampler and the material behind the end of the barrel.
+# The presamplers and the volumes behind the end of the barrel: see the notes before _getAtlasPsbCfg.
 #
 EMB_ATLAS_Z_MAX   = 3165*mm      # BarrelGeometry-03 ZMAX 316.5 cm
 EMB_ATLAS_ETA_CUT = 1.475        # BarrelGeometry-03 ETACUT
@@ -295,7 +297,7 @@ def atlasEmbCells(sampling, region, side=1):
         if (s, reg) == (sampling, region): break
     else:
         raise RuntimeError(f"EMB{sampling} region {region}: not in the dictionary")
-    table = dict(Names=[], Eta=[], DeltaEta=[], EmbSampling=sampling, EmbRegion=region)
+    table = dict(Names=[], Eta=[], DeltaEta=[], EmbMode=1, EmbSampling=sampling, EmbRegion=region)
     for i in range(first, last + 1):
         table['Names'].append(f"EMB{sampling}/{region}/{i}{'+' if side > 0 else '-'}")
         table['Eta'].append(side * (eta0 + deta * (i - first + 0.5))); table['DeltaEta'].append(deta)
@@ -356,3 +358,142 @@ def _getAtlasEmbCellsCfg():
     return out
 
 
+
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Presamplers and the end of the barrel with atlas_emb_cells (decisions of Luciano of 09/10/2026 on the items B, C and D of
+# F41 conserto 17; only with the option).
+#
+# - Barrel presampler (C): active liquid argon of 13 mm from r = 1413.3 mm (PresamplerGeometry-00 RACTIVE 141.33 cm, the
+#   inner radius of the active layer, and HACTIVE 1.3 cm; larheight = 13 mm in LArGeoBarrel/src/BarrelPresamplerConstruction.cxx),
+#   inside the ATLAS mother r = 1410-1447 mm, |z| = 3 to 3101 mm (mother of half length 1549 mm placed at z = 1549 + 3 mm,
+#   LArGeoBarrel/src/BarrelCryostatConstruction.cxx). The rest of the mother (modules, motherboards) is not modelled. Cells of
+#   the ATLAS identifier dictionary (LArEM-barrel-00): 61 cells of 0.025 up to 1.525, 64 phi slices, from the pseudorapidity of
+#   the point seen from the origin, int(|eta|/0.025) (the ATLAS simulation finds the cell from the electrode gap in each module,
+#   LArG4Barrel/src/LArBarrelPresamplerGeometry.cxx; not modelled).
+# - End-cap presampler (D): liquid argon of 4 mm at |z| = 3622-3626 mm, r = 1231.74-1701.98 mm (PresamplerPosition-00 ZPOS
+#   362.4 cm, TCK 0.4 cm, RMIN, RMAX; zEndcapPresamplerFrontFace and BackFace in LArG4EC/src/PresamplerGeometry.cc), in a cavity
+#   of DM::Crack::EM (see geometry/python/v1/DeadMaterials.py). Cells as in the ATLAS simulation (PresamplerGeometry.cc,
+#   CalculateIdentifier): etaBin = int(eta * 40 - 60), 12 -> 11 below 1.801, 0-11 (1.5-1.8), 64 phi slices.
+# - Behind the end of the barrel (B): liquid argon from |z| = 3165 to 3205 mm in r = 1500-1980 mm and in the corner of the steps
+#   of EMB1 (between the end of each step and 3165 mm); the mixture LArElectronics (1.58 g/cm3; copper 0.13, kapton 0.07, argon
+#   0.80 in mass; LArMaterials-12) from 3205 to 3267 mm in r = 1565.5-2140 mm (CryoCylinders-09, Barrel::TotalLAr cylinder 21),
+#   up to 1980 mm without atlas_barrel_cryostat; the conical part of the cold wall (CryoPcons-18, Barrel::OuterWall planes 26-27:
+#   z 3101 -> 3267 mm, inner radius 1356.72 -> 1537.22 mm, outer 1385 -> 1565.5 mm, aluminium) in steps of z with the radii of the
+#   cone at the middle of each step; with atlas_barrel_cryostat, the end wall of the cold vessel extended down to r = 1565.5 mm
+#   (Barrel::OuterWall planes 27-30: z 3267-3287 mm).
+#
+PSB_ATLAS_R_ACTIVE  = 1413.3*mm     # PresamplerGeometry-00 RACTIVE (inner radius of the active argon)
+PSB_ATLAS_ACTIVE    = 13.0*mm       # PresamplerGeometry-00 HACTIVE; larheight in BarrelPresamplerConstruction.cxx
+PSB_ATLAS_Z         = (3.0*mm, 3101.0*mm)
+PSE_ATLAS_R         = (1231.74*mm, 1701.98*mm)   # PresamplerPosition-00 RMIN, RMAX
+PSE_ATLAS_Z         = (3622.0*mm, 3626.0*mm)     # PresamplerPosition-00 ZPOS -+ TCK/2
+EMB_ATLAS_END_LAR_Z = 3205.0*mm                  # CryoCylinders-09 cylinder 21 ZMIN 320.5 cm
+EMB_ATLAS_END_Z     = 3267.0*mm                  # ZMIN + DZ (326.7 cm), cold wall (CryoPcons-18)
+EMB_ATLAS_ELEC_RMIN = 1565.5*mm                  # RMIN 156.55 cm
+EMB_ATLAS_ELEC_RMAX = 2140.0*mm                  # RMIN + DR (214.0 cm)
+EMB_ATLAS_DEAD_RMAX = 1980.0*mm                  # up to the dead argon of the barrel cryostat (1980.05 mm)
+EMB_ATLAS_CONE      = ((3101.0*mm, 1356.72*mm, 1385.0*mm), (3267.0*mm, 1537.22*mm, 1565.5*mm))   # (z, rmin, rmax)
+EMB_ATLAS_CONE_STEPS = 12                        # steps of 13.83 mm in z (see the report of conserto 17)
+EMB_ATLAS_COLD_WALL = (3267.0*mm, 3287.0*mm)     # Barrel::OuterWall planes 28-29
+EMB_ATLAS_COLD_WALL_RMIN = 1565.5*mm             # plane 29
+
+
+def _slab(name, plates, material, rmin, rmax, z0, z1, color='gray', dead=True):
+    """One volume of a single material (absorber and gap both of it, half of the thickness each)."""
+    t = (rmax - rmin) if plates == Plates.Horizontal else (z1 - z0)
+    pv = PhysicalVolume( Name               = name,
+                         Plates             = plates,
+                         AbsorberMaterial   = material,
+                         GapMaterial        = material,
+                         NofLayers          = 1,
+                         AbsorberThickness  = t/2,
+                         GapThickness       = t/2,
+                         RMin               = rmin,
+                         RMax               = rmax,
+                         ZSize              = z1 - z0,
+                         X=0,Y=0,Z=0.5*(z0 + z1),
+                         Visualization = True,
+                         Color         = color )
+    if dead: pv.Cuts = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
+    return pv
+
+
+def _presamplerCalorimeter(pv, sign, side_name, sampling, eta0, ncells, emb_mode, key, noise):
+    basepath = os.environ['LORENZETTI_GEOMETRY_DATA_DIR']
+    deta = 0.025
+    cells = dict(Names=[], Eta=[], DeltaEta=[], EmbMode=emb_mode, EmbSampling=0, EmbRegion=0)
+    for i in range(ncells):
+        cells['Names'].append(f"{key}/0/{i}{'+' if sign > 0 else '-'}")
+        cells['Eta'].append(sign * (eta0 + deta * (i + 0.5))); cells['DeltaEta'].append(deta)
+    edges = [eta0 + deta * k for k in range(ncells + 1)]
+    edges = edges if sign > 0 else sorted(-e for e in edges)
+    lo, hi = sorted(abs(e) for e in (edges[0], edges[-1]))
+    sv = SensitiveDetector( pv, EtaMin = sign*lo, EtaMax = sign*hi, Segment = 0, DeltaEta = deta, DeltaPhi = 2*pi/64 )
+    if len(sv.PhiBins) - 1 != 64:
+        raise RuntimeError(f"{key}: {len(sv.PhiBins) - 1} phi slices, expected 64")
+    sv.EtaBins = edges; sv.EtaMin = edges[0]; sv.EtaMax = edges[-1]
+    sv.Cells = cells
+    return Calorimeter( sv, -21, 3, -2,
+                        CollectionKey   = f"Collection_{key}_0" + side_name,
+                        Detector        = Detector.TTEM,
+                        Sampling        = sampling,
+                        Shaper          = basepath + "/pulseLar.dat",
+                        Noise           = noise,
+                        Samples         = 5,
+                        OFWeightsEnergy = [-0.0000853580,    0.265132,    0.594162,     0.389505,     0.124353],
+                        OFWeightsTime   = [-0.0000853580,   -12.870312690734863, -27.39136505126953, 8.075883865356445, 13.768877029418945] )
+
+
+def _getAtlasPsbCfg():
+    """Barrel presampler as in ATLAS, one hit maker per side (see above). The noise is that of the default presampler."""
+    dets = []
+    for sign, side_name in ((1, 'A'), (-1, 'B')):
+        z0, z1 = PSB_ATLAS_Z if sign > 0 else (-PSB_ATLAS_Z[1], -PSB_ATLAS_Z[0])
+        pv = _slab(f"LAr::PSB::{side_name}", Plates.Horizontal, "liquidArgon", PSB_ATLAS_R_ACTIVE,
+                   PSB_ATLAS_R_ACTIVE + PSB_ATLAS_ACTIVE, z0, z1, color='orange', dead=False)
+        dets.append( _presamplerCalorimeter(pv, sign, side_name, CaloSampling.PSB, 0.0, 61, 1, "PSB", 90*MeV) )
+    return dets
+
+
+def getAtlasPseCfg(left_side=False):
+    """End-cap presampler as in ATLAS on one side (see above); its cavity in DM::Crack::EM is in DeadMaterials.py."""
+    sign = -1 if left_side else 1
+    side_name = 'B' if left_side else 'A'
+    z0, z1 = PSE_ATLAS_Z if sign > 0 else (-PSE_ATLAS_Z[1], -PSE_ATLAS_Z[0])
+    pv = _slab(f"LAr::PSE::{side_name}", Plates.Vertical, "liquidArgon", PSE_ATLAS_R[0], PSE_ATLAS_R[1], z0, z1,
+               color='orange', dead=False)
+    return [ _presamplerCalorimeter(pv, sign, side_name, CaloSampling.PSE, 1.5, 12, 2, "PSE", 26*MeV) ]
+
+
+def atlasEmbConeSteps():
+    """(z start, z end, rmin, rmax) of the steps of the conical cold wall: the radii of the cone at the middle of each step."""
+    (za, ria, roa), (zb, rib, rob) = EMB_ATLAS_CONE
+    dz = (zb - za) / EMB_ATLAS_CONE_STEPS; out = []
+    for k in range(EMB_ATLAS_CONE_STEPS):
+        z0 = za + k*dz; z1 = za + (k + 1)*dz if k < EMB_ATLAS_CONE_STEPS - 1 else zb
+        f = (0.5*(z0 + z1) - za) / (zb - za)
+        out.append( (z0, z1, ria + f*(rib - ria), roa + f*(rob - roa)) )
+    return out
+
+
+def getAtlasEmbEndCfg(atlas_barrel_cryostat=False):
+    """Volumes behind the end of the ATLAS-like barrel, both sides (see above)."""
+    vols = []
+    steps = [v for v in getAtlasEmbVolumesCfg() if "::Step" in v.Name]
+    for sign, side_name in ((1, 'A'), (-1, 'B')):
+        def add(name, plates, material, rmin, rmax, z0, z1):
+            za, zb = (z0, z1) if sign > 0 else (-z1, -z0)
+            vols.append( _slab(f"DM::EMBEnd::{name}::{side_name}", plates, material, rmin, rmax, za, zb) )
+        add("LAr", Plates.Vertical, "liquidArgon", EMB_ATLAS_RMIN, EMB_ATLAS_DEAD_RMAX, EMB_ATLAS_Z_MAX, EMB_ATLAS_END_LAR_Z)
+        for v in steps:
+            add("CornerLAr" + v.Name.split("::Step")[1], Plates.Vertical, "liquidArgon", v.RMin, v.RMax, v.ZSize/2, EMB_ATLAS_Z_MAX)
+        add("Electronics", Plates.Vertical, "ATLAS_LAR_ELECTRONICS", EMB_ATLAS_ELEC_RMIN,
+            EMB_ATLAS_ELEC_RMAX if atlas_barrel_cryostat else EMB_ATLAS_DEAD_RMAX, EMB_ATLAS_END_LAR_Z, EMB_ATLAS_END_Z)
+        for k, (z0, z1, r0, r1) in enumerate(atlasEmbConeSteps()):
+            add(f"ColdCone{k+1}", Plates.Vertical, "G4_Al", r0, r1, z0, z1)
+        if atlas_barrel_cryostat:
+            add("ColdEndWall", Plates.Vertical, "G4_Al", EMB_ATLAS_COLD_WALL_RMIN, EMB_ATLAS_DEAD_RMAX,
+                EMB_ATLAS_COLD_WALL[0], EMB_ATLAS_COLD_WALL[1])
+    return vols

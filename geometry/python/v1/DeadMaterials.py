@@ -4,10 +4,11 @@ __all__ = ["getCrackVolumesCfg", "getDMVolumesCfg", "getAtlasEndcapCryostatCfg",
 from GaugiKernel.constants import m,cm,mm
 from .PhysicalVolume import PhysicalVolume, Plates, ProductionCuts
 from .TILE import TILE_ATLAS_BARREL_HALF_Z, TILE_ATLAS_EXTENDED_Z_START
+from .ECAL import PSE_ATLAS_R, PSE_ATLAS_Z, PSB_ATLAS_Z
 
 
 def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_itc=False, atlas_barrel_cryostat=False,
-                       atlas_emec=False):
+                       atlas_emec=False, atlas_emb_cells=False):
     """
     Dead material in the crack between the barrel and the endcaps.
 
@@ -25,6 +26,10 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_it
                            the moved end-cap presampler (|z| = 3697 mm) instead of 3717.5 mm, with the same two 43 mm
                            aluminium plates and 96.75 mm of liquid argon in each layer instead of 107 mm (F41 conserto
                            16, decision of 06/10/2026). The space up to the end-cap cryostat cylinders is left empty.
+        atlas_emb_cells (bool): With the ATLAS-like barrel cells (geometry/python/v1/ECAL.py), the block has a cavity for the
+                           end-cap presampler of ATLAS (|z| = 3622-3626 mm, r = 1231.74-1701.98 mm; see getAtlasPseCfg): the
+                           liquid argon layer that contains it is split in z within that radial range (F41 conserto 17,
+                           decision of 09/10/2026). Same materials and thicknesses.
     """
 
     sign = -1 if left_side else 1
@@ -82,11 +87,49 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_it
     crack_em_pv.Cuts     = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
     crack_tile_pv.Cuts   = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
 
+    crack_em = [crack_em_pv]
+    if atlas_emb_cells:
+        crack_em = _crackWithPresamplerCavity(side_name, sign, crack_em_start, crack_em_pv.NofLayers,
+                                              crack_em_pv.AbsorberThickness, crack_em_pv.GapThickness)
+
     if tile_atlas_itc:
         if not tile_atlas_geometry:
             raise ValueError("tile_atlas_itc needs tile_atlas_geometry.")
-        return [crack_em_pv] + getAtlasItcCfg(left_side=left_side, atlas_barrel_cryostat=atlas_barrel_cryostat)
-    return [crack_em_pv, crack_tile_pv]
+        return crack_em + getAtlasItcCfg(left_side=left_side, atlas_barrel_cryostat=atlas_barrel_cryostat)
+    return crack_em + [crack_tile_pv]
+
+
+def _crackWithPresamplerCavity(side_name, sign, z_start, nlayers, absorber, gap):
+    """
+    DM::Crack::EM as pieces of one material, the same layers (liquid argon, then aluminium, from the interaction point), with
+    the liquid argon layer that contains the ATLAS-like end-cap presampler split in z within its radial range (cavity).
+    """
+    rmin, rmax = 900*mm, 2232*mm
+    vols = []
+    def piece(name, material, r0, r1, z0, z1):
+        za, zb = (z0, z1) if sign > 0 else (-z1, -z0)
+        pv = PhysicalVolume( Name = f"DM::Crack::EM::{name}::{side_name}", Plates = Plates.Vertical,
+                             AbsorberMaterial = material, GapMaterial = material, NofLayers = 1,
+                             AbsorberThickness = (z1 - z0)/2, GapThickness = (z1 - z0)/2, RMin = r0, RMax = r1,
+                             ZSize = z1 - z0, X=0,Y=0,Z=0.5*(za + zb), Visualization = True, Color = 'gray' )
+        pv.Cuts = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
+        vols.append(pv)
+    z = z_start; found = False
+    for k in range(nlayers):
+        z0, z1 = z, z + gap
+        if z0 < PSE_ATLAS_Z[0] and PSE_ATLAS_Z[1] < z1:
+            found = True
+            piece(f"LAr{k+1}::Inner", "liquidArgon", rmin, PSE_ATLAS_R[0], z0, z1)
+            piece(f"LAr{k+1}::Outer", "liquidArgon", PSE_ATLAS_R[1], rmax, z0, z1)
+            piece(f"LAr{k+1}::Front", "liquidArgon", PSE_ATLAS_R[0], PSE_ATLAS_R[1], z0, PSE_ATLAS_Z[0])
+            piece(f"LAr{k+1}::Back", "liquidArgon", PSE_ATLAS_R[0], PSE_ATLAS_R[1], PSE_ATLAS_Z[1], z1)
+        else:
+            piece(f"LAr{k+1}", "liquidArgon", rmin, rmax, z0, z1)
+        piece(f"Al{k+1}", "G4_Al", rmin, rmax, z1, z1 + absorber)
+        z = z1 + absorber
+    if not found:
+        raise RuntimeError("DM::Crack::EM: no liquid argon layer contains the end-cap presampler")
+    return vols
 
 
 # The gap between the tile barrel (|z| < 2808 mm) and the extended barrel (|z| > 3554 mm) as in ATLAS. The gap "is filled
@@ -203,7 +246,8 @@ def getAtlasEndcapCryostatCfg(left_side=False):
     return volumes
 
 
-def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, atlas_barrel_cryostat=False):
+def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, atlas_barrel_cryostat=False,
+                    atlas_emb_cells=False):
     """
     Dead material around the barrel calorimeters.
 
@@ -218,6 +262,10 @@ def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, at
                                     in front of the presampler and the material between the presampler and the
                                     accordion. Without it (the default) only 40 mm of aluminium stand in front of the
                                     presampler.
+        atlas_emb_cells (bool): With the ATLAS-like barrel presampler (r = 1413.3-1426.3 mm, |z| = 3-3101 mm; ECAL.py), the
+                                    80 mm envelope of aluminium in front of it moves to r = 1305-1385 mm and, as the material
+                                    between the presampler and the accordion, ends at |z| = 3101 mm (room for the conical cold
+                                    wall); same thicknesses (F41 conserto 17, decision of 09/10/2026).
     """
 
     ecal_barrel_start = 0*m
@@ -234,6 +282,9 @@ def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, at
         tile_barrel_z = 2*TILE_ATLAS_BARREL_HALF_Z
 
     psb_rmin = 1460*mm
+    ps_boundary_z = ecal_barrel_z
+    if atlas_emb_cells:
+        psb_rmin = 1385*mm; ps_boundary_z = 2*PSB_ATLAS_Z[1]
 
     nlayers=2; absorber=2*cm; gap=2*cm; rsize=nlayers*(absorber+gap)
     if atlas_material_in_front:
@@ -248,7 +299,7 @@ def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, at
                              GapThickness       = gap, # gap
                              RMin               = psb_rmin - rsize, #crack_em_pv.RMax, #228.3*cm, # radio min,
                              RMax               = psb_rmin, # radio max 
-                             ZSize              = ecal_barrel_z,
+                             ZSize              = ps_boundary_z,
                              X=0,Y=0,Z=0,
                              Visualization = True,
                              Color         = 'gray'
@@ -294,11 +345,11 @@ def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, at
 
     if atlas_barrel_cryostat:
         # The two 100 mm aluminium shells are replaced by the outer part of the ATLAS barrel cryostat
-        volumes = [dm_pv] + getAtlasBarrelCryostatCfg()
+        volumes = [dm_pv] + getAtlasBarrelCryostatCfg(atlas_emb_cells=atlas_emb_cells)
     else:
         volumes = [dm_pv, ecal_boundary_pv, tilecal_boundary_pv]
     if atlas_material_in_front:
-        volumes.extend( getAtlasMaterialInFrontCfg() )
+        volumes.extend( getAtlasMaterialInFrontCfg(atlas_emb_cells=atlas_emb_cells) )
     return volumes
 
 
@@ -317,9 +368,11 @@ def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, at
 # leave room for the warm step (see getAtlasItcCfg).
 ATLAS_BARREL_CRYOSTAT_LAR_RMIN = 1980.05*mm   # outside the EM barrel (r < 1980 mm by default, 1973.4 mm with atlas_emb)
 
-def getAtlasBarrelCryostatCfg():
+def getAtlasBarrelCryostatCfg(atlas_emb_cells=False):
     """
-    Outer part of the barrel cryostat as in ATLAS (see above). Simulation only.
+    Outer part of the barrel cryostat as in ATLAS (see above). Simulation only. With atlas_emb_cells the dead liquid argon
+    ends at |z| = 3205 mm, where the LArElectronics of the ATLAS-like barrel starts (ECAL.py, getAtlasEmbEndCfg; F41
+    conserto 17, decision of 09/10/2026).
     """
     def pv(name, plates, material, r1, r2, z1, z2):
         if plates == Plates.Horizontal:
@@ -346,7 +399,8 @@ def getAtlasBarrelCryostatCfg():
     # the three long volumes span both sides
     volumes = [pv("ColdCylinder", H, "G4_Al",       2140.05*mm, 2170*mm, -3076.95*mm, 3076.95*mm),
                pv("WarmCylinder", H, "G4_Al",       2220*mm,    2250*mm, -2864.95*mm, 2864.95*mm),
-               pv("LAr",          H, "liquidArgon", rlar,       2140*mm, -3266.95*mm, 3266.95*mm)]
+               pv("LAr",          H, "liquidArgon", rlar,       2140*mm, -(3205.0*mm if atlas_emb_cells else 3266.95*mm),
+                                                                          3205.0*mm if atlas_emb_cells else 3266.95*mm)]
     for sign, side in ((1, 'A'), (-1, 'B')):
         for name, plates, material, r1, r2, z1, z2 in (
                 ("ColdStepWall",  V, "G4_Al",       2140.05*mm, 2258.5*mm,  3077*mm,    3107*mm),
@@ -378,10 +432,11 @@ def getAtlasBarrelCryostatCfg():
 # (a separate step).
 ATLAS_CRYOSTAT_AL_THICKNESS = 67.6*mm
 
-def getAtlasMaterialInFrontCfg():
+def getAtlasMaterialInFrontCfg(atlas_emb_cells=False):
     """
     Solenoid and material between the presampler and the accordion of the barrel, as in ATLAS (see above).
-    The cryostat wall is set in getDMVolumesCfg (DM::PS::Boundary).
+    The cryostat wall is set in getDMVolumesCfg (DM::PS::Boundary). With atlas_emb_cells the material between the
+    presampler and the accordion ends at |z| = 3101 mm (same radii and thicknesses; F41 conserto 17).
     """
     solenoid_pv = PhysicalVolume( Name               = "DM::Solenoid",
                                   Plates             = Plates.Horizontal,
@@ -406,7 +461,7 @@ def getAtlasMaterialInFrontCfg():
                                       GapThickness       = 24.19*mm,
                                       RMin               = 1471.05*mm,   # the presampler ends at 1471.01 mm
                                       RMax               = 1499.95*mm,   # the first layer starts at 1500 mm
-                                      ZSize              = 2*3.4*m,
+                                      ZSize              = 2*PSB_ATLAS_Z[1] if atlas_emb_cells else 2*3.4*m,
                                       X=0,Y=0,Z=0,
                                       Visualization = True,
                                       Color         = 'gray'

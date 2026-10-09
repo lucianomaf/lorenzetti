@@ -306,6 +306,16 @@ void DetectorConstruction_v1::DefineMaterials()
     }
   }
 
+  // LArElectronics of the ATLAS barrel cryostat (behind the end of the ATLAS-like barrel, geometry/python/v1/ECAL.py,
+  // --atlas-emb-cells): 1.58 g/cm3, mass fractions copper 0.13, kapton 0.07, argon 0.80 (ATLAS geometry database,
+  // LArMaterials-12 and its components). Not used by the default geometry.
+  {
+    G4Material *mix = new G4Material("ATLAS_LAR_ELECTRONICS", 1.58*g/cm3, 3);
+    mix->AddMaterial(nistManager->FindOrBuildMaterial("G4_Cu"), 0.13);
+    mix->AddMaterial(nistManager->FindOrBuildMaterial("G4_KAPTON"), 0.07);
+    mix->AddMaterial(G4Material::GetMaterial("liquidArgon"), 0.80);
+  }
+
   // Print materials
   G4cout << *(G4Material::GetMaterialTable()) << G4endl;
 }

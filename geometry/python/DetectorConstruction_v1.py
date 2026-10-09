@@ -15,7 +15,8 @@ from GaugiKernel import Cpp
 from GaugiKernel.macros import *
 
 from geometry.v1.PhysicalVolume   import Plates
-from geometry.v1.ECAL             import getLArBarrelCfg, getAtlasEmbVolumesCfg
+from CaloCell.CaloDefs            import CaloSampling
+from geometry.v1.ECAL             import getLArBarrelCfg, getAtlasEmbVolumesCfg, getAtlasPseCfg, getAtlasEmbEndCfg
 from geometry.v1.TILE             import getTileBarrelCfg, getTileExtendedCfg
 from geometry.v1.EMEC             import getLArEMECCfg, getAtlasEmecVolumesCfg
 from geometry.v1.HEC              import getHECCfg, getAtlasHecPassiveCfg
@@ -76,6 +77,9 @@ class DetectorConstruction_v1( Cpp ):
     self.samplings.extend( getLArBarrelCfg(atlas_emb=AtlasEmb, atlas_emb_cells=AtlasEmbCells)   )
     if AtlasEmbCells:
       self.volumes.extend( getAtlasEmbVolumesCfg() )
+      # behind the end of the barrel: dead argon, LArElectronics, conical cold wall and, with the barrel cryostat, the end
+      # wall of the cold vessel down to r = 1565.5 mm (see geometry/python/v1/ECAL.py)
+      self.volumes.extend( getAtlasEmbEndCfg(atlas_barrel_cryostat=AtlasBarrelCryostat) )
     # ATLAS-like tile calorimeter (tiles normal to the beam line, 18 mm period, ATLAS layer radii and z extent;
     # see geometry/python/v1/TILE.py). The same value must be used in simulation and digitization. With it the
     # dead material next to the tile calorimeter (inner aluminium shell, ITC block) follows the ATLAS z extent.
@@ -90,7 +94,7 @@ class DetectorConstruction_v1( Cpp ):
     if AtlasBarrelCryostat and not TileAtlasItc:
       raise ValueError("AtlasBarrelCryostat needs TileAtlasItc.")
     self.volumes.extend( getDMVolumesCfg(tile_atlas_geometry=TileAtlasGeometry, atlas_material_in_front=AtlasMaterialInFront,
-                                         atlas_barrel_cryostat=AtlasBarrelCryostat) )
+                                         atlas_barrel_cryostat=AtlasBarrelCryostat, atlas_emb_cells=AtlasEmbCells) )
     # Right side (A)
     self.samplings.extend( getTileExtendedCfg(atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells)    )
     # EMEC as in ATLAS: two wheels with the nominal z, composition and cells of ATLAS (see geometry/python/v1/EMEC.py).
@@ -102,13 +106,15 @@ class DetectorConstruction_v1( Cpp ):
     # The gap between the tile barrel and the extended barrel as in ATLAS (plug of the ITC and services) instead of the
     # aluminium block; needs TileAtlasGeometry (see geometry/python/v1/DeadMaterials.py). Simulation only.
     self.volumes.extend( getCrackVolumesCfg(tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc,
-                                            atlas_barrel_cryostat=AtlasBarrelCryostat, atlas_emec=AtlasEmec) )
+                                            atlas_barrel_cryostat=AtlasBarrelCryostat, atlas_emec=AtlasEmec,
+                                            atlas_emb_cells=AtlasEmbCells) )
     # Left side (B)
     self.samplings.extend( getTileExtendedCfg(left_side = True, atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells) )
     self.samplings.extend( getLArEMECCfg(left_side=True, atlas_emec=AtlasEmec) )
     self.samplings.extend( getHECCfg(left_side=True, atlas_hec=AtlasHec) )
     self.volumes.extend( getCrackVolumesCfg(left_side=True, tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc,
-                                            atlas_barrel_cryostat=AtlasBarrelCryostat, atlas_emec=AtlasEmec) )
+                                            atlas_barrel_cryostat=AtlasBarrelCryostat, atlas_emec=AtlasEmec,
+                                            atlas_emb_cells=AtlasEmbCells) )
     # Outer cylinders of the end-cap cryostats as in ATLAS (warm and cold vessels and the liquid argon between the EMEC
     # and the cold vessel; see geometry/python/v1/DeadMaterials.py). Simulation only.
     if AtlasEndcapCryostat:
@@ -123,6 +129,11 @@ class DetectorConstruction_v1( Cpp ):
       self.volumes.extend( getAtlasEmecVolumesCfg() )
       self.volumes.extend( getAtlasEmecVolumesCfg(left_side=True) )
     self.samplings = flatten(self.samplings)
+    # With AtlasEmbCells the end-cap presampler is that of ATLAS (|z| = 3622-3626 mm, in a cavity of DM::Crack::EM, with the
+    # cells of the dictionary; geometry/python/v1/ECAL.py) instead of the one of EMEC.py.
+    if AtlasEmbCells:
+      self.samplings = [s for s in self.samplings if s.Sampling != CaloSampling.PSE]
+      self.samplings.extend( getAtlasPseCfg() + getAtlasPseCfg(left_side=True) )
     
   
   def compile(self):
