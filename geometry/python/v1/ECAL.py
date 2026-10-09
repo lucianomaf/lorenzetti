@@ -478,8 +478,12 @@ def atlasEmbConeSteps():
     return out
 
 
-def getAtlasEmbEndCfg(atlas_barrel_cryostat=False):
-    """Volumes behind the end of the ATLAS-like barrel, both sides (see above)."""
+def getAtlasEmbEndCfg(atlas_barrel_cryostat=False, atlas_barrel_front=False):
+    """Volumes behind the end of the ATLAS-like barrel, both sides (see above). With atlas_barrel_front (the ATLAS pieces in
+    front of the accordion, DeadMaterials.getAtlasBarrelFrontCfg) the conical cold wall is the exact cone of that front, not
+    the steps here, and the corner of the steps of EMB1 holds the high-eta cables of ATLAS (TELB, LAr::Cables, a cone from
+    z = 3110.1 mm at r = 1500 mm to z = 3165 mm at r = 1546.63 mm; BarrelConstruction.cxx and the public GeoModel geometry)
+    instead of liquid argon (F41 conserto 17c)."""
     vols = []
     steps = [v for v in getAtlasEmbVolumesCfg() if "::Step" in v.Name]
     for sign, side_name in ((1, 'A'), (-1, 'B')):
@@ -488,10 +492,15 @@ def getAtlasEmbEndCfg(atlas_barrel_cryostat=False):
             vols.append( _slab(f"DM::EMBEnd::{name}::{side_name}", plates, material, rmin, rmax, za, zb) )
         add("LAr", Plates.Vertical, "liquidArgon", EMB_ATLAS_RMIN, EMB_ATLAS_DEAD_RMAX, EMB_ATLAS_Z_MAX, EMB_ATLAS_END_LAR_Z)
         for v in steps:
-            add("CornerLAr" + v.Name.split("::Step")[1], Plates.Vertical, "liquidArgon", v.RMin, v.RMax, v.ZSize/2, EMB_ATLAS_Z_MAX)
+            if atlas_barrel_front:
+                add("CornerCables" + v.Name.split("::Step")[1], Plates.Vertical, "ATLAS_LAR_CABLES", v.RMin, v.RMax, v.ZSize/2,
+                    EMB_ATLAS_Z_MAX)
+            else:
+                add("CornerLAr" + v.Name.split("::Step")[1], Plates.Vertical, "liquidArgon", v.RMin, v.RMax, v.ZSize/2,
+                    EMB_ATLAS_Z_MAX)
         add("Electronics", Plates.Vertical, "ATLAS_LAR_ELECTRONICS", EMB_ATLAS_ELEC_RMIN,
             EMB_ATLAS_ELEC_RMAX if atlas_barrel_cryostat else EMB_ATLAS_DEAD_RMAX, EMB_ATLAS_END_LAR_Z, EMB_ATLAS_END_Z)
-        for k, (z0, z1, r0, r1) in enumerate(atlasEmbConeSteps()):
+        for k, (z0, z1, r0, r1) in enumerate([] if atlas_barrel_front else atlasEmbConeSteps()):
             add(f"ColdCone{k+1}", Plates.Vertical, "G4_Al", r0, r1, z0, z1)
         if atlas_barrel_cryostat:
             add("ColdEndWall", Plates.Vertical, "G4_Al", EMB_ATLAS_COLD_WALL_RMIN, EMB_ATLAS_DEAD_RMAX,

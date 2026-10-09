@@ -5,6 +5,7 @@ from GaugiKernel.constants import m,cm,mm
 from .PhysicalVolume import PhysicalVolume, Plates, ProductionCuts
 from .TILE import TILE_ATLAS_BARREL_HALF_Z, TILE_ATLAS_EXTENDED_Z_START
 from .ECAL import PSE_ATLAS_R, PSE_ATLAS_Z, PSB_ATLAS_Z
+from .AtlasBarrelFront import ATLAS_BARREL_FRONT_MIXTURES, ATLAS_BARREL_FRONT_VOLUMES
 
 
 def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_itc=False, atlas_barrel_cryostat=False,
@@ -246,6 +247,35 @@ def getAtlasEndcapCryostatCfg(left_side=False):
     return volumes
 
 
+def getAtlasBarrelFrontCfg():
+    """
+    The material in front of the accordion of the barrel as in ATLAS, piece by piece (geometry/python/v1/AtlasBarrelFront.py):
+    the warm inner wall of the cryostat (inside the solenoid field volume for |z| < 2900 mm), the solenoid in its five
+    cylinders, the cold inner wall with its conical end, the liquid argon bath, the presampler mother (around the active
+    argon of ECAL.py) and the front of the EM barrel (summing boards, motherboards, cables, G10 ring, absorber tips), and the
+    argon between the cone of the cold wall and the end of the accordion. The materials are the mixtures of
+    ATLAS_BARREL_FRONT_MIXTURES (defined by DetectorConstruction_v1). F41 conserto 17c, 09/10/2026.
+    """
+    vols = []
+    for v in ATLAS_BARREL_FRONT_VOLUMES:
+        if v['kind'] == 'tube':
+            pv = PhysicalVolume( Name = v['name'], Plates = Plates.Horizontal, AbsorberMaterial = v['material'],
+                                 GapMaterial = v['material'], NofLayers = 1, AbsorberThickness = (v['r1'] - v['r0'])/2,
+                                 GapThickness = (v['r1'] - v['r0'])/2, RMin = v['r0'], RMax = v['r1'],
+                                 ZSize = v['z1'] - v['z0'], X=0,Y=0,Z=0.5*(v['z0'] + v['z1']), Visualization = True,
+                                 Color = 'gray', InSolenoidField = v['in_field'] )
+        else:
+            zs = [p[0] for p in v['planes']]; rmins = [p[1] for p in v['planes']]; rmaxs = [p[2] for p in v['planes']]
+            pv = PhysicalVolume( Name = v['name'], Plates = Plates.Polycone, AbsorberMaterial = v['material'],
+                                 GapMaterial = v['material'], NofLayers = 1, AbsorberThickness = 0, GapThickness = 0,
+                                 RMin = min(rmins), RMax = max(rmaxs), ZSize = max(zs) - min(zs), X=0,Y=0,
+                                 Z=0.5*(max(zs) + min(zs)), Visualization = True, Color = 'gray', ZPlanes = zs,
+                                 RMinPlanes = rmins, RMaxPlanes = rmaxs, InSolenoidField = v['in_field'] )
+        pv.Cuts = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
+        vols.append(pv)
+    return vols
+
+
 def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, atlas_barrel_cryostat=False,
                     atlas_emb_cells=False):
     """
@@ -265,7 +295,10 @@ def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, at
         atlas_emb_cells (bool): With the ATLAS-like barrel presampler (r = 1413.3-1426.3 mm, |z| = 3-3101 mm; ECAL.py), the
                                     80 mm envelope of aluminium in front of it moves to r = 1305-1385 mm and, as the material
                                     between the presampler and the accordion, ends at |z| = 3101 mm (room for the conical cold
-                                    wall); same thicknesses (F41 conserto 17, decision of 09/10/2026).
+                                    wall); same thicknesses (F41 conserto 17, decision of 09/10/2026). Together with
+                                    atlas_material_in_front, the envelope, the solenoid mixture and the material between
+                                    the presampler and the accordion are replaced by the ATLAS pieces of
+                                    getAtlasBarrelFrontCfg (F41 conserto 17c).
     """
 
     ecal_barrel_start = 0*m
@@ -343,12 +376,16 @@ def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, at
     ecal_boundary_pv.Cuts       = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
     tilecal_boundary_pv.Cuts    = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
 
+    barrel_front = atlas_emb_cells and atlas_material_in_front
+    front = [] if barrel_front else [dm_pv]
     if atlas_barrel_cryostat:
         # The two 100 mm aluminium shells are replaced by the outer part of the ATLAS barrel cryostat
-        volumes = [dm_pv] + getAtlasBarrelCryostatCfg(atlas_emb_cells=atlas_emb_cells)
+        volumes = front + getAtlasBarrelCryostatCfg(atlas_emb_cells=atlas_emb_cells)
     else:
-        volumes = [dm_pv, ecal_boundary_pv, tilecal_boundary_pv]
-    if atlas_material_in_front:
+        volumes = front + [ecal_boundary_pv, tilecal_boundary_pv]
+    if barrel_front:
+        volumes.extend( getAtlasBarrelFrontCfg() )
+    elif atlas_material_in_front:
         volumes.extend( getAtlasMaterialInFrontCfg(atlas_emb_cells=atlas_emb_cells) )
     return volumes
 

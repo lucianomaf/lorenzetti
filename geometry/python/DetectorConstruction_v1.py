@@ -21,6 +21,7 @@ from geometry.v1.TILE             import getTileBarrelCfg, getTileExtendedCfg
 from geometry.v1.EMEC             import getLArEMECCfg, getAtlasEmecVolumesCfg
 from geometry.v1.HEC              import getHECCfg, getAtlasHecPassiveCfg
 from geometry.v1.DeadMaterials    import getDMVolumesCfg, getCrackVolumesCfg, getAtlasEndcapCryostatCfg
+from geometry.v1.AtlasBarrelFront import ATLAS_BARREL_FRONT_MIXTURES, ATLAS_BARREL_FRONT_FIELD_RADIUS
 #from geometry.detectors.Tracking      import *
 
 
@@ -64,6 +65,15 @@ class DetectorConstruction_v1( Cpp ):
 
     self.samplings = []
     self.volumes = []
+    # Mixtures defined by the geometry (name: (density in g/cm3, {element symbol: mass fraction})).
+    self.mixtures = {}
+    # With AtlasEmbCells and AtlasMaterialInFront the material in front of the barrel accordion is that of ATLAS, piece by
+    # piece (geometry/python/v1/DeadMaterials.py, getAtlasBarrelFrontCfg; F41 conserto 17c): the solenoid field volume
+    # ends at r = 1229 mm, where the coil starts, and the warm inner wall of the cryostat sits inside it.
+    atlas_barrel_front = AtlasEmbCells and AtlasMaterialInFront
+    if atlas_barrel_front:
+      self.mixtures.update( ATLAS_BARREL_FRONT_MIXTURES )
+      self.setProperty( "SolenoidFieldRadius", ATLAS_BARREL_FRONT_FIELD_RADIUS )
     # Center
     
     #volumes.extend( getPixelBarrelCfg()   )
@@ -79,7 +89,8 @@ class DetectorConstruction_v1( Cpp ):
       self.volumes.extend( getAtlasEmbVolumesCfg() )
       # behind the end of the barrel: dead argon, LArElectronics, conical cold wall and, with the barrel cryostat, the end
       # wall of the cold vessel down to r = 1565.5 mm (see geometry/python/v1/ECAL.py)
-      self.volumes.extend( getAtlasEmbEndCfg(atlas_barrel_cryostat=AtlasBarrelCryostat) )
+      self.volumes.extend( getAtlasEmbEndCfg(atlas_barrel_cryostat=AtlasBarrelCryostat,
+                                             atlas_barrel_front=atlas_barrel_front) )
     # ATLAS-like tile calorimeter (tiles normal to the beam line, 18 mm period, ATLAS layer radii and z extent;
     # see geometry/python/v1/TILE.py). The same value must be used in simulation and digitization. With it the
     # dead material next to the tile calorimeter (inner aluminium shell, ITC block) follows the ATLAS z extent.
@@ -139,6 +150,12 @@ class DetectorConstruction_v1( Cpp ):
   def compile(self):
     # Create all volumes inside of the detector
     
+    from ROOT.std import vector
+    for name, (density, fractions) in self.mixtures.items():
+      symbols = vector('string')(); values = vector('double')()
+      for s, f in fractions.items(): symbols.push_back(s); values.push_back(f)
+      self._core.AddMixture( name, density, symbols, values )
+
     volumes = [pv for pv in self.volumes]
     # The envelopes of the ATLAS-like EMEC and barrel (Envelope = True) only give the limits of their hit makers: not built.
     volumes.extend( [samp.volume() for samp in self.samplings if not getattr(samp.volume(), 'Envelope', False)] )
@@ -161,6 +178,12 @@ class DetectorConstruction_v1( Cpp ):
                              )
       if pv.AbsorberSplitZ > 0:
         self._core.SetAbsorberSplit( pv.Name, pv.AbsorberSplitZ, pv.AbsorberMaterial2, pv.AbsorberThickness2 )
+      if pv.Plates == Plates.Polycone:
+        zs = vector('double')(); r0 = vector('double')(); r1 = vector('double')()
+        for z, a, b in zip(pv.ZPlanes, pv.RMinPlanes, pv.RMaxPlanes): zs.push_back(z); r0.push_back(a); r1.push_back(b)
+        self._core.SetPolycone( pv.Name, zs, r0, r1 )
+      if pv.InSolenoidField:
+        self._core.SetInSolenoidField( pv.Name )
 
   def summary(self):
 

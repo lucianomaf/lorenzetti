@@ -4,6 +4,7 @@
 #include "G4NistManager.hh"
 #include "G4Box.hh"
 #include "G4Tubs.hh"
+#include "G4Polycone.hh"
 #include "G4LogicalVolume.hh"
 #include "G4PVPlacement.hh"
 #include "G4PVReplica.hh"
@@ -59,6 +60,9 @@ DetectorConstruction_v1::DetectorConstruction_v1(std::string name)
 {
   declareProperty( "UseMagneticField"           , m_useMagneticField=true     );
   declareProperty( "UseSolenoidField"           , m_useSolenoidField=false    );
+  // Radius of the solenoid field volume (1230 mm, JINST table 2.1; 1229 mm, where the coil starts, with the ATLAS pieces
+  // in front of the barrel accordion, F41 conserto 17c)
+  declareProperty( "SolenoidFieldRadius"        , m_solenoidFieldRadius=1230.  );
   declareProperty( "CutOnPhi"                 , m_cutOnPhi=false            );
   declareProperty( "OutputLevel"                , m_outputLevel=0             ); 
 }
@@ -101,6 +105,23 @@ void DetectorConstruction_v1::SetAbsorberSplit(std::string region, double zSplit
                                                double absoThickness2)
 {
   m_absorberSplit[region] = AbsorberSplit{zSplit, absorberMaterial2, absoThickness2};
+}
+
+void DetectorConstruction_v1::AddMixture(std::string name, double density, std::vector<std::string> symbols,
+                                         std::vector<double> fractions)
+{
+  m_mixtures.push_back(Mixture{name, density, symbols, fractions});
+}
+
+void DetectorConstruction_v1::SetPolycone(std::string region, std::vector<double> z, std::vector<double> rmin,
+                                          std::vector<double> rmax)
+{
+  m_polycones[region] = PolyconePlanes{z, rmin, rmax};
+}
+
+void DetectorConstruction_v1::SetInSolenoidField(std::string region)
+{
+  m_inSolenoidField.insert(region);
 }
 
 
@@ -149,7 +170,7 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
     if (m_useMagneticField){
       MSG_FATAL("UseSolenoidField and UseMagneticField cannot be enabled together. Abort!");
     }
-    const double solenoidInnerRadius = 1230*mm;
+    const double solenoidInnerRadius = m_solenoidFieldRadius*mm;
     const double solenoidHalfLength  = 2900*mm;
     G4VSolid* solenoidS = new G4Tubs( "SolenoidField",
                                       0,
@@ -167,6 +188,12 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
   for (auto &volume : m_volumes){
 
     MSG_INFO( "Creating Volume with name " << volume.name );
+    // Mother: the world, or the solenoid field volume for the volumes that sit inside it (F41 conserto 17c)
+    G4LogicalVolume *motherLV = worldLV;
+    if (m_inSolenoidField.count(volume.name)){
+      if (m_solenoidLV){ motherLV = m_solenoidLV; }
+      else{ MSG_INFO( "No solenoid field volume: " << volume.name << " placed in the world" ); }
+    }
 
     if(volume.plates == 0){ //Plates::Horizontal){
 
@@ -177,7 +204,7 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
 
 
       // Create a region
-      CreateHorizontalPlates( worldLV,
+      CreateHorizontalPlates( motherLV,
                     volume.name,
                     defaultMaterial, // default
                     G4Material::GetMaterial(volume.absorberMaterial), // absorber
@@ -201,7 +228,7 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
 
       auto region = GetRegion(volume.name);
       // Create a region
-      CreateVerticalPlates( worldLV,
+      CreateVerticalPlates( motherLV,
                     volume.name,
                     defaultMaterial, // default
                     G4Material::GetMaterial(volume.absorberMaterial), // absorber
@@ -225,6 +252,21 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
       // assign cuts to the region and return succesfully
       region->SetProductionCuts(cuts);
     
+    }else if (volume.plates == 2){ //Plates::Polycone
+
+      auto planes = m_polycones.find(volume.name);
+      if (planes == m_polycones.end()){
+        MSG_FATAL("Polycone " << volume.name << " without planes (SetPolycone). Abort!");
+      }
+      auto region = GetRegion(volume.name);
+      CreatePolycone( motherLV, volume.name, G4Material::GetMaterial(volume.absorberMaterial), planes->second, region );
+      G4ProductionCuts* cuts=new G4ProductionCuts();
+      cuts->SetProductionCut(volume.gammaCut,"gamma");
+      cuts->SetProductionCut(volume.electronCut,"e-");
+      cuts->SetProductionCut(volume.positronCut,"e+");
+      cuts->SetProductionCut(volume.photonCut,"proton");
+      region->SetProductionCuts(cuts);
+
     }else{
       MSG_FATAL("Volume type is not recognize. Abort!");
     }
@@ -314,6 +356,18 @@ void DetectorConstruction_v1::DefineMaterials()
     mix->AddMaterial(nistManager->FindOrBuildMaterial("G4_Cu"), 0.13);
     mix->AddMaterial(nistManager->FindOrBuildMaterial("G4_KAPTON"), 0.07);
     mix->AddMaterial(G4Material::GetMaterial("liquidArgon"), 0.80);
+  }
+
+  // Mixtures defined by the geometry in Python (AddMixture)
+  for (auto &mix : m_mixtures){
+    if (G4Material::GetMaterial(mix.name, false)) continue;
+    auto *mat = new G4Material(mix.name, mix.density*g/cm3, (G4int)mix.symbols.size());
+    for (size_t i = 0; i < mix.symbols.size(); ++i){
+      auto *el = nistManager->FindOrBuildElement(mix.symbols[i]);
+      // braces needed: MSG_FATAL is several statements
+      if (!el){ MSG_FATAL("Mixture " << mix.name << ": unknown element " << mix.symbols[i] << ". Abort!"); }
+      mat->AddElement(el, mix.fractions[i]);
+    }
   }
 
   // Print materials
@@ -706,6 +760,22 @@ void DetectorConstruction_v1::ConstructSDandField(){
 
 }
 
+
+
+void DetectorConstruction_v1::CreatePolycone( G4LogicalVolume *motherLV, std::string name, G4Material *material,
+                                              const PolyconePlanes &planes, G4Region *region )
+{
+  if (!material){
+    G4ExceptionDescription msg;
+    msg << "Cannot retrieve the material of the polycone " << name;
+    G4Exception("DetectorConstruction_v1::CreatePolycone()", "MyCode0003", FatalException, msg);
+  }
+  auto *solid = new G4Polycone( name, 0*deg, (!m_cutOnPhi)?(360*deg):(235*deg), (G4int)planes.z.size(),
+                                planes.z.data(), planes.rmin.data(), planes.rmax.data() );
+  auto *lv = new G4LogicalVolume( solid, material, name );
+  new G4PVPlacement( 0, G4ThreeVector(), lv, name, motherLV, false, 0, m_checkOverlaps );
+  region->AddRootLogicalVolume(lv);
+}
 
 
 G4Region* DetectorConstruction_v1::GetRegion( std::string name ){

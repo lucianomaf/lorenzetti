@@ -10,6 +10,8 @@
 #include "globals.hh"
 #include "G4Cache.hh"
 #include <map>
+#include <set>
+#include <vector>
 
 
 //enum Plates{
@@ -84,10 +86,27 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
     void SetAbsorberSplit(std::string region, double zSplit, std::string absorberMaterial2, double absoThickness2);
     struct AbsorberSplit{ double z; std::string material; double thickness; };
 
+    // A material from elements, defined by the geometry in Python (density in g/cm3, mass fractions by element symbol):
+    // the phi-averaged mixtures of the ATLAS pieces in front of the barrel accordion (F41 conserto 17c).
+    void AddMixture(std::string name, double density, std::vector<std::string> symbols, std::vector<double> fractions);
+    // Plates::Polycone (2): one G4Polycone of the absorber material with these planes. Call after AddVolume.
+    void SetPolycone(std::string region, std::vector<double> z, std::vector<double> rmin, std::vector<double> rmax);
+    // Place this volume inside the solenoid field volume (UseSolenoidField) instead of the world. Call after AddVolume.
+    void SetInSolenoidField(std::string region);
+    struct Mixture{ std::string name; double density; std::vector<std::string> symbols; std::vector<double> fractions; };
+    struct PolyconePlanes{ std::vector<double> z, rmin, rmax; };
+
   private:
 
     std::vector<Volume> m_volumes;
     std::map<std::string, AbsorberSplit> m_absorberSplit;
+    std::vector<Mixture> m_mixtures;
+    std::map<std::string, PolyconePlanes> m_polycones;
+    std::set<std::string> m_inSolenoidField;
+    double m_solenoidFieldRadius;
+
+    void CreatePolycone( G4LogicalVolume *motherLV, std::string name, G4Material *material, const PolyconePlanes &planes,
+                         G4Region *region );
 
     // methods
     void DefineMaterials();

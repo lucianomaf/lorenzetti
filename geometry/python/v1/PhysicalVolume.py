@@ -10,6 +10,8 @@ from GaugiKernel import EnumStringification
 class Plates(EnumStringification):
   Horizontal = 0
   Vertical   = 1
+  # One G4Polycone of AbsorberMaterial (dead material only) with the planes ZPlanes, RMinPlanes, RMaxPlanes.
+  Polycone   = 2
 
 
 #
@@ -37,6 +39,10 @@ class PhysicalVolume(Logger):
                       "Z",
                       "Visualization",
                       "Color",
+                      "ZPlanes",
+                      "RMinPlanes",
+                      "RMaxPlanes",
+                      "InSolenoidField",
                    ]
 
     # Constructor
@@ -51,6 +57,10 @@ class PhysicalVolume(Logger):
         self.AbsorberSplitZ = 0
         self.AbsorberMaterial2 = ""
         self.AbsorberThickness2 = 0
+        # Plates.Polycone only: z, inner and outer radius of each plane.
+        self.ZPlanes = []; self.RMinPlanes = []; self.RMaxPlanes = []
+        # Placed inside the volume of the solenoid field (built with UseSolenoidField) instead of the world.
+        self.InSolenoidField = False
         for key, value in kw.items():
           if key in self.__allow_keys:
             setattr(self, key, value )
