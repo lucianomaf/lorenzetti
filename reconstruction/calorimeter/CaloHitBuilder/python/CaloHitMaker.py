@@ -78,6 +78,11 @@ class CaloHitMaker( Cpp ):
           self.setProperty( key                 , [int(x) for x in cells[key]]             )
         for key in ("EmecWheelRMin", "EmecWheelRMax", "EmecWheelZMin", "EmecWheelZMax"):
           self.setProperty( key                 , [float(x) for x in cells[key]]           )
+      # ATLAS-like barrel EM (geometry/python/v1/ECAL.py): sampling and region of the dictionary read by this maker
+      # (see CaloHitMaker::embFindCell)
+      if "EmbSampling" in cells:
+        self.setProperty( "EmbSampling"         , int(cells["EmbSampling"])               )
+        self.setProperty( "EmbRegion"           , int(cells["EmbRegion"])                 )
       # radius on the axis of the module (ATLAS-like HEC, geometry/python/v1/HEC.py); absent: r
       if "RadiusModules" in cells:
         self.setProperty( "CellRadiusModules"   , int(cells["RadiusModules"])           )

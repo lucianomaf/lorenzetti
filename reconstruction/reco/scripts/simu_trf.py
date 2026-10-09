@@ -116,6 +116,16 @@ def parse_args():
                              "|eta| = 0.8 and 1.13 mm above, two 0.2 mm steel sheets, glue and electrode, liquid argon "
                              "of 2 x 2.1 mm, 470 mm of depth (JINST 3 (2008) S08003, sec. 5.2 and fig. 5.1). Radial "
                              "shells, not the accordion. Use the same option in digit_trf.py. Off by default.")
+    parser.add_argument('--atlas-emb-cells', action='store_true',
+                        dest='atlas_emb_cells', required=False,
+                        help="Needs --atlas-emb. The barrel EM layers end at |z| = 3165 mm as in ATLAS (instead of "
+                             "3400 mm), with steps of one layer that follow |eta| = 1.475 near the inner radius, and have "
+                             "the cells of the ATLAS identifier dictionary: EMB1 strips of 0.003125 (indices 1-447, 64 phi) "
+                             "and 3 cells of 0.025 in 1.4-1.475 (256 phi); EMB2 56 cells of 0.025 up to 1.4 and one of "
+                             "0.075 in 1.4-1.475 (256 phi); EMB3 27 cells of 0.05 up to 1.35 (256 phi). The cell comes from "
+                             "the eta of the point seen from the origin, as in the ATLAS simulation (Athena LArG4Barrel "
+                             "LArBarrelGeometry); the eta of the hit is the nominal centre of the cell. The presamplers do "
+                             "not change. Use the same option in digit_trf.py. Off by default.")
     parser.add_argument('--atlas-hec', action='store_true',
                         dest='atlas_hec', required=False,
                         help="HEC as in ATLAS, with the nominal values of the ATLAS geometry (without the shift of the installed detector): "
@@ -209,6 +219,7 @@ def main(logging_level: str,
          atlas_material_in_front: bool,
          tile_atlas_itc: bool,
          atlas_emb: bool,
+         atlas_emb_cells: bool,
          atlas_hec: bool,
          atlas_emec: bool,
          atlas_endcap_cryostat: bool,
@@ -249,6 +260,7 @@ def main(logging_level: str,
         atlas_material_in_front (bool): Material in front of the barrel EM calorimeter as in ATLAS.
         tile_atlas_itc (bool): The gap between the tile barrel and the extended barrel as in ATLAS.
         atlas_emb (bool): Barrel EM calorimeter with the ATLAS absorber composition.
+        atlas_emb_cells (bool): Barrel EM with the ATLAS length (|z| < 3165 mm) and cells (needs atlas_emb).
         atlas_hec (bool): HEC as in ATLAS (four samplings, nominal geometry and cells of ATLAS).
         atlas_emec (bool): EM end-cap as in ATLAS (two wheels, nominal geometry, composition and cells of ATLAS).
         atlas_endcap_cryostat (bool): Outer cylinders of the end-cap cryostats as in ATLAS.
@@ -284,6 +296,7 @@ def main(logging_level: str,
                                                         AtlasMaterialInFront=atlas_material_in_front,
                                                         TileAtlasItc=tile_atlas_itc,
                                                         AtlasEmb=atlas_emb,
+                                                        AtlasEmbCells=atlas_emb_cells,
                                                         AtlasHec=atlas_hec,
                                                         AtlasEmec=atlas_emec,
                                                         AtlasEndcapCryostat=atlas_endcap_cryostat,
@@ -389,6 +402,7 @@ if __name__ == "__main__":
              atlas_material_in_front = args.atlas_material_in_front,
              tile_atlas_itc        = args.tile_atlas_itc,
              atlas_emb             = args.atlas_emb,
+             atlas_emb_cells       = args.atlas_emb_cells,
              atlas_hec             = args.atlas_hec,
              atlas_emec            = args.atlas_emec,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,

@@ -15,7 +15,7 @@ from GaugiKernel import Cpp
 from GaugiKernel.macros import *
 
 from geometry.v1.PhysicalVolume   import Plates
-from geometry.v1.ECAL             import getLArBarrelCfg
+from geometry.v1.ECAL             import getLArBarrelCfg, getAtlasEmbVolumesCfg
 from geometry.v1.TILE             import getTileBarrelCfg, getTileExtendedCfg
 from geometry.v1.EMEC             import getLArEMECCfg, getAtlasEmecVolumesCfg
 from geometry.v1.HEC              import getHECCfg, getAtlasHecPassiveCfg
@@ -46,6 +46,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasMaterialInFront : bool=False,
                 TileAtlasItc      : bool=False,
                 AtlasEmb          : bool=False,
+                AtlasEmbCells     : bool=False,
                 AtlasEndcapCryostat : bool=False,
                 AtlasBarrelCryostat : bool=False,
                 AtlasHec          : bool=False,
@@ -67,7 +68,14 @@ class DetectorConstruction_v1( Cpp ):
     #volumes.extend( getPixelBarrelCfg()   )
     # Barrel EM calorimeter with the ATLAS absorber composition (lead 1.53/1.13 mm, steel, glue and electrode) and depth
     # (see geometry/python/v1/ECAL.py). The same value must be used in simulation and digitization.
-    self.samplings.extend( getLArBarrelCfg(atlas_emb=AtlasEmb)   )
+    # With AtlasEmbCells (needs AtlasEmb) the three layers end at |z| = 3165 mm as in ATLAS (steps along |eta| = 1.475 near
+    # the inner radius) and have the cells of the ATLAS identifier dictionary (see geometry/python/v1/ECAL.py); their
+    # volumes are built from getAtlasEmbVolumesCfg. The same value must be used in simulation and digitization.
+    if AtlasEmbCells and not AtlasEmb:
+      raise ValueError("AtlasEmbCells needs AtlasEmb.")
+    self.samplings.extend( getLArBarrelCfg(atlas_emb=AtlasEmb, atlas_emb_cells=AtlasEmbCells)   )
+    if AtlasEmbCells:
+      self.volumes.extend( getAtlasEmbVolumesCfg() )
     # ATLAS-like tile calorimeter (tiles normal to the beam line, 18 mm period, ATLAS layer radii and z extent;
     # see geometry/python/v1/TILE.py). The same value must be used in simulation and digitization. With it the
     # dead material next to the tile calorimeter (inner aluminium shell, ITC block) follows the ATLAS z extent.
@@ -121,7 +129,7 @@ class DetectorConstruction_v1( Cpp ):
     # Create all volumes inside of the detector
     
     volumes = [pv for pv in self.volumes]
-    # The envelopes of the ATLAS-like EMEC (Envelope = True) only give the limits of its hit makers: not built.
+    # The envelopes of the ATLAS-like EMEC and barrel (Envelope = True) only give the limits of their hit makers: not built.
     volumes.extend( [samp.volume() for samp in self.samplings if not getattr(samp.volume(), 'Envelope', False)] )
           
     for pv in tqdm( volumes, desc="Compiling  volumes...", ncols=70):
