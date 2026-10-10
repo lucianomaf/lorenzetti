@@ -14,18 +14,18 @@ ATLAS_BARREL_FRONT_MIXTURES = {
     'ATLAS_STD_G10': (2.000003, {'C': 0.235440, 'H': 0.019758, 'F': 0.744802}),
     'ATLAS_PS_Shell': (1.900003, {'H': 0.081008, 'C': 0.551609, 'O': 0.367383}),
     'ATLAS_PS_Prepreg1': (1.900003, {'H': 0.081008, 'C': 0.551609, 'O': 0.367383}),
-    'ATLAS_PS_Prepreg2': (1.898215, {'H': 0.080797, 'C': 0.550170, 'O': 0.366424, 'Ar': 0.002609}),
-    'ATLAS_PS_Board': (1.989374, {'H': 0.057483, 'C': 0.391417, 'O': 0.260692, 'Cu': 0.130289, 'Ar': 0.160119}),
-    'ATLAS_PS_Connectics_1': (1.524777, {'Cu': 0.023512, 'H': 0.018550, 'C': 0.126315, 'O': 0.084128, 'Ar': 0.747495}),
-    'ATLAS_PS_Connectics_2': (1.617491, {'Cu': 0.070016, 'H': 0.020255, 'C': 0.137921, 'O': 0.091858, 'Ar': 0.679950}),
-    'ATLAS_PS_Connectics_3': (1.743535, {'Cu': 0.125305, 'H': 0.022281, 'C': 0.151720, 'O': 0.101049, 'Ar': 0.599645}),
-    'ATLAS_PS_Connectics_4': (1.902909, {'Cu': 0.184728, 'H': 0.024459, 'C': 0.166551, 'O': 0.110927, 'Ar': 0.513334}),
-    'ATLAS_PS_Connectics_5': (2.095614, {'Cu': 0.244508, 'H': 0.026651, 'C': 0.181471, 'O': 0.120863, 'Ar': 0.426507}),
-    'ATLAS_PS_Connectics_6': (2.321650, {'Cu': 0.301980, 'H': 0.028757, 'C': 0.195815, 'O': 0.130417, 'Ar': 0.343031}),
-    'ATLAS_PS_Connectics_7': (2.581015, {'Cu': 0.355524, 'H': 0.030720, 'C': 0.209179, 'O': 0.139317, 'Ar': 0.265260}),
-    'ATLAS_PS_Connectics_8': (2.873711, {'Cu': 0.404341, 'H': 0.032509, 'C': 0.221363, 'O': 0.147432, 'Ar': 0.194355}),
-    'ATLAS_PS_Plate': (1.887689, {'H': 0.079545, 'C': 0.541642, 'O': 0.360745, 'Ar': 0.018069}),
-    'ATLAS_PS_Rails': (1.481626, {'H': 0.017649, 'C': 0.120175, 'O': 0.080039, 'Ar': 0.782138}),
+    'ATLAS_PS_Prepreg2': (1.898004, {'H': 0.080772, 'C': 0.550000, 'O': 0.366311, 'Ar': 0.002917}),
+    'ATLAS_PS_Board': (1.989126, {'H': 0.057466, 'C': 0.391302, 'O': 0.260615, 'Cu': 0.130251, 'Ar': 0.160366}),
+    'ATLAS_PS_Connectics_1': (1.524723, {'Cu': 0.023503, 'H': 0.018543, 'C': 0.126266, 'O': 0.084096, 'Ar': 0.747591}),
+    'ATLAS_PS_Connectics_2': (1.617398, {'Cu': 0.069990, 'H': 0.020248, 'C': 0.137871, 'O': 0.091825, 'Ar': 0.680065}),
+    'ATLAS_PS_Connectics_3': (1.743390, {'Cu': 0.125263, 'H': 0.022274, 'C': 0.151670, 'O': 0.101015, 'Ar': 0.599779}),
+    'ATLAS_PS_Connectics_4': (1.902698, {'Cu': 0.184672, 'H': 0.024452, 'C': 0.166500, 'O': 0.110893, 'Ar': 0.513483}),
+    'ATLAS_PS_Connectics_5': (2.095322, {'Cu': 0.244440, 'H': 0.026643, 'C': 0.181421, 'O': 0.120830, 'Ar': 0.426666}),
+    'ATLAS_PS_Connectics_6': (2.321263, {'Cu': 0.301904, 'H': 0.028750, 'C': 0.195766, 'O': 0.130384, 'Ar': 0.343196}),
+    'ATLAS_PS_Connectics_7': (2.580520, {'Cu': 0.355444, 'H': 0.030713, 'C': 0.209132, 'O': 0.139286, 'Ar': 0.265426}),
+    'ATLAS_PS_Connectics_8': (2.873094, {'Cu': 0.404259, 'H': 0.032502, 'C': 0.221318, 'O': 0.147402, 'Ar': 0.194518}),
+    'ATLAS_PS_Plate': (1.887484, {'H': 0.079520, 'C': 0.541475, 'O': 0.360633, 'Ar': 0.018371}),
+    'ATLAS_PS_Rails': (1.481591, {'H': 0.017642, 'C': 0.120127, 'O': 0.080007, 'Ar': 0.782224}),
     'ATLAS_EMBF_CablesIn_4': (1.396017, {'Cu': 0.000012, 'C': 0.000005, 'H': 0.000000, 'O': 0.000002, 'N': 0.000001, 'Ar': 0.999980}),
     'ATLAS_EMBF_CablesIn_5': (1.498833, {'Cu': 0.078763, 'C': 0.033364, 'H': 0.001273, 'O': 0.010100, 'N': 0.003537, 'Ar': 0.872963}),
     'ATLAS_EMBF_CablesIn_6': (1.698294, {'Cu': 0.204345, 'C': 0.086560, 'H': 0.003302, 'O': 0.026205, 'N': 0.009176, 'Ar': 0.670412}),
@@ -63,40 +63,40 @@ ATLAS_BARREL_FRONT_VOLUMES = [
     dict(kind='pcon', name='DM::Barrel::ColdWall', material='G4_Al', planes=[(-3267.000, 1537.220, 1565.500), (-3101.000, 1356.720, 1385.000), (-3101.000, 1365.000, 1385.000), (-3023.000, 1365.000, 1385.000), (-2950.000, 1340.500, 1385.000), (-2728.000, 1340.500, 1385.000), (-2640.000, 1371.000, 1385.000), (-2400.000, 1369.000, 1385.000), (-1950.000, 1367.000, 1385.000), (-1120.000, 1358.900, 1385.000), (-400.000, 1356.600, 1385.000), (-75.000, 1341.000, 1385.000), (75.000, 1341.000, 1385.000), (400.000, 1356.600, 1385.000), (1120.000, 1358.900, 1385.000), (1950.000, 1367.000, 1385.000), (2400.000, 1369.000, 1385.000), (2640.000, 1371.000, 1385.000), (2728.000, 1340.500, 1385.000), (2950.000, 1340.500, 1385.000), (3023.000, 1365.000, 1385.000), (3101.000, 1365.000, 1385.000), (3101.000, 1356.720, 1385.000), (3267.000, 1537.220, 1565.500)], in_field=False),  # OuterWall planes 4-27 (CryoPcons-18)
     dict(kind='tube', name='DM::Barrel::LArBath', material='liquidArgon', r0=1385.000, r1=1410.000, z0=-3101.000, z1=3101.000, in_field=False),  # TotalLAr (CryoPcons-18) minus the PS mother
     dict(kind='tube', name='DM::Barrel::LArCentral', material='liquidArgon', r0=1410.000, r1=1500.000, z0=-3.000, z1=3.000, in_field=False),  # HalfLAr::Pos starts at z = 3 mm
-    dict(kind='tube', name='DM::Barrel::PSMother::Shell::A', material='ATLAS_PS_Shell', r0=1411.400, r1=1411.800, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::Shell::B', material='ATLAS_PS_Shell', r0=1411.400, r1=1411.800, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::Prepreg1::A', material='ATLAS_PS_Prepreg1', r0=1412.300, r1=1413.300, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::Prepreg1::B', material='ATLAS_PS_Prepreg1', r0=1412.300, r1=1413.300, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::Prepreg2::A', material='ATLAS_PS_Prepreg2', r0=1426.300, r1=1430.800, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::Prepreg2::B', material='ATLAS_PS_Prepreg2', r0=1426.300, r1=1430.800, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::Board::A', material='ATLAS_PS_Board', r0=1430.800, r1=1433.000, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::Board::B', material='ATLAS_PS_Board', r0=1430.800, r1=1433.000, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics1::A', material='ATLAS_PS_Connectics_1', r0=1433.000, r1=1438.000, z0=3.000, z1=390.250, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics1::B', material='ATLAS_PS_Connectics_1', r0=1433.000, r1=1438.000, z0=-390.250, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics2::A', material='ATLAS_PS_Connectics_2', r0=1433.000, r1=1438.000, z0=390.250, z1=777.500, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics2::B', material='ATLAS_PS_Connectics_2', r0=1433.000, r1=1438.000, z0=-777.500, z1=-390.250, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics3::A', material='ATLAS_PS_Connectics_3', r0=1433.000, r1=1438.000, z0=777.500, z1=1164.750, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics3::B', material='ATLAS_PS_Connectics_3', r0=1433.000, r1=1438.000, z0=-1164.750, z1=-777.500, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics4::A', material='ATLAS_PS_Connectics_4', r0=1433.000, r1=1438.000, z0=1164.750, z1=1552.000, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics4::B', material='ATLAS_PS_Connectics_4', r0=1433.000, r1=1438.000, z0=-1552.000, z1=-1164.750, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics5::A', material='ATLAS_PS_Connectics_5', r0=1433.000, r1=1438.000, z0=1552.000, z1=1939.250, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics5::B', material='ATLAS_PS_Connectics_5', r0=1433.000, r1=1438.000, z0=-1939.250, z1=-1552.000, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics6::A', material='ATLAS_PS_Connectics_6', r0=1433.000, r1=1438.000, z0=1939.250, z1=2326.500, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics6::B', material='ATLAS_PS_Connectics_6', r0=1433.000, r1=1438.000, z0=-2326.500, z1=-1939.250, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics7::A', material='ATLAS_PS_Connectics_7', r0=1433.000, r1=1438.000, z0=2326.500, z1=2713.750, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics7::B', material='ATLAS_PS_Connectics_7', r0=1433.000, r1=1438.000, z0=-2713.750, z1=-2326.500, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics8::A', material='ATLAS_PS_Connectics_8', r0=1433.000, r1=1438.000, z0=2713.750, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Connectics8::B', material='ATLAS_PS_Connectics_8', r0=1433.000, r1=1438.000, z0=-3101.000, z1=-2713.750, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
-    dict(kind='tube', name='DM::Barrel::PSMother::Plate::A', material='ATLAS_PS_Plate', r0=1438.000, r1=1438.500, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::Plate::B', material='ATLAS_PS_Plate', r0=1438.000, r1=1438.500, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::Rails::A', material='ATLAS_PS_Rails', r0=1438.500, r1=1439.400, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::Rails::B', material='ATLAS_PS_Rails', r0=1438.500, r1=1439.400, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
-    dict(kind='tube', name='DM::Barrel::PSMother::LAr1::A', material='liquidArgon', r0=1410.000, r1=1411.400, z0=3.000, z1=3101.000, in_field=False),  # PS mother, argon
-    dict(kind='tube', name='DM::Barrel::PSMother::LAr1::B', material='liquidArgon', r0=1410.000, r1=1411.400, z0=-3101.000, z1=-3.000, in_field=False),  # PS mother, argon
-    dict(kind='tube', name='DM::Barrel::PSMother::LAr2::A', material='liquidArgon', r0=1411.800, r1=1412.300, z0=3.000, z1=3101.000, in_field=False),  # PS mother, argon
-    dict(kind='tube', name='DM::Barrel::PSMother::LAr2::B', material='liquidArgon', r0=1411.800, r1=1412.300, z0=-3101.000, z1=-3.000, in_field=False),  # PS mother, argon
-    dict(kind='tube', name='DM::Barrel::PSMother::LAr3::A', material='liquidArgon', r0=1439.400, r1=1447.000, z0=3.000, z1=3101.000, in_field=False),  # PS mother, argon
-    dict(kind='tube', name='DM::Barrel::PSMother::LAr3::B', material='liquidArgon', r0=1439.400, r1=1447.000, z0=-3101.000, z1=-3.000, in_field=False),  # PS mother, argon
+    dict(kind='tube', name='DM::Barrel::PSMother::Shell::A', material='ATLAS_PS_Shell', r0=1412.000, r1=1412.400, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::Shell::B', material='ATLAS_PS_Shell', r0=1412.000, r1=1412.400, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::Prepreg1::A', material='ATLAS_PS_Prepreg1', r0=1412.900, r1=1413.900, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::Prepreg1::B', material='ATLAS_PS_Prepreg1', r0=1412.900, r1=1413.900, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::Prepreg2::A', material='ATLAS_PS_Prepreg2', r0=1426.900, r1=1431.400, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::Prepreg2::B', material='ATLAS_PS_Prepreg2', r0=1426.900, r1=1431.400, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::Board::A', material='ATLAS_PS_Board', r0=1431.400, r1=1433.600, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::Board::B', material='ATLAS_PS_Board', r0=1431.400, r1=1433.600, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics1::A', material='ATLAS_PS_Connectics_1', r0=1433.600, r1=1438.600, z0=3.000, z1=390.250, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics1::B', material='ATLAS_PS_Connectics_1', r0=1433.600, r1=1438.600, z0=-390.250, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics2::A', material='ATLAS_PS_Connectics_2', r0=1433.600, r1=1438.600, z0=390.250, z1=777.500, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics2::B', material='ATLAS_PS_Connectics_2', r0=1433.600, r1=1438.600, z0=-777.500, z1=-390.250, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics3::A', material='ATLAS_PS_Connectics_3', r0=1433.600, r1=1438.600, z0=777.500, z1=1164.750, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics3::B', material='ATLAS_PS_Connectics_3', r0=1433.600, r1=1438.600, z0=-1164.750, z1=-777.500, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics4::A', material='ATLAS_PS_Connectics_4', r0=1433.600, r1=1438.600, z0=1164.750, z1=1552.000, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics4::B', material='ATLAS_PS_Connectics_4', r0=1433.600, r1=1438.600, z0=-1552.000, z1=-1164.750, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics5::A', material='ATLAS_PS_Connectics_5', r0=1433.600, r1=1438.600, z0=1552.000, z1=1939.250, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics5::B', material='ATLAS_PS_Connectics_5', r0=1433.600, r1=1438.600, z0=-1939.250, z1=-1552.000, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics6::A', material='ATLAS_PS_Connectics_6', r0=1433.600, r1=1438.600, z0=1939.250, z1=2326.500, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics6::B', material='ATLAS_PS_Connectics_6', r0=1433.600, r1=1438.600, z0=-2326.500, z1=-1939.250, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics7::A', material='ATLAS_PS_Connectics_7', r0=1433.600, r1=1438.600, z0=2326.500, z1=2713.750, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics7::B', material='ATLAS_PS_Connectics_7', r0=1433.600, r1=1438.600, z0=-2713.750, z1=-2326.500, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics8::A', material='ATLAS_PS_Connectics_8', r0=1433.600, r1=1438.600, z0=2713.750, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Connectics8::B', material='ATLAS_PS_Connectics_8', r0=1433.600, r1=1438.600, z0=-3101.000, z1=-2713.750, in_field=False),  # BarrelPresamplerConstruction.cxx, connectics growing with |z|
+    dict(kind='tube', name='DM::Barrel::PSMother::Plate::A', material='ATLAS_PS_Plate', r0=1438.600, r1=1439.100, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::Plate::B', material='ATLAS_PS_Plate', r0=1438.600, r1=1439.100, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::Rails::A', material='ATLAS_PS_Rails', r0=1439.100, r1=1440.000, z0=3.000, z1=3101.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::Rails::B', material='ATLAS_PS_Rails', r0=1439.100, r1=1440.000, z0=-3101.000, z1=-3.000, in_field=False),  # BarrelPresamplerConstruction.cxx
+    dict(kind='tube', name='DM::Barrel::PSMother::LAr1::A', material='liquidArgon', r0=1410.000, r1=1412.000, z0=3.000, z1=3101.000, in_field=False),  # PS mother, argon
+    dict(kind='tube', name='DM::Barrel::PSMother::LAr1::B', material='liquidArgon', r0=1410.000, r1=1412.000, z0=-3101.000, z1=-3.000, in_field=False),  # PS mother, argon
+    dict(kind='tube', name='DM::Barrel::PSMother::LAr2::A', material='liquidArgon', r0=1412.400, r1=1412.900, z0=3.000, z1=3101.000, in_field=False),  # PS mother, argon
+    dict(kind='tube', name='DM::Barrel::PSMother::LAr2::B', material='liquidArgon', r0=1412.400, r1=1412.900, z0=-3101.000, z1=-3.000, in_field=False),  # PS mother, argon
+    dict(kind='tube', name='DM::Barrel::PSMother::LAr3::A', material='liquidArgon', r0=1440.000, r1=1447.000, z0=3.000, z1=3101.000, in_field=False),  # PS mother, argon
+    dict(kind='tube', name='DM::Barrel::PSMother::LAr3::B', material='liquidArgon', r0=1440.000, r1=1447.000, z0=-3101.000, z1=-3.000, in_field=False),  # PS mother, argon
     dict(kind='tube', name='DM::Barrel::EMBFront::LAr1::A', material='liquidArgon', r0=1447.000, r1=1449.180, z0=3.000, z1=3097.000, in_field=False),  # BarrelConstruction.cxx (front electronics, G10 ring, absorber tips)
     dict(kind='tube', name='DM::Barrel::EMBFront::LAr1::B', material='liquidArgon', r0=1447.000, r1=1449.180, z0=-3097.000, z1=-3.000, in_field=False),  # BarrelConstruction.cxx (front electronics, G10 ring, absorber tips)
     dict(kind='tube', name='DM::Barrel::EMBFront::CablesIn1::A', material='liquidArgon', r0=1449.180, r1=1450.850, z0=3.000, z1=389.750, in_field=False),  # BarrelConstruction.cxx (front electronics, G10 ring, absorber tips)

@@ -6,10 +6,11 @@ from .PhysicalVolume import PhysicalVolume, Plates, ProductionCuts
 from .TILE import TILE_ATLAS_BARREL_HALF_Z, TILE_ATLAS_EXTENDED_Z_START
 from .ECAL import PSE_ATLAS_R, PSE_ATLAS_Z, PSB_ATLAS_Z
 from .AtlasBarrelFront import ATLAS_BARREL_FRONT_MIXTURES, ATLAS_BARREL_FRONT_VOLUMES
+from .AtlasBarrelCryostat import ATLAS_BARREL_CRYOSTAT_VOLUMES
 
 
 def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_itc=False, atlas_barrel_cryostat=False,
-                       atlas_emec=False, atlas_emb_cells=False):
+                       atlas_emec=False, atlas_emb_cells=False, atlas_cryostat_pieces=False):
     """
     Dead material in the crack between the barrel and the endcaps.
 
@@ -96,7 +97,8 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_it
     if tile_atlas_itc:
         if not tile_atlas_geometry:
             raise ValueError("tile_atlas_itc needs tile_atlas_geometry.")
-        return crack_em + getAtlasItcCfg(left_side=left_side, atlas_barrel_cryostat=atlas_barrel_cryostat)
+        return crack_em + getAtlasItcCfg(left_side=left_side, atlas_barrel_cryostat=atlas_barrel_cryostat,
+                                         atlas_cryostat_pieces=atlas_cryostat_pieces)
     return crack_em + [crack_tile_pv]
 
 
@@ -146,11 +148,12 @@ def _crackWithPresamplerCavity(side_name, sign, z_start, nlayers, absorber, gap)
 # Not modelled: the gap and cryostat scintillators E1-E4.
 ATLAS_ITC_SERVICES_FRACTION = 0.05
 
-def getAtlasItcCfg(left_side=False, atlas_barrel_cryostat=False):
+def getAtlasItcCfg(left_side=False, atlas_barrel_cryostat=False, atlas_cryostat_pieces=False):
     """
     Plug of the ITC and services of the gap (see above). With atlas_barrel_cryostat the services leave room for the step of
     the warm vessel of the barrel cryostat (r = 2250 to 2775 mm, |z| = 2865 to 3405 mm; see getAtlasBarrelCryostatCfg),
-    keeping the same 5% of aluminium in the remaining volume.
+    keeping the same 5% of aluminium in the remaining volume. With atlas_cryostat_pieces (the ATLAS pieces of the barrel
+    cryostat, F41 conserto 14b) the step of the warm vessel starts at |z| = 2850 mm, as in the ATLAS geometry.
     """
     sign = -1 if left_side else 1
     side_name = 'B' if left_side else 'A'
@@ -178,6 +181,8 @@ def getAtlasItcCfg(left_side=False, atlas_barrel_cryostat=False):
         caixas = ((2808*mm, 2864.95*mm, 2283*mm, 3850*mm), (2865*mm, 3225*mm, 2775.05*mm, 3850*mm),
                   (3225*mm, 3405*mm, 2775.05*mm, 3461*mm), (3405.05*mm, 3444*mm, 2283*mm, 3461*mm),
                   (3444*mm, 3554*mm, 2283*mm, 2988*mm))
+    if atlas_cryostat_pieces:
+        caixas = ((2808*mm, 2849.95*mm, 2283*mm, 3850*mm), (2850*mm, 3225*mm, 2775.05*mm, 3850*mm)) + caixas[2:]
     for i, (z1, z2, r1, r2) in enumerate(caixas):
         nlayers = max(1, int(round((r2 - r1) / (50*mm)))); layer = (r2 - r1) / nlayers
         pv = PhysicalVolume( Name               = "DM::ITC::Services%d::%s" % (i+1, side_name),
@@ -256,8 +261,14 @@ def getAtlasBarrelFrontCfg():
     argon between the cone of the cold wall and the end of the accordion. The materials are the mixtures of
     ATLAS_BARREL_FRONT_MIXTURES (defined by DetectorConstruction_v1). F41 conserto 17c, 09/10/2026.
     """
+    return _volumesFromTable(ATLAS_BARREL_FRONT_VOLUMES)
+
+
+def _volumesFromTable(table):
+    """Dead-material volumes from a generated table (AtlasBarrelFront.py, AtlasBarrelCryostat.py): tubes and polycones of
+    one material each."""
     vols = []
-    for v in ATLAS_BARREL_FRONT_VOLUMES:
+    for v in table:
         if v['kind'] == 'tube':
             pv = PhysicalVolume( Name = v['name'], Plates = Plates.Horizontal, AbsorberMaterial = v['material'],
                                  GapMaterial = v['material'], NofLayers = 1, AbsorberThickness = (v['r1'] - v['r0'])/2,
@@ -292,7 +303,7 @@ def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, at
                                     in front of the presampler and the material between the presampler and the
                                     accordion. Without it (the default) only 40 mm of aluminium stand in front of the
                                     presampler.
-        atlas_emb_cells (bool): With the ATLAS-like barrel presampler (r = 1413.3-1426.3 mm, |z| = 3-3101 mm; ECAL.py), the
+        atlas_emb_cells (bool): With the ATLAS-like barrel presampler (r = 1413.9-1426.9 mm, |z| = 3-3101 mm; ECAL.py), the
                                     80 mm envelope of aluminium in front of it moves to r = 1305-1385 mm and, as the material
                                     between the presampler and the accordion, ends at |z| = 3101 mm (room for the conical cold
                                     wall); same thicknesses (F41 conserto 17, decision of 09/10/2026). Together with
@@ -378,7 +389,10 @@ def getDMVolumesCfg(tile_atlas_geometry=False, atlas_material_in_front=False, at
 
     barrel_front = atlas_emb_cells and atlas_material_in_front
     front = [] if barrel_front else [dm_pv]
-    if atlas_barrel_cryostat:
+    if atlas_barrel_cryostat and barrel_front:
+        # the ATLAS pieces of the barrel cryostat (F41 conserto 14b)
+        volumes = front + _volumesFromTable(ATLAS_BARREL_CRYOSTAT_VOLUMES)
+    elif atlas_barrel_cryostat:
         # The two 100 mm aluminium shells are replaced by the outer part of the ATLAS barrel cryostat
         volumes = front + getAtlasBarrelCryostatCfg(atlas_emb_cells=atlas_emb_cells)
     else:

@@ -365,8 +365,9 @@ def _getAtlasEmbCellsCfg():
 # Presamplers and the end of the barrel with atlas_emb_cells (decisions of Luciano of 09/10/2026 on the items B, C and D of
 # F41 conserto 17; only with the option).
 #
-# - Barrel presampler (C): active liquid argon of 13 mm from r = 1413.3 mm (PresamplerGeometry-00 RACTIVE 141.33 cm, the
-#   inner radius of the active layer, and HACTIVE 1.3 cm; larheight = 13 mm in LArGeoBarrel/src/BarrelPresamplerConstruction.cxx),
+# - Barrel presampler (C): active liquid argon of 13 mm from r = 1413.9 mm, as in the ATLAS simulation (the stack of the
+#   module in LArGeoBarrel/src/BarrelPresamplerConstruction.cxx, larheight = 13 mm; LArG4Barrel findCell measures from
+#   r0 = 1420.4 mm; RACTIVE of PresamplerGeometry-00 says 1413.3 mm; F41 conserto 17c, Luciano, 09/10/2026),
 #   inside the ATLAS mother r = 1410-1447 mm, |z| = 3 to 3101 mm (mother of half length 1549 mm placed at z = 1549 + 3 mm,
 #   LArGeoBarrel/src/BarrelCryostatConstruction.cxx). The rest of the mother (modules, motherboards) is not modelled. Cells of
 #   the ATLAS identifier dictionary (LArEM-barrel-00): 61 cells of 0.025 up to 1.525, 64 phi slices, from the pseudorapidity of
@@ -384,7 +385,7 @@ def _getAtlasEmbCellsCfg():
 #   cone at the middle of each step; with atlas_barrel_cryostat, the end wall of the cold vessel extended down to r = 1565.5 mm
 #   (Barrel::OuterWall planes 27-30: z 3267-3287 mm).
 #
-PSB_ATLAS_R_ACTIVE  = 1413.3*mm     # PresamplerGeometry-00 RACTIVE (inner radius of the active argon)
+PSB_ATLAS_R_ACTIVE  = 1413.9*mm     # inner radius of the active argon in the ATLAS simulation (BarrelPresamplerConstruction.cxx; findCell uses r0 = 1420.4 mm); RACTIVE of PresamplerGeometry-00 is 1413.3 mm
 PSB_ATLAS_ACTIVE    = 13.0*mm       # PresamplerGeometry-00 HACTIVE; larheight in BarrelPresamplerConstruction.cxx
 PSB_ATLAS_Z         = (3.0*mm, 3101.0*mm)
 PSE_ATLAS_R         = (1231.74*mm, 1701.98*mm)   # PresamplerPosition-00 RMIN, RMAX
@@ -569,7 +570,7 @@ def getAtlasEmbEndCfg(atlas_barrel_cryostat=False, atlas_barrel_front=False):
             EMB_ATLAS_ELEC_RMAX if atlas_barrel_cryostat else EMB_ATLAS_DEAD_RMAX, EMB_ATLAS_END_LAR_Z, EMB_ATLAS_END_Z)
         for k, (z0, z1, r0, r1) in enumerate([] if atlas_barrel_front else atlasEmbConeSteps()):
             add(f"ColdCone{k+1}", Plates.Vertical, "G4_Al", r0, r1, z0, z1)
-        if atlas_barrel_cryostat:
+        if atlas_barrel_cryostat and not atlas_barrel_front:   # with the front, the end wall comes from the cryostat pieces
             add("ColdEndWall", Plates.Vertical, "G4_Al", EMB_ATLAS_COLD_WALL_RMIN, EMB_ATLAS_DEAD_RMAX,
                 EMB_ATLAS_COLD_WALL[0], EMB_ATLAS_COLD_WALL[1])
     return vols
