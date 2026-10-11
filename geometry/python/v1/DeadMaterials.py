@@ -1,11 +1,12 @@
 
-__all__ = ["getCrackVolumesCfg", "getDMVolumesCfg", "getAtlasEndcapCryostatCfg", "getAtlasBarrelCryostatCfg"]
+__all__ = ["getCrackVolumesCfg", "getDMVolumesCfg", "getAtlasEndcapCryostatCfg", "getAtlasBarrelCryostatCfg", "getAtlasFcalCfg"]
 
 from GaugiKernel.constants import m,cm,mm
 from .PhysicalVolume import PhysicalVolume, Plates, ProductionCuts
 from .TILE import TILE_ATLAS_BARREL_HALF_Z, TILE_ATLAS_EXTENDED_Z_START
 from .ECAL import PSE_ATLAS_R, PSE_ATLAS_Z, PSB_ATLAS_Z
 from .AtlasBarrelFront import ATLAS_BARREL_FRONT_MIXTURES, ATLAS_BARREL_FRONT_VOLUMES
+from .AtlasFCal import ATLAS_FCAL_VOLUMES
 from .AtlasBarrelCryostat import ATLAS_BARREL_CRYOSTAT_VOLUMES
 
 
@@ -262,6 +263,16 @@ def getAtlasBarrelFrontCfg():
     ATLAS_BARREL_FRONT_MIXTURES (defined by DetectorConstruction_v1). F41 conserto 17c, 09/10/2026.
     """
     return _volumesFromTable(ATLAS_BARREL_FRONT_VOLUMES)
+
+
+def getAtlasFcalCfg():
+    """
+    The ATLAS forward calorimeter as passive material, without cells, on both sides (geometry/python/v1/AtlasFCal.py): the
+    three modules as tubes of the mean mixture of absorber, rods and liquid argon (ATLAS_FCAL_MIXTURES, defined by
+    DetectorConstruction_v1) and the liquid argon between them, at the nominal z of the public GeoModel geometry. F41
+    conserto 20, 11/10/2026.
+    """
+    return _volumesFromTable(ATLAS_FCAL_VOLUMES)
 
 
 def _volumesFromTable(table):

@@ -24,6 +24,8 @@ from geometry.v1.HEC              import getHECCfg, getAtlasHecPassiveCfg
 from geometry.v1.DeadMaterials    import getDMVolumesCfg, getCrackVolumesCfg, getAtlasEndcapCryostatCfg
 from geometry.v1.AtlasBarrelFront import ATLAS_BARREL_FRONT_MIXTURES, ATLAS_BARREL_FRONT_FIELD_RADIUS
 from geometry.v1.AtlasBarrelCryostat import ATLAS_BARREL_CRYOSTAT_MIXTURES
+from geometry.v1.AtlasFCal        import ATLAS_FCAL_MIXTURES
+from geometry.v1.DeadMaterials    import getAtlasFcalCfg
 #from geometry.detectors.Tracking      import *
 
 
@@ -55,6 +57,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasBarrelCryostat : bool=False,
                 AtlasHec          : bool=False,
                 AtlasEmec         : bool=False,
+                AtlasFcal         : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -145,6 +148,11 @@ class DetectorConstruction_v1( Cpp ):
     if AtlasHec:
       self.volumes.extend( getAtlasHecPassiveCfg() )
       self.volumes.extend( getAtlasHecPassiveCfg(left_side=True) )
+    # Forward calorimeter of ATLAS as passive material, without cells (geometry/python/v1/AtlasFCal.py; F41 conserto 20).
+    # Simulation only.
+    if AtlasFcal:
+      self.mixtures.update( ATLAS_FCAL_MIXTURES )
+      self.volumes.extend( getAtlasFcalCfg() )
     # Volumes of the ATLAS-like EMEC (radial bands and steps of the two wheels); their cells come from the samplings.
     if AtlasEmec:
       self.volumes.extend( getAtlasEmecVolumesCfg() )

@@ -134,6 +134,12 @@ def parse_args():
                              "ATLAS identifier dictionary found from the radius of the readout pads of each block, as "
                              "in the ATLAS simulation (JINST 3 (2008) S08003, sec. 5.3; Athena HECGeometry). "
                              "Use the same option in digit_trf.py. Off by default.")
+    parser.add_argument('--atlas-fcal', action='store_true',
+                        dest='atlas_fcal', required=False,
+                        help="Forward calorimeter of ATLAS as passive material, without cells: the three modules (copper, then "
+                             "two of tungsten; r = 72-449.6 mm, z = 4668.5-6045.1 mm without the shift of the installed "
+                             "detector) as tubes of the mean mixture of absorber, rods and liquid argon, from the public ATLAS "
+                             "GeoModel geometry (JINST 3 (2008) S08003, Table 5.4). Simulation only. Off by default.")
     parser.add_argument('--atlas-emec', action='store_true',
                         dest='atlas_emec', required=False,
                         help="EM end-cap as in ATLAS, with the nominal values of the ATLAS geometry (without the shift of the "
@@ -228,6 +234,7 @@ def main(logging_level: str,
          atlas_emb_cells: bool,
          atlas_hec: bool,
          atlas_emec: bool,
+         atlas_fcal: bool,
          atlas_endcap_cryostat: bool,
          atlas_barrel_cryostat: bool,
          tile_dual_readout: int,
@@ -269,6 +276,7 @@ def main(logging_level: str,
         atlas_emb_cells (bool): Barrel EM with the ATLAS length (|z| < 3165 mm) and cells (needs atlas_emb).
         atlas_hec (bool): HEC as in ATLAS (four samplings, nominal geometry and cells of ATLAS).
         atlas_emec (bool): EM end-cap as in ATLAS (two wheels, nominal geometry, composition and cells of ATLAS).
+        atlas_fcal (bool): Forward calorimeter of ATLAS as passive material (three modules, no cells).
         atlas_endcap_cryostat (bool): Outer cylinders of the end-cap cryostats as in ATLAS.
         atlas_barrel_cryostat (bool): Outer part of the barrel cryostat as in ATLAS.
         tile_dual_readout (int): Two PMTs per tile cell: 0 = off, 1 = ATLAS U-shape, 2 = linear (needs tile_atlas_cells).
@@ -305,6 +313,7 @@ def main(logging_level: str,
                                                         AtlasEmbCells=atlas_emb_cells,
                                                         AtlasHec=atlas_hec,
                                                         AtlasEmec=atlas_emec,
+                                                        AtlasFcal=atlas_fcal,
                                                         AtlasEndcapCryostat=atlas_endcap_cryostat,
                                                         AtlasBarrelCryostat=atlas_barrel_cryostat),
                                NumberOfThreads=number_of_threads,
@@ -414,6 +423,7 @@ if __name__ == "__main__":
              atlas_emb_cells       = args.atlas_emb_cells,
              atlas_hec             = args.atlas_hec,
              atlas_emec            = args.atlas_emec,
+             atlas_fcal            = args.atlas_fcal,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,
              atlas_barrel_cryostat = args.atlas_barrel_cryostat,
              tile_dual_readout     = (0 if not args.tile_dual_readout else
