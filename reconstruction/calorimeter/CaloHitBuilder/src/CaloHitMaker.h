@@ -158,6 +158,15 @@ class CaloHitMaker : public Gaugi::Algorithm
     int m_embRegion;
     // EmbMode = 3: radius of the middle of the active layer of the barrel presampler (mm)
     double m_psbR0;
+    // Barrel EM (EmbMode = 1, EmbSampling 1-3) with the sampling, region and cell of the ATLAS simulation (F41 conserto 18):
+    // fiducial cuts and Geometry::SampSeg of LArBarrelGeometry (see embSampSeg); the maker takes the steps of the whole
+    // accordion (its radial limits are not applied) and keeps those of its own sampling and region.
+    bool m_embSampSeg;
+  public:
+    /*! ATLAS SampSeg for the point (x, y, z), in mm: 1 if active (then region, sampling and eta index of the dictionary), 0 if
+        not. Public so that the assignment can be tested from Python. */
+    int embSampSeg( double x, double y, double z, int &region, int &sampling, int &ieta ) const;
+  private:
 
     // Free-running hits (simu_trf.py --free-running-hits): every deposit of the ATLAS tile cells also goes, per PMT, with
     // the identifier and the time of the ATLAS simulation, to a per-event list written in the layout of the ATLAS HITS

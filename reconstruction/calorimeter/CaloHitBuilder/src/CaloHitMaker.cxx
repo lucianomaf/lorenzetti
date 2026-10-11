@@ -6,6 +6,7 @@
 #include "CaloHitMaker.h"
 #include "CaloFreeRunningHitList.h"
 #include "TileUShape.h"
+#include "EmbAtlasSampling.h"
 #include <algorithm>
 
 #include "G4Kernel/CaloPhiRange.h"
@@ -108,6 +109,8 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   // EmbMode = 3: ATLAS-like barrel presampler with the cell from the gap of the electrode (see psbGapCell); radius of the
   // middle of the active layer, in mm
   declareProperty( "PsbR0"                    , m_psbR0=0.                            );
+  // Barrel EM with the sampling boundaries and rules of the ATLAS simulation (F41 conserto 18, see embSampSeg); false by default
+  declareProperty( "EmbSampSeg"               , m_embSampSeg=false                    );
   // Dual readout of the tile cells (two PMTs per cell, as in ATLAS): 0 = off, 1 = ATLAS U-shape, 2 = linear.
   // Only for the tile samplings and only with the ATLAS tile cells (CellEta not empty); see tilePmtWeights.
   declareProperty( "TileDualReadout"          , m_tileDualReadout=0                   );
@@ -323,8 +326,9 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
   float phi = vpos.Phi();
   float radius = vpos.Perp();
 
-  // In plan xy
-  if( !(radius > m_rMin && radius <= m_rMax) )
+  // In plan xy (the ATLAS-like barrel EM with SampSeg takes the whole accordion: its sampling comes from embSampSeg)
+  const bool sampSeg = m_embSampSeg && m_embMode == 1 && m_embSampling > 0;
+  if( !sampSeg && !(radius > m_rMin && radius <= m_rMax) )
     return StatusCode::SUCCESS;
 
   if( !(pos.z() > m_zMin && pos.z() <= m_zMax))
@@ -334,6 +338,16 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
   if( m_emecCompartment > 0 ){
     // ATLAS-like EM end-cap: the step is taken only inside the wheel of this maker and in its compartment
     if( emecFindCell( pos.x(), pos.y(), pos.z(), etaBin, phiBin ) != m_emecCompartment )
+      return StatusCode::SUCCESS;
+  }else if( sampSeg ){
+    // ATLAS-like barrel EM with the sampling of the ATLAS simulation: only the active steps of this sampling and region
+    int region, sampling, ieta;
+    if( !embSampSeg( pos.x(), pos.y(), pos.z(), region, sampling, ieta ) ) return StatusCode::SUCCESS;
+    if( sampling != m_embSampling || region != m_embRegion ) return StatusCode::SUCCESS;
+    etaBin = ieta - ( ( m_embSampling == 1 && m_embRegion == 0 ) ? 1 : 0 );   // the strip 0 does not exist
+    if( etaBin < 0 || etaBin >= (int)m_cellEta.size() ) return StatusCode::SUCCESS;
+    phiBin = findPhi(phi);
+    if(phiBin < 0)
       return StatusCode::SUCCESS;
   }else if( m_embMode > 0 ){
     // ATLAS-like barrel EM and presamplers: the cell from the pseudorapidity of the step, within the region of this maker
@@ -861,6 +875,123 @@ int CaloHitMaker::embFindCell( double x, double y, double z ) const
   }
   if( ieta < first || ieta > last ) return -1;
   return ieta - first;
+}
+
+//!=====================================================================
+
+// ATLAS-like barrel EM with the sampling of the ATLAS simulation (F41 conserto 18). Copy of the public ATLAS code (Athena, Apache
+// 2.0; copies in the F41 notes of the group): LArBarrelCalculator::FiducialCuts and Geometry::SampSeg of LArG4Barrel/src/
+// LArBarrelGeometry.cxx, with the boundaries Rmax1 and Rmax2 of LArBarrelSampling.h (EmbAtlasSampling.h). The point is taken in
+// the half-barrel frame as |z| and |eta| (eta seen from the origin, as embFindCell). Constants: LArEMBRadiusInnerAccordion
+// 1500.024 mm, LArEMBFiducialRmax 1960 mm and LArEMBMaxEtaAcceptance 1.475 (BarrelGeometry RIN_AC, ROUT_AC and ETACUT of the
+// ATLAS geometry database, tag BarrelGeometry-03); LArEMBfiducialMothZmin 4 mm and LArEMBfiducialMothZmax 3150 mm (BarrelLongDiv,
+// not in the public copies: the values of the comments of LArBarrelGeometry.cxx and LArBarrelCalculator.cxx, "currently 3150,
+// should be changed in database to become 3164"); R_min_highz 1548 mm, 7 mm of readout strips at the edges, 1.1 mm inactive
+// between S1 and S2, as in SampSeg. Returns 1 for an active point, with the region (0, 1), sampling (1-3) and eta index of the
+// dictionary; 0 otherwise (the ATLAS simulation drops the step: cellID = 0, or calibration hits outside the fiducial region).
+int CaloHitMaker::embSampSeg( double x, double y, double z, int &iregion, int &isampling, int &ieta ) const
+{
+  using EmbAtlasSampling::Rmax1;
+  using EmbAtlasSampling::Rmax2;
+  static const double Eta_max = 1.475, R_min_acc = 1500.024, R_max_acc = 1960., Z_min_acc = 4., Z_max_acc = 3150.;
+  static const double R_min_highz = 1548., deltaz = 7., Dr_s12 = 1.1, Eta_max_s1 = 1.4, Eta_max_s3 = 1.325, deta = 0.025;
+  static const double zmax1 = Z_max_acc - deltaz, zmax2 = Z_max_acc - 2.*deltaz, zmax3 = Z_max_acc - 3.*deltaz,
+                      zmax4 = Z_max_acc - 4.*deltaz, zmax5 = Z_max_acc - 5.*deltaz, zmax6 = Z_max_acc - 6.*deltaz,
+                      zmax7 = Z_max_acc - 7.*deltaz;
+  static const double rmax1 = R_max_acc - deltaz, rmax2 = R_max_acc - 2.*deltaz, rmax3 = R_max_acc - 3.*deltaz,
+                      rmax4 = R_max_acc - 4.*deltaz;
+  static const double Z_max_lowr = std::sinh(Eta_max) * R_min_acc;
+  static const double dzdr = (Z_max_acc - Z_max_lowr) / (R_min_highz - R_min_acc);
+
+  iregion = -1; isampling = -1; ieta = -1;
+  const double radius = std::sqrt( x*x + y*y );
+  const double mag = std::sqrt( x*x + y*y + z*z );
+  const double az = std::fabs( z );
+  if( mag == 0 || mag == az ) return 0;
+  const double aeta = 0.5 * std::log( (mag + az) / (mag - az) );
+
+  // LArBarrelCalculator::FiducialCuts
+  if( radius < R_min_acc || radius > R_max_acc || aeta > Eta_max || az < Z_min_acc || az > Z_max_acc ) return 0;
+
+  // Geometry::SampSeg
+  int iactive = 1;
+  if( aeta < Eta_max_s1 ){
+    const int istrip = (int)( aeta / deta * 8. );
+    if( istrip < 0 || istrip >= 448 ) return 0;
+    const double r12 = Rmax1[istrip];
+    const int imid = (int)( aeta / deta );
+    if( imid < 0 || imid >= 56 ) return 0;
+    const double r23 = Rmax2[imid];
+    iregion = 0;
+    if( radius <= r12 ){
+      isampling = 1; ieta = istrip;
+      if( ieta == 0 ) iactive = 0;
+    }else if( radius < (r12 + Dr_s12) ){
+      isampling = 1; ieta = istrip; iactive = 0;
+    }else{
+      if( aeta < Eta_max_s3 ){
+        if( radius <= r23 ){
+          isampling = 2; ieta = imid;
+        }else{
+          if     ( az > zmax1 ){ isampling = 2; ieta = 55; }
+          else if( az > zmax2 ){ isampling = 2; ieta = 54; }
+          else if( az > zmax3 ){ isampling = 2; ieta = 53; }
+          else if( az > zmax4 ){ isampling = 3; ieta = 26; }
+          else if( aeta < 1.3 && az > zmax5 ){ isampling = 2; ieta = 52; }
+          else if( aeta < 1.3 && az > zmax6 ){ isampling = 2; ieta = 51; }
+          else if( radius > rmax4 && az < zmax5 && aeta > 1.2 ){
+            if     ( radius > rmax1 ){ isampling = 2; ieta = 51; }
+            else if( radius > rmax2 ){ isampling = 3; ieta = 25; }
+            else if( radius > rmax3 ){
+              if( az < zmax7 ){ isampling = 2; ieta = 50; }
+              else            { isampling = 3; ieta = 25; }
+            }else{
+              if( aeta < 1.25 ){ isampling = 2; ieta = 49; }
+              else             { isampling = 3; ieta = 25; }
+            }
+          }else{
+            isampling = 3; ieta = imid / 2;
+          }
+        }
+        // energy deposited along the readout strips across the back goes to the middle
+        if( isampling == 3 && az < zmax4 && ( radius < rmax4 || aeta < 1.2 ) ){
+          const double etastr = ( imid % 2 == 0 ) ? 0.025 * imid : 0.025 * ( imid + 1 );
+          const double delta = radius * ( std::sinh(etastr) - std::sinh(aeta) ) / std::cosh(etastr);
+          double deltastr;
+          if      ( aeta < 0.475 ) deltastr = 1.5;
+          else if ( aeta < 0.80  ) deltastr = 2.75;
+          else if ( aeta < 0.85  ) deltastr = 1.5;
+          else if ( aeta < 1.1   ) deltastr = 2.75;
+          else                     deltastr = 3.25;
+          if( std::fabs(delta) < deltastr ){ isampling = 2; ieta = imid; }
+        }
+      }else{
+        isampling = 2; ieta = imid;
+        if     ( az > zmax1 ) ieta = 55;
+        else if( az > zmax2 && aeta < 1.375 ) ieta = 54;
+      }
+    }
+  }
+  if( aeta >= Eta_max_s1 && aeta < Eta_max ){
+    const double r12 = Rmax1[447];
+    const double r23 = Z_max_acc / std::sinh(aeta);
+    const double zmax = Z_max_lowr + dzdr * ( radius - R_min_acc );
+    iregion = 1;
+    if( radius <= r12 ){
+      isampling = 1; ieta = (int)( (aeta - Eta_max_s1) / deta );
+      if( az > zmax ) iactive = 0;
+    }else if( radius < (r12 + Dr_s12) ){
+      isampling = 1; ieta = (int)( (aeta - Eta_max_s1) / deta ); iactive = 0;
+    }else if( radius <= r23 ){
+      isampling = 2; ieta = 0;
+      if( az > zmax ) iactive = 0;
+    }else{
+      isampling = 2; ieta = 0; iactive = 0;
+    }
+  }
+  if( aeta > Eta_max ) iactive = 0;
+  if( az > Z_max_acc || radius > R_max_acc || radius < R_min_acc || aeta > Eta_max ) iactive = 0;
+  return iactive;
 }
 
 //!=====================================================================

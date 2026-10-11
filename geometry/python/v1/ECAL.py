@@ -298,7 +298,8 @@ def atlasEmbCells(sampling, region, side=1):
     else:
         raise RuntimeError(f"EMB{sampling} region {region}: not in the dictionary")
     # AtlasLArPart ... AtlasEtaIndex: the ATLAS identifier of the cells, for the free-running hits (F41 conserto 19)
-    table = dict(Names=[], Eta=[], DeltaEta=[], EmbMode=1, EmbSampling=sampling, EmbRegion=region,
+    # EmbSampSeg: the sampling of each step from the boundaries and rules of the ATLAS simulation (F41 conserto 18)
+    table = dict(Names=[], Eta=[], DeltaEta=[], EmbMode=1, EmbSampling=sampling, EmbRegion=region, EmbSampSeg=True,
                  AtlasLArPart=1, AtlasBarrelEc=1 if side > 0 else -1, AtlasLArSampling=sampling, AtlasLArRegion=region,
                  AtlasEtaIndex=list(range(first, last + 1)))
     for i in range(first, last + 1):
