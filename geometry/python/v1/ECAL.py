@@ -10,7 +10,7 @@ from GaugiKernel.constants import m,cm,mm,MeV,pi
 
 from .Calorimeter import Calorimeter
 from .PhysicalVolume import PhysicalVolume, Plates, ProductionCuts
-from .SensitiveDetector import SensitiveDetector
+from .SensitiveDetector import SensitiveDetector, atlasLArPhiShift
 
 
 def getLArBarrelCfg(atlas_emb=False, atlas_emb_cells=False):
@@ -297,7 +297,10 @@ def atlasEmbCells(sampling, region, side=1):
         if (s, reg) == (sampling, region): break
     else:
         raise RuntimeError(f"EMB{sampling} region {region}: not in the dictionary")
-    table = dict(Names=[], Eta=[], DeltaEta=[], EmbMode=1, EmbSampling=sampling, EmbRegion=region)
+    # AtlasLArPart ... AtlasEtaIndex: the ATLAS identifier of the cells, for the free-running hits (F41 conserto 19)
+    table = dict(Names=[], Eta=[], DeltaEta=[], EmbMode=1, EmbSampling=sampling, EmbRegion=region,
+                 AtlasLArPart=1, AtlasBarrelEc=1 if side > 0 else -1, AtlasLArSampling=sampling, AtlasLArRegion=region,
+                 AtlasEtaIndex=list(range(first, last + 1)))
     for i in range(first, last + 1):
         table['Names'].append(f"EMB{sampling}/{region}/{i}{'+' if side > 0 else '-'}")
         table['Eta'].append(side * (eta0 + deta * (i - first + 0.5))); table['DeltaEta'].append(deta)
@@ -344,6 +347,7 @@ def _getAtlasEmbCellsCfg():
                     raise RuntimeError(f"EMB{s} region {region}: {len(sv.PhiBins) - 1} phi slices, expected {nphi}")
                 sv.EtaBins = edges; sv.EtaMin = edges[0]; sv.EtaMax = edges[-1]
                 sv.Cells = cells
+                atlasLArPhiShift(sv, -sign * pi / 1024)
                 dets.append( Calorimeter( sv, -21, 3, -2,
                                   CollectionKey   = f"Collection_EMB{s}_{region}" + side_name,
                                   Detector        = Detector.TTEM,
@@ -424,7 +428,12 @@ def _slab(name, plates, material, rmin, rmax, z0, z1, color='gray', dead=True):
 def _presamplerCalorimeter(pv, sign, side_name, sampling, eta0, ncells, emb_mode, key, noise):
     basepath = os.environ['LORENZETTI_GEOMETRY_DATA_DIR']
     deta = 0.025
-    cells = dict(Names=[], Eta=[], DeltaEta=[], EmbMode=emb_mode, EmbSampling=0, EmbRegion=0)
+    # ATLAS identifier (F41 conserto 19): barrel presampler = LArEM barrel_ec +-1, end-cap presampler = +-2; sampling 0,
+    # region 0, eta index 0 to ncells - 1
+    barrel = emb_mode != 2
+    cells = dict(Names=[], Eta=[], DeltaEta=[], EmbMode=emb_mode, EmbSampling=0, EmbRegion=0,
+                 AtlasLArPart=1, AtlasBarrelEc=sign * (1 if barrel else 2), AtlasLArSampling=0, AtlasLArRegion=0,
+                 AtlasEtaIndex=list(range(ncells)))
     for i in range(ncells):
         cells['Names'].append(f"{key}/0/{i}{'+' if sign > 0 else '-'}")
         cells['Eta'].append(sign * (eta0 + deta * (i + 0.5))); cells['DeltaEta'].append(deta)
@@ -436,6 +445,7 @@ def _presamplerCalorimeter(pv, sign, side_name, sampling, eta0, ncells, emb_mode
         raise RuntimeError(f"{key}: {len(sv.PhiBins) - 1} phi slices, expected 64")
     sv.EtaBins = edges; sv.EtaMin = edges[0]; sv.EtaMax = edges[-1]
     sv.Cells = cells
+    atlasLArPhiShift(sv, -sign * pi / (1024 if barrel else 768))
     return Calorimeter( sv, -21, 3, -2,
                         CollectionKey   = f"Collection_{key}_0" + side_name,
                         Detector        = Detector.TTEM,

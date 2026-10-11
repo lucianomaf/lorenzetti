@@ -90,12 +90,28 @@ class CaloHitMaker( Cpp ):
       # radius on the axis of the module (ATLAS-like HEC, geometry/python/v1/HEC.py); absent: r
       if "RadiusModules" in cells:
         self.setProperty( "CellRadiusModules"   , int(cells["RadiusModules"])           )
+      # ATLAS-like LAr cells (F41 conserto 19): fields of the ATLAS identifier of this maker and the dictionary eta index
+      # of each cell, for the free-running hits (CaloHitMaker::freeRunningLAr)
+      if "AtlasLArPart" in cells:
+        self.setProperty( "AtlasLArPart"        , int(cells["AtlasLArPart"])              )
+        self.setProperty( "AtlasBarrelEc"       , int(cells["AtlasBarrelEc"])             )
+        self.setProperty( "AtlasLArSampling"    , int(cells["AtlasLArSampling"])          )
+        self.setProperty( "AtlasLArRegion"      , int(cells["AtlasLArRegion"])            )
+        self.setProperty( "CellAtlasEtaIndex"   , [int(x) for x in cells["AtlasEtaIndex"]] )
       if "AtlasSection" in cells:
         self.setProperty( "CellAtlasSection"    , [int(x) for x in cells["AtlasSection"]]  )
         self.setProperty( "CellAtlasTower"      , [int(x) for x in cells["AtlasTower"]]    )
         self.setProperty( "CellAtlasSampling"   , [int(x) for x in cells["AtlasSampling"]] )
         self.setProperty( "CellRCentre"         , [float(x) for x in cells["RCentre"]]     )
         self.setProperty( "CellZCentre"         , [float(x) for x in cells["ZCentre"]]     )
+    # Half-absorber shift of the phi edges of the ATLAS-like LAr cells (already in PhiBins) and the Birks constant of the
+    # liquid argon of this sampling (0.0486 in the HEC); absent: 0 and 0.05832 (F41 conserto 19)
+    phi_shift = getattr( sampling.sensitive(), "PhiShift", None )
+    if phi_shift:
+      self.setProperty( "PhiShift"              , float(phi_shift)            )
+    birks_k = getattr( sampling.sensitive(), "BirksLArK", None )
+    if birks_k:
+      self.setProperty( "BirksLArK"             , float(birks_k)              )
     self.setProperty( "DetailedHistograms"      , DetailedHistograms          )
     self.setProperty( "HistogramPath"           , HistogramPath               )
     self.setProperty( "OutputLevel"             , OutputLevel                 )

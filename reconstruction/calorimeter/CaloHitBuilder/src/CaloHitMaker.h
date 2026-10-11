@@ -66,6 +66,8 @@ class CaloHitMaker : public Gaugi::Algorithm
   private:
    
     int find( const std::vector<float> &vec, float value) const;
+    // phi bin of a step: as find, also trying phi -+ 2 pi (the edges may be shifted out of -pi..pi, see m_phiShift)
+    int findPhi( float phi ) const;
     unsigned long int hash(unsigned bin) const;
 
     /*! collection key */
@@ -171,6 +173,25 @@ class CaloHitMaker : public Gaugi::Algorithm
     std::vector<float> m_cellZCentre;
     void freeRunningTile( SG::EventContext &ctx, const G4Step *step, int cell, int phiBin, float edep, float w0,
                           float w1 ) const;
+
+    // Free-running hits of the ATLAS-like LAr cells (F41 conserto 19; --atlas-emb-cells, --atlas-emec, --atlas-hec): the
+    // fields of the ATLAS identifier of the cells of this maker (AtlasLArPart: 1 = LArEM, 2 = LArHEC, 0 = not set, the
+    // default; barrel_ec or pos_neg, sampling and region of the dictionary, and the dictionary eta index of each cell, same
+    // order as m_cellEta). See freeRunningLAr.
+    int m_atlasLArPart;
+    int m_atlasBarrelEc;
+    int m_atlasLArSampling;
+    int m_atlasLArRegion;
+    std::vector<int> m_cellAtlasEtaIndex;
+    bool isAtlasLAr() const { return m_atlasLArPart > 0; }
+    void freeRunningLAr( SG::EventContext &ctx, const G4Step *step, int cell, int phiBin, float edep ) const;
+    // Shift (rad) of the phi edges of the cells, the half absorber of the ATLAS readout geometry (EMB and barrel presampler
+    // -pi/1024 on side A, +pi/1024 on side C; EMEC and end-cap presampler -+pi/768; 0, the default, elsewhere). The phi
+    // edges (PhiBins) come already shifted from Python; the maker uses it for the cells found from atan2 (emecFindCell).
+    float m_phiShift;
+    // Birks constant of the liquid argon (k of LArG4BirksLaw): 0.05832 (default; ATLAS barrel, presamplers and EMEC) or
+    // 0.0486 (ATLAS HEC and FCAL, LArG4HECConfig.py)
+    double m_birksLArK;
 };
 
 

@@ -220,7 +220,7 @@ StatusCode CaloFreeRunningHitWriter::serialize( EventContext &ctx ) const
   Container emb ("LArHitEMB" , {"region", "sampling", "barrel_ec"});
   Container emec("LArHitEMEC", {"region", "sampling", "barrel_ec"});
   Container hec ("LArHitHEC" , {"region", "sampling", "pos_neg"});
-  Container fcal("LArHitFCAL", {"module"});   // Lorenzetti has no FCAL: branches stay empty
+  Container fcal("LArHitFCAL", {"module"});   // FCAL out of the ATLAS-like LAr (decision of 06/10/2026): branches stay empty
   tile.link(tree);
   emb.link(tree);
   emec.link(tree);
@@ -234,11 +234,21 @@ StatusCode CaloFreeRunningHitWriter::serialize( EventContext &ctx ) const
 
   double etot = 0;
   std::vector<double> tglobal = list->tglobal();
+  std::vector<double> hitTime = list->hitTime();
   for ( size_t i = 0; i < list->size(); ++i )
   {
-    // tile hits only (per PMT), with the ATLAS identifier fields filled by CaloHitMaker
-    tile.push( list->cellID()[i], list->energy()[i], list->time()[i], tglobal[i], list->eta()[i], list->phi()[i],
-               list->sampling()[i], list->side()[i], list->module()[i], list->tower()[i] );
+    const int det = list->det()[i];
+    if( det == 0 ){
+      // tile hits (per PMT), with the ATLAS identifier fields filled by CaloHitMaker::freeRunningTile
+      tile.push( list->cellID()[i], list->energy()[i], hitTime[i], tglobal[i], list->eta()[i], list->phi()[i],
+                 list->sampling()[i], list->side()[i], list->module()[i], list->tower()[i] );
+    }else{
+      // LAr hits (F41 conserto 19; CaloHitMaker::freeRunningLAr): region, sampling, barrel_ec / pos_neg, in the order of
+      // the ATLAS ntuple branches (the list keeps sampling, barrel_ec and region in sampling, side and module)
+      Container &c = ( det == 1 ) ? emb : ( det == 2 ? emec : hec );
+      c.push( list->cellID()[i], list->energy()[i], hitTime[i], tglobal[i], list->eta()[i], list->phi()[i],
+              list->module()[i], list->sampling()[i], list->side()[i] );
+    }
     etot += list->energy()[i];
   }
 

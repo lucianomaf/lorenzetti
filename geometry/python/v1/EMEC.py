@@ -6,7 +6,7 @@ from CaloCell.CaloDefs import Detector, CaloSampling
 
 from .Calorimeter import Calorimeter
 from .PhysicalVolume import PhysicalVolume, Plates
-from .SensitiveDetector import SensitiveDetector
+from .SensitiveDetector import SensitiveDetector, atlasLArPhiShift
 
 
 import os
@@ -458,7 +458,10 @@ def atlasEmecCompartmentCells(compartment, side=1):
                  EmecZSep23=[int(round(x * 1e4)) for x in EMEC_ATLAS_ZSEP23_CM],
                  EmecZInner=[int(round(x * 1e4)) for x in EMEC_ATLAS_ZIW_CM],
                  EmecWheelRMin=[b[0] for b in boxes], EmecWheelRMax=[b[1] for b in boxes],
-                 EmecWheelZMin=[b[2] for b in boxes], EmecWheelZMax=[b[3] for b in boxes])
+                 EmecWheelZMin=[b[2] for b in boxes], EmecWheelZMax=[b[3] for b in boxes],
+                 # ATLAS identifier (F41 conserto 19): LArEM, barrel_ec +-2 (outer wheel) or +-3 (inner wheel)
+                 AtlasLArPart=1, AtlasBarrelEc=side * (3 if wheel == 'inner' else 2), AtlasLArSampling=sampling,
+                 AtlasLArRegion=region, AtlasEtaIndex=list(range(max_eta + 1)))
     for i in range(max_eta + 1):
         table['Names'].append(f"EMEC{sampling}/{'IW' if wheel == 'inner' else 'OW'}/{region}/{i}{'+' if side > 0 else '-'}")
         table['Eta'].append(side * (eta0 + deta * (i + 0.5))); table['DeltaEta'].append(deta)
@@ -513,6 +516,7 @@ def _getAtlasEmecCfg(left_side=False):
             raise RuntimeError(f"EMEC compartment {compartment}: {len(sv.PhiBins) - 1} phi slices, expected {max_phi + 1}")
         sv.EtaBins = edges; sv.EtaMin = edges[0]; sv.EtaMax = edges[-1]
         sv.Cells = cells
+        atlasLArPhiShift(sv, -sign * pi / 768)
         out[sampling].append( Calorimeter( sv, -21, 3, -2,
                               CollectionKey   = f"Collection_EMEC{sampling}_{segment}" + side_name,
                               Detector        = Detector.TTEM,

@@ -179,15 +179,21 @@ def parse_args():
                         help="Save all hits into the output file.")
     parser.add_argument('--free-running-hits', action='store_true',
                         dest='free_running_hits', required=False,
-                        help="Write the tile hits in the layout of the ATLAS HITS ntuple (tree CollectionTree: "
-                             "EventNumber, TileCalHit_cellID/energy/time/eta/phi/sampling/side/module/tower, plus the "
-                             "extra TileCalHit_tglobal; the LAr branches are written empty) instead of the standard HIT "
-                             "stream. As in the ATLAS simulation: one entry per PMT, with the ATLAS identifier (pmt_id, "
+                        help="Write the tile and LAr hits in the layout of the ATLAS HITS ntuple (tree CollectionTree: "
+                             "EventNumber, TileCalHit_cellID/energy/time/eta/phi/sampling/side/module/tower and "
+                             "LArHitEMB/EMEC/HEC_cellID/energy/time/eta/phi/region/sampling/barrel_ec (pos_neg in the HEC), "
+                             "plus the extra *_tglobal; the FCAL branches are written empty) instead of the standard HIT "
+                             "stream. Tile, as in the ATLAS simulation: one entry per PMT, with the ATLAS identifier (pmt_id, "
                              "64-bit), the visible energy (active medium and Birks' law, switched on by this option), the "
                              "time of TileGeoG4SDCalc (time of flight and fibre corrections, PMT delays, hits after "
                              "350.5 ns kept at 99995 ns) and its time bins (0.5 ns within +-75.25 ns, 5 ns outside). "
-                             "Needs --tile-atlas-geometry and --tile-atlas-cells; switches on --tile-dual-readout (U-shape). "
-                             "Off by default.")
+                             "LAr, as in the ATLAS simulation (LArG4SimpleSD): one entry per cell and time bin (2.5 ns up to "
+                             "10 ns, 5 ns up to 50 ns, 25 ns up to 100 ns, one bin above), with the ATLAS identifier "
+                             "(channel_id), the energy in the liquid argon with Birks' law, the global time minus r/c and no "
+                             "time window; no energy threshold and full precision (the FilterHit_tf cuts and compression of "
+                             "the ATLAS ntuples are applied outside). "
+                             "Needs --tile-atlas-geometry, --tile-atlas-cells, --atlas-emb-cells, --atlas-hec and "
+                             "--atlas-emec; switches on --tile-dual-readout (U-shape). Off by default.")
     parser.add_argument('--neutron-time-cut', action='store', type=float, default=None,
                         dest='neutron_time_cut', required=False,
                         help="Kill every neutron this time (ns) after the start of the event, as the ATLAS simulation does "
@@ -375,6 +381,9 @@ if __name__ == "__main__":
         # free-running hits as in the ATLAS simulation: ATLAS tile cells, active medium, Birks' law, U-shape dual readout
         if not (args.tile_atlas_geometry and args.tile_atlas_cells):
             parser.error("--free-running-hits needs --tile-atlas-geometry and --tile-atlas-cells")
+        # the LAr cells with the ATLAS identifier (F41 conserto 19)
+        if not (args.atlas_emb_cells and args.atlas_hec and args.atlas_emec):
+            parser.error("--free-running-hits needs --atlas-emb-cells, --atlas-hec and --atlas-emec (the LAr cells of ATLAS)")
         if args.tile_dual_readout and args.tile_pmt_split != 'ushape':
             parser.error("--free-running-hits uses the U-shape sharing of the ATLAS simulation (--tile-pmt-split ushape)")
         args.active_energy_only = True

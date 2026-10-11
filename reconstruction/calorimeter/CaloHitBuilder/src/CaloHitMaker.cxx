@@ -121,6 +121,17 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "CellAtlasSampling"        , m_cellAtlasSampling                   );
   declareProperty( "CellRCentre"              , m_cellRCentre                         );
   declareProperty( "CellZCentre"              , m_cellZCentre                         );
+  // Free-running hits of the ATLAS-like LAr cells (F41 conserto 19): fields of the ATLAS identifier of this maker (see
+  // freeRunningLAr); AtlasLArPart = 0 (the default) means no LAr free-running hits from this maker.
+  declareProperty( "AtlasLArPart"             , m_atlasLArPart=0                      );
+  declareProperty( "AtlasBarrelEc"            , m_atlasBarrelEc=0                     );
+  declareProperty( "AtlasLArSampling"         , m_atlasLArSampling=0                  );
+  declareProperty( "AtlasLArRegion"           , m_atlasLArRegion=0                    );
+  declareProperty( "CellAtlasEtaIndex"        , m_cellAtlasEtaIndex                   );
+  // Shift of the phi edges of the cells (rad), the half absorber of the ATLAS readout geometry; 0 by default
+  declareProperty( "PhiShift"                 , m_phiShift=0.                         );
+  // Birks constant of the liquid argon: 0.05832 (default) or 0.0486 (HEC, as ATLAS)
+  declareProperty( "BirksLArK"                , m_birksLArK=0.05832                   );
 
 
 
@@ -142,6 +153,9 @@ StatusCode CaloHitMaker::initialize()
   if( m_freeRunningHits && isTile() && ( !useCells() || m_tileDualReadout <= 0 ||
                                         m_cellAtlasSection.size() != m_cellEta.size() ) ){
     MSG_FATAL( "FreeRunningHits needs the ATLAS tile cells with their ATLAS identifier fields and the dual readout." );
+  }
+  if( m_freeRunningHits && isAtlasLAr() && ( !useCells() || m_cellAtlasEtaIndex.size() != m_cellEta.size() ) ){
+    MSG_FATAL( "FreeRunningHits needs the dictionary eta index of every ATLAS-like LAr cell (CellAtlasEtaIndex)." );
   }
 
   if( m_emecCompartment > 0 && ( m_emecZSep12.size() != 44 || m_emecZSep23.size() != 22 || m_emecZInner.size() != 7 ||
@@ -326,7 +340,7 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
     etaBin = embFindCell( pos.x(), pos.y(), pos.z() );
     if(etaBin < 0)
       return StatusCode::SUCCESS;
-    phiBin = find(m_phiBins, phi);
+    phiBin = findPhi(phi);
     if(phiBin < 0)
       return StatusCode::SUCCESS;
   }else{
@@ -336,7 +350,7 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
     if(etaBin < 0)
       return StatusCode::SUCCESS;
 
-    phiBin = find(m_phiBins, phi);
+    phiBin = findPhi(phi);
 
     if(phiBin < 0)
       return StatusCode::SUCCESS;
@@ -362,6 +376,9 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
       if( m_freeRunningHits && edep > 0 )
         freeRunningTile( ctx, step, etaBin, phiBin, edep, w0, w1 );
     }
+    // Free-running hits of the ATLAS-like LAr cells: the same deposit, with the ATLAS identifier and time
+    if( m_freeRunningHits && isAtlasLAr() && edep > 0 )
+      freeRunningLAr( ctx, step, etaBin, phiBin, edep );
   }else{
     MSG_FATAL( "Its not possible to retrieve the hit. Bin ("<< bin << ") not exist");
   }
@@ -476,11 +493,85 @@ void CaloHitMaker::freeRunningTile( SG::EventContext &ctx, const G4Step *step, i
 
 //!=====================================================================
 
+// Free-running hits of the ATLAS-like LAr cells (F41 conserto 19), with the identifier and the time of the ATLAS simulation.
+// Sources (Athena, public, Apache 2.0; copies and report in the F41 notes of the group, c19_lar_cellid_flag/):
+// - identifier: channel_id(barrel_ec, sampling, region, eta, phi) of LArEM_ID / LArHEC_ID (LArG4SimpleSD::ConvertID), the
+//   32-bit compact identifier in the upper half of the 64-bit integer, as in the ATLAS HITS ntuple. Bit layout of the 32
+//   bits (bit 31 first), read from the ATLAS HITS ntuple (c19_bits_5k.py; 100% of its LAr entries decode to the branches):
+//   LArEM: LArCalorimeter 1 (3 bits) | part 3 (3) | barrel_ec index in {-3,-2,-1,1,2,3} (3) | sampling (2) | region (3) |
+//   eta (9) | phi (8) | 0 (1); LArHEC: 1 (3) | part 4 (3) | pos_neg -2 -> 0, +2 -> 1 (1) | sampling (2) | region (1) | eta (4) |
+//   phi (6) | 0 (12).
+// - eta index: the dictionary index of the cell (CellAtlasEtaIndex); phi index: the phi slice from phi = 0, growing with phi
+//   on both sides, as in the ATLAS HITS ntuple; the edges carry the half-absorber shift (PhiShift, already in PhiBins).
+// - time (LArBarrelCalculator, LArBarrelPresamplerCalculator: pre-step; EnergyCalculator, LArEndcapPresamplerCalculator,
+//   LArHECWheelCalculator: mean of pre- and post-step): global time minus |r|/c of the same point, in ns.
+// - energy: the deposit of the step in the liquid argon, with Birks' law (BirksLaw, BirksLArK).
+// - time binning (option FreeRunningBinning; LArG4SimpleSD::getTimeBin, TimeBinType = Default): bin 0 for t < 0, bins of
+//   2.5 ns up to 10 ns, of 5 ns up to 50 ns, of 25 ns up to 100 ns and one bin above; the deposits of a cell in the same
+//   bin are summed, with the energy weighted mean time (LArHit::Add, finalize). No time window (the SD does not call
+//   isInTime).
+void CaloHitMaker::freeRunningLAr( SG::EventContext &ctx, const G4Step *step, int cell, int phiBin, float edep ) const
+{
+  SG::ReadHandle<CaloFreeRunningHitList> list( m_freeRunningListKey, ctx );
+  if( !list.isValid() ){
+    MSG_FATAL("It's not possible to retrieve the CaloFreeRunningHitList using this key: " << m_freeRunningListKey);
+  }
+  const double cLight = CLHEP::c_light;   // mm/ns
+  const int nPhi = (int)m_nPhiBins;
+  // phi slice from phi = 0: the bin of the -pi..pi grid (shifted by PhiShift) moved by half a turn
+  const int phiIndex = ( phiBin + nPhi / 2 ) % nPhi;
+  const int etaIndex = m_cellAtlasEtaIndex[cell];
+  unsigned long long id32 = 0;
+  int det = 0;
+  if( m_atlasLArPart == 1 ){
+    static const int beValues[6] = {-3, -2, -1, 1, 2, 3};
+    int beIndex = -1;
+    for( int k = 0; k < 6; ++k ) if( beValues[k] == m_atlasBarrelEc ) beIndex = k;
+    if( beIndex < 0 ){ MSG_FATAL( "AtlasBarrelEc " << m_atlasBarrelEc << " is not a LArEM barrel_ec" ); }
+    id32 = (1ULL << 29) | (3ULL << 26) | ((unsigned long long)beIndex << 23) | ((unsigned long long)m_atlasLArSampling << 21)
+         | ((unsigned long long)m_atlasLArRegion << 18) | ((unsigned long long)etaIndex << 9) | ((unsigned long long)phiIndex << 1);
+    det = ( std::abs(m_atlasBarrelEc) == 1 ) ? 1 : 2;
+  }else{
+    id32 = (1ULL << 29) | (4ULL << 26) | ((unsigned long long)(m_atlasBarrelEc > 0 ? 1 : 0) << 25)
+         | ((unsigned long long)m_atlasLArSampling << 23) | ((unsigned long long)m_atlasLArRegion << 22)
+         | ((unsigned long long)etaIndex << 18) | ((unsigned long long)phiIndex << 12);
+    det = 3;
+  }
+  const long long cellID = (long long)( id32 << 32 );
+
+  // time of the deposit (ns): pre-step in the barrel (EMB and barrel presampler), mean of pre and post elsewhere
+  const G4StepPoint *preP = step->GetPreStepPoint(), *postP = step->GetPostStepPoint();
+  double tglobal, mag;
+  if( std::abs(m_atlasBarrelEc) == 1 && m_atlasLArPart == 1 ){
+    tglobal = preP->GetGlobalTime() / ns;
+    mag = preP->GetPosition().mag();
+  }else{
+    tglobal = 0.5 * ( preP->GetGlobalTime() + postP->GetGlobalTime() ) / ns;
+    mag = ( 0.5 * ( preP->GetPosition() + postP->GetPosition() ) ).mag();
+  }
+  const double t = tglobal - mag / cLight;
+  int timeBin = -1;   // -1: no binning (one entry per step)
+  if( m_freeRunningBinning ){
+    if     ( t < 0.   ) timeBin = 0;
+    else if( t < 10.  ) timeBin = (int)( t / 2.5 );
+    else if( t < 50.  ) timeBin = 4 + (int)( ( t - 10. ) / 5. );
+    else if( t < 100. ) timeBin = 12 + (int)( ( t - 50. ) / 25. );
+    else                timeBin = 14;
+  }
+  // nominal centre of the cell (with the half-absorber shift of its edges)
+  const double phiCentre = std::remainder( 0.5 * ( m_phiBins[phiBin] + m_phiBins[phiBin+1] ), 2 * M_PI );
+  list->addLAr( cellID, edep / MeV, t, tglobal, m_cellEta[cell], phiCentre, m_atlasLArSampling, m_atlasBarrelEc,
+                m_atlasLArRegion, det, timeBin );
+}
+
+//!=====================================================================
+
 // Energy of the step after Birks' law, following the ATLAS simulation (Athena):
 // - plastic scintillator (TileGeoG4SDCalc::BirkLaw): E / (1 + kB dE/dx), kB = 0.02002 g/(MeV cm2)
 //   ("value updated for G4 10.6.p03"), second-order term 0, only for charged particles,
 //   kB scaled by 7.2/12.6 for charge above 1;
-// - liquid argon (LArG4BirksLaw): E (1 + k/F 1.51) / (1 + k/F (dE/dx)/rho), k = 0.05832,
+// - liquid argon (LArG4BirksLaw): E (1 + k/F 1.51) / (1 + k/F (dE/dx)/rho), k = BirksLArK (0.05832; 0.0486 in the HEC,
+//   as LArG4HECConfig.py),
 //   rho = 1.396 g/cm3, F = 10 kV/cm (the constant field of the ATLAS barrel, presamplers and HEC),
 //   with the correction for heavily ionising particles above 969 MeV/cm.
 // Other materials are left unchanged.
@@ -505,7 +596,7 @@ float CaloHitMaker::birksEnergy( const G4Step *step ) const
     const double dE = edep / MeV;
     const double dX = length / cm;
     if( dX < 1e-5 ) return (float)edep;
-    const double kOverField = 0.05832 / 10.;
+    const double kOverField = m_birksLArK / 10.;
     double dEdX = dE / dX;
     const double corrected = dE * (1 + kOverField * 1.51) / (1 + kOverField * dEdX / 1.396);
     if( dEdX > 12000.0 ) dEdX = 12000.0;
@@ -658,8 +749,10 @@ int CaloHitMaker::emecFindCell( double x, double y, double z, int &etaBin, int &
   if( etaBin > m_emecMaxEta ) etaBin = m_emecMaxEta;
 
   const int nPhi = (int)m_phiBins.size() - 1;
-  double phi = std::atan2( y, x );
-  if( phi < 0 ) phi += 2 * M_PI;
+  // phi edges shifted by the half absorber of the ATLAS readout geometry (PhiShift; the PhiBins come shifted the same way)
+  double phi = std::atan2( y, x ) - m_phiShift;
+  while( phi < 0 ) phi += 2 * M_PI;
+  while( phi >= 2 * M_PI ) phi -= 2 * M_PI;
   int k = (int)std::floor( phi / ( 2 * M_PI / nPhi ) );
   if( k >= nPhi ) k = nPhi - 1;
   phiBin = ( k + nPhi / 2 ) % nPhi;
@@ -777,6 +870,14 @@ int CaloHitMaker::find( const std::vector<float> &vec, float value) const
   auto binIterator = std::adjacent_find( vec.begin(), vec.end(), [=](float left, float right){ return left < value and value <= right; }  );
   if ( binIterator == vec.end() ) return -1;
   return  binIterator - vec.begin();
+}
+
+int CaloHitMaker::findPhi( float phi ) const
+{
+  int bin = find( m_phiBins, phi );
+  if( bin < 0 ) bin = find( m_phiBins, phi + 2 * M_PI );
+  if( bin < 0 ) bin = find( m_phiBins, phi - 2 * M_PI );
+  return bin;
 }
 
 //!=====================================================================

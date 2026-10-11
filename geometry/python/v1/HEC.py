@@ -12,6 +12,10 @@ from .SensitiveDetector import SensitiveDetector
 
 import os
 
+# Birks constant of the liquid argon of the HEC, as ATLAS (LArG4HECConfig.py, BirksConstant = 0.0486; the barrel and the EMEC use
+# 0.05832); read by CaloHitMaker with --birks-law (F41 conserto 19, decision of 11/10/2026)
+HEC_BIRKS_K = 0.0486
+
 
 
 def getHECCfg(left_side=False, atlas_hec=False):
@@ -55,7 +59,11 @@ def getHECCfg(left_side=False, atlas_hec=False):
 
    
     hec1_sv0 = SensitiveDetector( hec1_pv, EtaMax = sign*2.50         , Segment = 0, DeltaEta = 0.1, DeltaPhi = pi/32 )
+
+   
+    hec1_sv0.BirksLArK = HEC_BIRKS_K
     hec1_sv1 = SensitiveDetector( hec1_pv, EtaMin = hec1_sv0.EtaMax   , Segment = 1, DeltaEta = 0.2, DeltaPhi = pi/16 )
+    hec1_sv1.BirksLArK = HEC_BIRKS_K
 
 
 
@@ -106,7 +114,11 @@ def getHECCfg(left_side=False, atlas_hec=False):
 
 
     hec2_sv0 = SensitiveDetector( hec2_pv, EtaMax = sign*2.50         , Segment = 0, DeltaEta = 0.1, DeltaPhi = pi/32 )
+
+
+    hec2_sv0.BirksLArK = HEC_BIRKS_K
     hec2_sv1 = SensitiveDetector( hec2_pv, EtaMin = hec2_sv0.EtaMax   , Segment = 1, DeltaEta = 0.2, DeltaPhi = pi/16 )
+    hec2_sv1.BirksLArK = HEC_BIRKS_K
 
 
     # Configure the electronic frontend and the detector parameters
@@ -158,7 +170,11 @@ def getHECCfg(left_side=False, atlas_hec=False):
 
 
     hec3_sv0 = SensitiveDetector( hec3_pv, EtaMax = sign*2.50         , Segment = 0, DeltaEta = 0.1, DeltaPhi = pi/32 )
+
+
+    hec3_sv0.BirksLArK = HEC_BIRKS_K
     hec3_sv1 = SensitiveDetector( hec3_pv, EtaMin = hec3_sv0.EtaMax   , Segment = 1, DeltaEta = 0.2, DeltaPhi = pi/16 )
+    hec3_sv1.BirksLArK = HEC_BIRKS_K
 
     # Configure the electronic frontend and the detector parameters
     hec3_det0  = Calorimeter( hec3_sv0, -21, 3, -2, # sensitive volume, bunch start, bunch end, sampling start,
@@ -309,7 +325,10 @@ def getAtlasHecCells(sampling, region, side=1):
             boxes[ieta].append((rmin, rmax, z0, z1))
     eta0, deta = (1.5, 0.1) if region == 0 else (2.5, 0.2)
     table = dict(Names=[], Eta=[], DeltaEta=[], BoxRMin=[], BoxRMax=[], BoxZMin=[], BoxZMax=[], BoxCell=[],
-                 RadiusModules=HEC_ATLAS_MODULES)
+                 RadiusModules=HEC_ATLAS_MODULES,
+                 # ATLAS identifier (F41 conserto 19): LArHEC, pos_neg +-2, the dictionary eta index of each cell
+                 AtlasLArPart=2, AtlasBarrelEc=2 * side, AtlasLArSampling=sampling, AtlasLArRegion=region,
+                 AtlasEtaIndex=[int(i) for i in indices])
     for cell, i in enumerate(indices):
         if not boxes[i]:
             raise RuntimeError(f"HEC{sampling} region {region}: cell {i} has no box")
@@ -403,6 +422,7 @@ def _getAtlasHecCfg(left_side=False):
             sv = SensitiveDetector( pv, EtaMin = sign*lo, EtaMax = sign*hi, Segment = region, DeltaEta = deta, DeltaPhi = dphi )
             sv.EtaBins = edges; sv.EtaMin = edges[0]; sv.EtaMax = edges[-1]
             sv.Cells = cells
+            sv.BirksLArK = HEC_BIRKS_K
             dets.append( Calorimeter( sv, -21, 3, -2,
                               CollectionKey   = f"Collection_HEC{s}_{region}" + side_name,
                               Detector        = Detector.TTHEC,
