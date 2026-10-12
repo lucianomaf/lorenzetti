@@ -171,7 +171,7 @@ class DetectorConstruction_v1( Cpp ):
     # Simulation only.
     # With AtlasFcalCells (needs AtlasFcal) the modules are built as in ATLAS, a tube of absorber with one liquid argon gap per
     # electrode and the cable troughs, the electrodes read from the CSV file AtlasFcalElectrodes (the table LArFCalElectrodes
-    # of the ATLAS geometry database, written by geometry/scripts/fcal_electrodes_from_geomdb.py; F41 conserto 22).
+    # of the ATLAS geometry database, geometry/data/LArFCalElectrodes-06.csv; F41 conserto 22).
     if AtlasFcalCells and not AtlasFcal:
       raise ValueError("AtlasFcalCells needs AtlasFcal.")
     if AtlasFcal:

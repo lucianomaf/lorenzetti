@@ -159,10 +159,12 @@ def parse_args():
                              "--atlas-fcal-electrodes. The FCal cells go only to the free-running hits (LArHitFCAL). Needs "
                              "--atlas-fcal and --free-running-hits. Simulation only. Off by default.")
     parser.add_argument('--atlas-fcal-electrodes', action='store', dest='atlas_fcal_electrodes', required=False,
-                        type=str, default=os.environ.get('LORENZETTI_FCAL_ELECTRODES', ''),
+                        type=str, default=os.environ.get('LORENZETTI_FCAL_ELECTRODES',
+                                  os.path.join(os.environ.get('LORENZETTI_GEOMETRY_DATA_DIR', ''), 'LArFCalElectrodes-06.csv')),
                         help="CSV file with the electrodes of the ATLAS FCal (table LArFCalElectrodes of the ATLAS geometry "
-                             "database), written by geometry/scripts/fcal_electrodes_from_geomdb.py. Default: the environment "
-                             "variable LORENZETTI_FCAL_ELECTRODES.")
+                             "database, as written by geometry/scripts/fcal_electrodes_from_geomdb.py). Default: the environment "
+                             "variable LORENZETTI_FCAL_ELECTRODES, or geometry/data/LArFCalElectrodes-06.csv (the table of the "
+                             "Run 3 geometry ATLAS-R3S-2021-03-00-03).")
     parser.add_argument('--atlas-emec', action='store_true',
                         dest='atlas_emec', required=False,
                         help="EM end-cap as in ATLAS, with the nominal values of the ATLAS geometry (without the shift of the "

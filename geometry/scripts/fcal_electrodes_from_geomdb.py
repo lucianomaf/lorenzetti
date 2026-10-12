@@ -4,9 +4,9 @@ Writes the electrodes of the ATLAS forward calorimeter (table LArFCalElectrodes 
 read by simu_trf.py --atlas-fcal-cells (geometry/python/v1/FCAL.py; F41 conserto 22).
 
 The ATLAS simulation reads this table from the geometry database when it builds the FCal (Athena, LArCalorimeter/LArGeoModel/
-LArGeoFcal/src/FCALConstruction.cxx) and takes the cell of a deposit from it (FCAL_ChannelMap). The table is not in the public
-GeoModel geometry, so it is not part of this repository: run this script where the ATLAS geometry database is available, for
-instance on lxplus, with the SQLite copy of the database release in CVMFS:
+LArGeoFcal/src/FCALConstruction.cxx) and takes the cell of a deposit from it (FCAL_ChannelMap). The table of the Run 3 geometry is
+in geometry/data/LArFCalElectrodes-06.csv; this script writes it, or the table of another geometry tag, from the SQLite copy of the
+database release in CVMFS (for instance on lxplus):
 
     python3 fcal_electrodes_from_geomdb.py \\
         --db /cvmfs/atlas.cern.ch/repo/sw/database/DBRelease/400.2.442/geomDB/geomDB_sqlite \\

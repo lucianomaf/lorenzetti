@@ -18,8 +18,10 @@ The electrodes of side C sit at the same (X, Y) as those of side A, with z mirro
 side C by 180 degrees about y inside the end-cap C, itself turned by 180 degrees about y, and the cell centres of side C in
 the ATLAS HITS ntuple are at the (X, Y) of the table.
 
-The table is not part of this repository: it is read at run time from a CSV file written from the ATLAS geometry database by
-geometry/scripts/fcal_electrodes_from_geomdb.py (columns TILENAME, MODNUMBER, X, Y in cm, in the order of the database rows).
+The table is read at run time from a CSV file (columns TILENAME, MODNUMBER, X, Y in cm, in the order of the database rows):
+geometry/data/LArFCalElectrodes-06.csv, the table LArFCalElectrodes-06 of the Run 3 geometry ATLAS-R3S-2021-03-00-03, from the
+SQLite copy of the ATLAS geometry database in CVMFS (/cvmfs/atlas.cern.ch/repo/sw/database/DBRelease/400.2.442/geomDB/geomDB_sqlite),
+written by geometry/scripts/fcal_electrodes_from_geomdb.py, which also writes it for another geometry tag.
 """
 
 import csv, math
