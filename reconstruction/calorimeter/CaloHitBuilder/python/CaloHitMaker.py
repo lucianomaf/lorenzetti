@@ -101,6 +101,21 @@ class CaloHitMaker( Cpp ):
         self.setProperty( "AtlasLArSampling"    , int(cells["AtlasLArSampling"])          )
         self.setProperty( "AtlasLArRegion"      , int(cells["AtlasLArRegion"])            )
         self.setProperty( "CellAtlasEtaIndex"   , [int(x) for x in cells["AtlasEtaIndex"]] )
+      # ATLAS gap and ITC cells (F41 conserto 21; geometry/python/v1/TILE.py, getAtlasTileGapCfg)
+      if "NPmt" in cells:
+        self.setProperty( "CellNPmt"            , [int(x) for x in cells["NPmt"]]          )
+      if "UShapePart" in cells:
+        self.setProperty( "UShapePart"          , int(cells["UShapePart"])                )
+        self.setProperty( "UShapeLayer"         , int(cells["UShapeLayer"])               )
+      if "SpecialModule" in cells:
+        self.setProperty( "SpecialModule"       , [int(x) for x in cells["SpecialModule"]] )
+        self.setProperty( "SpecialNPmt"         , [int(x) for x in cells["SpecialNPmt"]]   )
+      if "ReplaceSection" in cells:
+        self.setProperty( "ReplaceSection"      , int(cells["ReplaceSection"])            )
+        self.setProperty( "ReplaceTower"        , int(cells["ReplaceTower"])              )
+        self.setProperty( "ReplaceSampling"     , int(cells["ReplaceSampling"])           )
+        self.setProperty( "ReplaceRCentre"      , float(cells["ReplaceRCentre"])          )
+        self.setProperty( "ReplaceZCentre"      , float(cells["ReplaceZCentre"])          )
       if "AtlasSection" in cells:
         self.setProperty( "CellAtlasSection"    , [int(x) for x in cells["AtlasSection"]]  )
         self.setProperty( "CellAtlasTower"      , [int(x) for x in cells["AtlasTower"]]    )

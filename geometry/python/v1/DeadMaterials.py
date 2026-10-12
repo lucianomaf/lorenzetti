@@ -11,7 +11,7 @@ from .AtlasBarrelCryostat import ATLAS_BARREL_CRYOSTAT_VOLUMES
 
 
 def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_itc=False, atlas_barrel_cryostat=False,
-                       atlas_emec=False, atlas_emb_cells=False, atlas_cryostat_pieces=False):
+                       atlas_emec=False, atlas_emb_cells=False, atlas_cryostat_pieces=False, tile_atlas_gap=False):
     """
     Dead material in the crack between the barrel and the endcaps.
 
@@ -33,6 +33,11 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_it
                            end-cap presampler of ATLAS (|z| = 3622-3626 mm, r = 1231.74-1701.98 mm; see getAtlasPseCfg): the
                            liquid argon layer that contains it is split in z within that radial range (F41 conserto 17,
                            decision of 09/10/2026). Same materials and thicknesses.
+        tile_atlas_gap (bool): With the ATLAS gap/crack scintillators and the active ITC (geometry/python/v1/TILE.py, F41
+                           conserto 21; needs tile_atlas_itc, atlas_emb_cells and atlas_cryostat_pieces): the first liquid argon
+                           layer of the EM crack block leaves room for the aluminium box of the crack scintillators (|z| =
+                           3492-3500 mm, r = 1308-2232 mm), the plug of the ITC is not built here (the active D4 and C10 come
+                           from TILE.py) and the services fill the space around the ATLAS plug and scintillators.
     """
 
     sign = -1 if left_side else 1
@@ -91,22 +96,30 @@ def getCrackVolumesCfg(left_side=False, tile_atlas_geometry=False, tile_atlas_it
     crack_tile_pv.Cuts   = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
 
     crack_em = [crack_em_pv]
+    if tile_atlas_gap and not (tile_atlas_itc and atlas_emb_cells and atlas_cryostat_pieces):
+        raise ValueError("tile_atlas_gap needs tile_atlas_itc, atlas_emb_cells and the ATLAS pieces of the barrel cryostat.")
     if atlas_emb_cells:
         crack_em = _crackWithPresamplerCavity(side_name, sign, crack_em_start, crack_em_pv.NofLayers,
-                                              crack_em_pv.AbsorberThickness, crack_em_pv.GapThickness)
+                                              crack_em_pv.AbsorberThickness, crack_em_pv.GapThickness,
+                                              crack_slot=CRACK_SCINT_SLOT if tile_atlas_gap else None)
 
     if tile_atlas_itc:
         if not tile_atlas_geometry:
             raise ValueError("tile_atlas_itc needs tile_atlas_geometry.")
         return crack_em + getAtlasItcCfg(left_side=left_side, atlas_barrel_cryostat=atlas_barrel_cryostat,
-                                         atlas_cryostat_pieces=atlas_cryostat_pieces)
+                                         atlas_cryostat_pieces=atlas_cryostat_pieces, tile_atlas_gap=tile_atlas_gap)
     return crack_em + [crack_tile_pv]
 
 
-def _crackWithPresamplerCavity(side_name, sign, z_start, nlayers, absorber, gap):
+# Room left in the EM crack block for the aluminium box of the ATLAS crack scintillators (|z| and r, mm; F41 conserto 21)
+CRACK_SCINT_SLOT = ((3492.0*mm, 3500.0*mm), (1308.0*mm, 2232.0*mm))
+
+
+def _crackWithPresamplerCavity(side_name, sign, z_start, nlayers, absorber, gap, crack_slot=None):
     """
     DM::Crack::EM as pieces of one material, the same layers (liquid argon, then aluminium, from the interaction point), with
-    the liquid argon layer that contains the ATLAS-like end-cap presampler split in z within its radial range (cavity).
+    the liquid argon layer that contains the ATLAS-like end-cap presampler split in z within its radial range (cavity). With
+    crack_slot ((z0, z1), (r0, r1)), the liquid argon layer that contains it is split the same way (crack scintillators).
     """
     rmin, rmax = 900*mm, 2232*mm
     vols = []
@@ -121,7 +134,12 @@ def _crackWithPresamplerCavity(side_name, sign, z_start, nlayers, absorber, gap)
     z = z_start; found = False
     for k in range(nlayers):
         z0, z1 = z, z + gap
-        if z0 < PSE_ATLAS_Z[0] and PSE_ATLAS_Z[1] < z1:
+        if crack_slot and z0 < crack_slot[0][0] and crack_slot[0][1] < z1:
+            (sz0, sz1), (sr0, sr1) = crack_slot
+            piece(f"LAr{k+1}::Inner", "liquidArgon", rmin, sr0, z0, z1)
+            piece(f"LAr{k+1}::Front", "liquidArgon", sr0, sr1, z0, sz0)
+            piece(f"LAr{k+1}::Back", "liquidArgon", sr0, sr1, sz1, z1)
+        elif z0 < PSE_ATLAS_Z[0] and PSE_ATLAS_Z[1] < z1:
             found = True
             piece(f"LAr{k+1}::Inner", "liquidArgon", rmin, PSE_ATLAS_R[0], z0, z1)
             piece(f"LAr{k+1}::Outer", "liquidArgon", PSE_ATLAS_R[1], rmax, z0, z1)
@@ -149,7 +167,7 @@ def _crackWithPresamplerCavity(side_name, sign, z_start, nlayers, absorber, gap)
 # Not modelled: the gap and cryostat scintillators E1-E4.
 ATLAS_ITC_SERVICES_FRACTION = 0.05
 
-def getAtlasItcCfg(left_side=False, atlas_barrel_cryostat=False, atlas_cryostat_pieces=False):
+def getAtlasItcCfg(left_side=False, atlas_barrel_cryostat=False, atlas_cryostat_pieces=False, tile_atlas_gap=False):
     """
     Plug of the ITC and services of the gap (see above). With atlas_barrel_cryostat the services leave room for the step of
     the warm vessel of the barrel cryostat (r = 2250 to 2775 mm, |z| = 2865 to 3405 mm; see getAtlasBarrelCryostatCfg),
@@ -160,7 +178,8 @@ def getAtlasItcCfg(left_side=False, atlas_barrel_cryostat=False, atlas_cryostat_
     side_name = 'B' if left_side else 'A'
     period = 18*mm; steel = 14*mm; tile = 3*mm; clearance = 1*mm
     volumes = []
-    for name, nper, zc, rmin, rmax in (("D4", 17, 3380*mm, 3461*mm, 3850*mm), ("C10", 4, 3487.5*mm, 2988*mm, 3457*mm)):
+    plug = () if tile_atlas_gap else (("D4", 17, 3380*mm, 3461*mm, 3850*mm), ("C10", 4, 3487.5*mm, 2988*mm, 3457*mm))
+    for name, nper, zc, rmin, rmax in plug:
         pv = PhysicalVolume( Name               = "DM::ITC::"+name+"::"+side_name,
                              Plates             = Plates.Vertical,
                              AbsorberMaterial   = "G4_Fe",
@@ -184,6 +203,13 @@ def getAtlasItcCfg(left_side=False, atlas_barrel_cryostat=False, atlas_cryostat_
                   (3444*mm, 3554*mm, 2283*mm, 2988*mm))
     if atlas_cryostat_pieces:
         caixas = ((2808*mm, 2849.95*mm, 2283*mm, 3850*mm), (2850*mm, 3225*mm, 2775.05*mm, 3850*mm)) + caixas[2:]
+    if tile_atlas_gap:
+        # around the ATLAS plug (D4 from z = 3210.5 mm, r > 3440 mm; C10 from 3424.8 mm, r > 2989.5 mm), the crack box (3492-3500 mm,
+        # r < 2342.8 mm), the gap box (3504.5-3519.5 mm) and the nominal extended barrel (from 3519.5 mm); see TILE.py
+        caixas = ((2808*mm, 2849.95*mm, 2283*mm, 3850*mm), (2850*mm, 3210.45*mm, 2775.05*mm, 3850*mm),
+                  (3210.5*mm, 3405*mm, 2775.05*mm, 3439.95*mm), (3405.05*mm, 3424.75*mm, 2283*mm, 3439.95*mm),
+                  (3424.8*mm, 3491.95*mm, 2283*mm, 2989.45*mm), (3492*mm, 3500*mm, 2342.85*mm, 2989.45*mm),
+                  (3500.05*mm, 3504.45*mm, 2283*mm, 2989.45*mm))
     for i, (z1, z2, r1, r2) in enumerate(caixas):
         nlayers = max(1, int(round((r2 - r1) / (50*mm)))); layer = (r2 - r1) / nlayers
         pv = PhysicalVolume( Name               = "DM::ITC::Services%d::%s" % (i+1, side_name),

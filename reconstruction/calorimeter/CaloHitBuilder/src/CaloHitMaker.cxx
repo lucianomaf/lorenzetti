@@ -135,6 +135,17 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "PhiShift"                 , m_phiShift=0.                         );
   // Birks constant of the liquid argon: 0.05832 (default) or 0.0486 (HEC, as ATLAS)
   declareProperty( "BirksLArK"                , m_birksLArK=0.05832                   );
+  // ATLAS gap and ITC cells (F41 conserto 21): PMTs per cell, U-shape table, special modules and the replacement cell
+  declareProperty( "CellNPmt"                 , m_cellNPmt                            );
+  declareProperty( "UShapePart"               , m_uShapePart=-1                       );
+  declareProperty( "UShapeLayer"              , m_uShapeLayer=-1                      );
+  declareProperty( "SpecialModule"            , m_specialModule                       );
+  declareProperty( "SpecialNPmt"              , m_specialNPmt                         );
+  declareProperty( "ReplaceSection"           , m_replaceSection=0                    );
+  declareProperty( "ReplaceTower"             , m_replaceTower=0                      );
+  declareProperty( "ReplaceSampling"          , m_replaceSampling=0                   );
+  declareProperty( "ReplaceRCentre"           , m_replaceRCentre=0                    );
+  declareProperty( "ReplaceZCentre"           , m_replaceZCentre=0                    );
 
 
 
@@ -312,7 +323,7 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
     const G4Material *material = step->GetPreStepPoint()->GetMaterial();
     if( !material ) return StatusCode::SUCCESS;
     const G4String &materialName = material->GetName();
-    if( materialName != "liquidArgon" && materialName != "PLASTIC SCINTILLATOR" )
+    if( materialName != "liquidArgon" && materialName != "PLASTIC SCINTILLATOR" && materialName != "ATLAS_TILE_PVT" )
       return StatusCode::SUCCESS;
   }
 
@@ -383,12 +394,18 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
       hit->fill( step , 1*m_noiseStd); // hit with tof selection sensible by 1*sigma of sampling noise.
     // Dual readout: the same energy shared between the two PMTs by the position across the module
     if( hit->dualReadout() ){
+      // number of PMTs of the cell in this module: 2, 1 (only pmt 0), -1 (only pmt 1) or 0 (the cell is read as the
+      // replacement cell, as D4 in EBA15 and EBC18); see tileNPmt
+      const int npmt = tileNPmt( etaBin, phiBin );
       float w0, w1;
-      tilePmtWeights( std::remainder( phi - hit->phi(), 2 * M_PI ), pos.z(), w0, w1 );
+      if( npmt == 2 || npmt == 0 )
+        tilePmtWeights( std::remainder( phi - hit->phi(), 2 * M_PI ), pos.z(), w0, w1, npmt == 0 );
+      else if( npmt == 1 ){ w0 = 1; w1 = 0; }
+      else                { w0 = 0; w1 = 1; }
       hit->fillPmt( step, edep * w0, edep * w1 );
       // Free-running hits: the same deposit and PMT weights, with the ATLAS identifier and time
       if( m_freeRunningHits && edep > 0 )
-        freeRunningTile( ctx, step, etaBin, phiBin, edep, w0, w1 );
+        freeRunningTile( ctx, step, etaBin, phiBin, edep, w0, w1, npmt );
     }
     // Free-running hits of the ATLAS-like LAr cells: the same deposit, with the ATLAS identifier and time
     if( m_freeRunningHits && isAtlasLAr() && edep > 0 )
@@ -414,12 +431,34 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
 //   u = tan(phiLocal)/tan(dphi/2) from -1 to 1 across the module (the tile edges taken as radial lines).
 // Convention (not checked against the orientation of the ATLAS local axes): the PMT 1 is the one on the side of
 // larger phi, on both sides of the detector.
-void CaloHitMaker::tilePmtWeights( float phiLocal, float z, float &w0, float &w1 ) const
+// Number of PMTs of a tile cell in the module of the phi bin (F41 conserto 21): CellNPmt of the cell (2 by default; 1 for
+// E1-E4, read by pmt 0), unless the module is in SpecialModule (modules 0-63 from phi = 0, as freeRunningTile), where it is
+// SpecialNPmt: 1 = only pmt 0, -1 = only pmt 1, 0 = read as the replacement cell (Athena TileGeoG4LookupBuilder: special C10
+// with one PMT, D4 absent in EBA15 and EBC18).
+int CaloHitMaker::tileNPmt( int cell, int phiBin ) const
+{
+  int npmt = ( cell >= 0 && cell < (int)m_cellNPmt.size() ) ? m_cellNPmt[cell] : 2;
+  if( m_specialModule.empty() ) return npmt;
+  const double twoPi = 2 * M_PI, modWidth = twoPi / 64;
+  double phiCentre = 0.5 * ( m_phiBins[phiBin] + m_phiBins[phiBin+1] );
+  double phi0 = phiCentre < 0 ? phiCentre + twoPi : phiCentre;
+  int module = (int)std::floor( phi0 / modWidth ) % 64;
+  for( size_t i = 0; i < m_specialModule.size(); ++i )
+    if( m_specialModule[i] == module ) return m_specialNPmt[i];
+  return npmt;
+}
+
+// The ATLAS ITC (F41 conserto 21) uses the tables of the long barrel by tile row (Tile_1D_profileRescaled: nDetector != 2;
+// C10 rows 1-3 = A, D4 rows 4-5 = BC): UShapePart and UShapeLayer; the special D4 read as D5 (replaced) uses the D table
+// of its extended barrel.
+void CaloHitMaker::tilePmtWeights( float phiLocal, float z, float &w0, float &w1, bool replaced ) const
 {
   if( m_tileDualReadout == 1 ){
     // layer: TileCal1/TileExt1 = A, TileCal2/TileExt2 = BC (B), TileCal3/TileExt3 = D
-    const int layer = (m_sampling - 5) % 3;
-    const int part  = (m_sampling <= 7) ? 0 : ( z > 0 ? 1 : 2 ); // LB, EBA (z > 0), EBC (z < 0)
+    int layer = (m_sampling - 5) % 3;
+    int part  = (m_sampling <= 7) ? 0 : ( z > 0 ? 1 : 2 ); // LB, EBA (z > 0), EBC (z < 0)
+    if( replaced ){ part = ( z > 0 ? 1 : 2 ); layer = 2; }
+    else if( m_uShapePart >= 0 ){ part = m_uShapePart; layer = m_uShapeLayer; }
     const double *t = TileUShape::table( part, layer );
     w1 = TileUShape::amplitude( t, -phiLocal );
     w0 = TileUShape::amplitude( t,  phiLocal );
@@ -451,8 +490,11 @@ void CaloHitMaker::tilePmtWeights( float phiLocal, float z, float &w0, float &w1
 //   energy is kept.
 // - time binning (option FreeRunningBinning; TileGeoG4SDCalc::deltaT, DeltaTHit = {0.5, -75.25, 75.25, 5.}): bins of
 //   0.5 ns for -75.25 < t < 75.25 ns, 5 ns elsewhere (see CaloFreeRunningHitList::add).
+// Cells of the ATLAS gap and ITC (F41 conserto 21): npmt = 1 or -1 (one PMT: pmt 0 or pmt 1, as E1-E4 and the special C10)
+// has no PMT delay (Athena adds deltaT only with two PMTs); npmt = 0 (D4 in EBA15 and EBC18) is read as the replacement
+// cell (D5: ReplaceSection, ReplaceTower, ReplaceSampling, ReplaceRCentre, ReplaceZCentre), with two PMTs.
 void CaloHitMaker::freeRunningTile( SG::EventContext &ctx, const G4Step *step, int cell, int phiBin, float edep,
-                                    float w0, float w1 ) const
+                                    float w0, float w1, int npmt ) const
 {
   SG::ReadHandle<CaloFreeRunningHitList> list( m_freeRunningListKey, ctx );
   if( !list.isValid() ){
@@ -467,10 +509,13 @@ void CaloHitMaker::freeRunningTile( SG::EventContext &ctx, const G4Step *step, i
   double phi0 = phiCentre < 0 ? phiCentre + twoPi : phiCentre;
   int module = (int)std::floor( phi0 / modWidth ) % 64;
   double moduleCentre = std::remainder( (module + 0.5) * modWidth, twoPi );
-  int section  = m_cellAtlasSection[cell];
-  int tower    = m_cellAtlasTower[cell];
-  int sampling = m_cellAtlasSampling[cell];
-  int side     = ( m_cellZCentre[cell] >= 0 || (section == 1 && sampling == 2 && tower == 0) ) ? +1 : -1;
+  const bool replaced = ( npmt == 0 );
+  int section  = replaced ? m_replaceSection  : m_cellAtlasSection[cell];
+  int tower    = replaced ? m_replaceTower    : m_cellAtlasTower[cell];
+  int sampling = replaced ? m_replaceSampling : m_cellAtlasSampling[cell];
+  double rCell = replaced ? m_replaceRCentre : m_cellRCentre[cell];
+  double zCell = replaced ? m_replaceZCentre : m_cellZCentre[cell];
+  int side     = ( zCell >= 0 || (section == 1 && sampling == 2 && tower == 0) ) ? +1 : -1;
   auto pmtId = [&]( int pmt ) -> long long {
     unsigned long long id = (2ULL << 61) | ((unsigned long long)section << 58) | ((unsigned long long)(side > 0 ? 2 : 0) << 54)
                           | ((unsigned long long)module << 46) | ((unsigned long long)tower << 40)
@@ -482,7 +527,6 @@ void CaloHitMaker::freeRunningTile( SG::EventContext &ctx, const G4Step *step, i
   const G4ThreeVector post = step->GetPostStepPoint()->GetPosition();
   const G4ThreeVector pre  = step->GetPreStepPoint()->GetPosition();
   double tglobal = step->GetPostStepPoint()->GetGlobalTime() / ns;
-  double rCell = m_cellRCentre[cell], zCell = m_cellZCentre[cell];
   double sinThCell = rCell / std::sqrt( rCell*rCell + zCell*zCell );
   double cosThHit = post.cosTheta();
   double t = tglobal + ( rCell * ( n - 2.0 / sinThCell ) + post.mag() * ( 1.0 - n * std::sqrt( 1.0 - cosThHit*cosThHit ) ) ) / cLight;
@@ -495,6 +539,7 @@ void CaloHitMaker::freeRunningTile( SG::EventContext &ctx, const G4Step *step, i
   double dyDown = halfWidth + yLocal;
   double dtUp   = n * ( dyUp   - rCell * tanPi64 ) / cLight;
   double dtDown = n * ( dyDown - rCell * tanPi64 ) / cLight;
+  if( npmt == 1 || npmt == -1 ) dtUp = dtDown = 0.0;   // one PMT: no delay across the tile (Athena: only with two PMTs)
   if( t + dtUp > timeCut || t + dtDown > timeCut ){
     t = lateHitTime; dtUp = dtDown = 0.0;
   }

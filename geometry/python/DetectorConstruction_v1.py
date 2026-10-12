@@ -19,6 +19,7 @@ from CaloCell.CaloDefs            import CaloSampling
 from geometry.v1.ECAL             import getLArBarrelCfg, getAtlasEmbVolumesCfg, getAtlasPseCfg, getAtlasEmbEndCfg
 from geometry.v1.ECAL             import getAtlasPsbVolumesCfg, ATLAS_PS_ELECTRODE_MIXTURE
 from geometry.v1.TILE             import getTileBarrelCfg, getTileExtendedCfg
+from geometry.v1.TILE             import getAtlasTileGapCfg, getAtlasTileGapVolumesCfg, ATLAS_TILE_GAP_MIXTURES
 from geometry.v1.EMEC             import getLArEMECCfg, getAtlasEmecVolumesCfg
 from geometry.v1.HEC              import getHECCfg, getAtlasHecPassiveCfg
 from geometry.v1.DeadMaterials    import getDMVolumesCfg, getCrackVolumesCfg, getAtlasEndcapCryostatCfg
@@ -58,6 +59,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasHec          : bool=False,
                 AtlasEmec         : bool=False,
                 AtlasFcal         : bool=False,
+                TileAtlasGap      : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -120,7 +122,8 @@ class DetectorConstruction_v1( Cpp ):
     self.volumes.extend( getDMVolumesCfg(tile_atlas_geometry=TileAtlasGeometry, atlas_material_in_front=AtlasMaterialInFront,
                                          atlas_barrel_cryostat=AtlasBarrelCryostat, atlas_emb_cells=AtlasEmbCells) )
     # Right side (A)
-    self.samplings.extend( getTileExtendedCfg(atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells)    )
+    self.samplings.extend( getTileExtendedCfg(atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells,
+                                              atlas_gap=TileAtlasGap)    )
     # EMEC as in ATLAS: two wheels with the nominal z, composition and cells of ATLAS (see geometry/python/v1/EMEC.py).
     # The cells depend on it: the same value must be used in simulation and digitization.
     self.samplings.extend( getLArEMECCfg(atlas_emec=AtlasEmec) )
@@ -131,14 +134,23 @@ class DetectorConstruction_v1( Cpp ):
     # aluminium block; needs TileAtlasGeometry (see geometry/python/v1/DeadMaterials.py). Simulation only.
     self.volumes.extend( getCrackVolumesCfg(tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc,
                                             atlas_barrel_cryostat=AtlasBarrelCryostat, atlas_emec=AtlasEmec,
-                                            atlas_emb_cells=AtlasEmbCells, atlas_cryostat_pieces=atlas_cryostat_pieces) )
+                                            atlas_emb_cells=AtlasEmbCells, atlas_cryostat_pieces=atlas_cryostat_pieces,
+                                            tile_atlas_gap=TileAtlasGap) )
     # Left side (B)
-    self.samplings.extend( getTileExtendedCfg(left_side = True, atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells) )
+    self.samplings.extend( getTileExtendedCfg(left_side = True, atlas_geometry=TileAtlasGeometry, atlas_cells=TileAtlasCells,
+                                              atlas_gap=TileAtlasGap) )
     self.samplings.extend( getLArEMECCfg(left_side=True, atlas_emec=AtlasEmec) )
     self.samplings.extend( getHECCfg(left_side=True, atlas_hec=AtlasHec) )
     self.volumes.extend( getCrackVolumesCfg(left_side=True, tile_atlas_geometry=TileAtlasGeometry, tile_atlas_itc=TileAtlasItc,
                                             atlas_barrel_cryostat=AtlasBarrelCryostat, atlas_emec=AtlasEmec,
-                                            atlas_emb_cells=AtlasEmbCells, atlas_cryostat_pieces=atlas_cryostat_pieces) )
+                                            atlas_emb_cells=AtlasEmbCells, atlas_cryostat_pieces=atlas_cryostat_pieces,
+                                            tile_atlas_gap=TileAtlasGap) )
+    # ATLAS gap and crack scintillators (E1-E4), active ITC (C10, D4) and the plates of the nominal extended barrel
+    # (geometry/python/v1/TILE.py; F41 conserto 21). Simulation only.
+    if TileAtlasGap:
+      self.mixtures.update( ATLAS_TILE_GAP_MIXTURES )
+      self.samplings.extend( getAtlasTileGapCfg() + getAtlasTileGapCfg(left_side=True) )
+      self.volumes.extend( getAtlasTileGapVolumesCfg() + getAtlasTileGapVolumesCfg(left_side=True) )
     # Outer cylinders of the end-cap cryostats as in ATLAS (warm and cold vessels and the liquid argon between the EMEC
     # and the cold vessel; see geometry/python/v1/DeadMaterials.py). Simulation only.
     if AtlasEndcapCryostat:

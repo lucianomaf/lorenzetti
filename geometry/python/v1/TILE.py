@@ -1,5 +1,6 @@
 
-__all__ = ["getTileBarrelCfg","getTileExtendedCfg","getAtlasTileCells"]
+__all__ = ["getTileBarrelCfg","getTileExtendedCfg","getAtlasTileCells","getAtlasTileGapCfg","getAtlasTileGapVolumesCfg",
+           "ATLAS_TILE_GAP_MIXTURES"]
 
 from GaugiKernel.constants import m,cm,mm,MeV,pi
 from CaloCell.CaloDefs import Detector, CaloSampling
@@ -53,6 +54,46 @@ TILE_ATLAS_CELLS_BC_RADIUS = 2990*mm   # B/C row boundary inside the BC layer
 TILE_ATLAS_CELLS_EXT_A = [3720.6, 4174.8, 4682.1, 5234.8]   # A12/A13 ... A15/A16
 TILE_ATLAS_CELLS_EXT_B = [3803.8, 4320.2, 4886.5, 5473.3]   # B11/B12 ... B14/B15
 TILE_ATLAS_CELLS_EXT_D = [4742.7]                           # D5/D6
+
+
+# ATLAS gap and crack scintillators (E1-E4), active ITC (C10, D4) and the extended barrel at the nominal position of the ATLAS
+# geometry (option TileAtlasGap, F41 conserto 21, 11/10/2026; needs TileAtlasItc). Sources: the public ATLAS geometry of the
+# GeoModel project (geometry-ATLAS-R3S-2021-03-00-00.db, Run 3, with the crack scintillators of Run 3) and the Tile tables of
+# the ATLAS geometry database (TILB-GEO-04, TICL-GEO-02, TileGlobals-09). The volumes of the GeoModel geometry carry the
+# shift of the installed extended barrels and ITC (TileGlobals ZSHIFT, 40 mm on side A); the nominal positions are the
+# ZOFFSET of TILB, as for the LAr end-caps (F45). On side A:
+# - extended barrel (TILB section 2): front plate of 15 mm at z = 3519.5-3534.5 mm, 140 periods of 18.2536 mm (3534.5-6090 mm),
+#   end plate of 20 mm (6090-6110 mm); cells by the number of periods of TICL: A12-A16 9/25/28/30/48, B11-B15 16/27/30/32/35,
+#   D5/D6 65/75;
+# - D4 (TILB section 3, Plug1): 17 periods of 18.1765 mm at z = 3210.5-3519.5 mm, steel r = 3440-3860 mm, tiles in two rows,
+#   r = 3441.5-3818.5 mm (TICL: 17 tiles per row);
+# - C10 (TILB section 4, Plug2): 5 periods of 18.1318 mm (z = 3424.8-3515.46 mm) and a last period of 4.04 mm with tiles only in
+#   the first and third rows (TICL: 6/5/6 tiles per row), tiles r = 2991-3438 mm;
+# - gap (TILB section 5): 12 mm scintillators at z = 3506-3518 mm in an aluminium box of 15 mm (z = 3504.5-3519.5 mm): E2 r =
+#   2310.8-2650.8 mm (copy 0), E1 2652.8-2976.8 mm (copy 1);
+# - crack (TILB section 6): 6 mm scintillators of polyvinyltoluene (Run 3) at z = 3493-3499 mm in an aluminium box of 8 mm
+#   (3492-3500 mm): E4 r = 1317.8-1473.4 mm (copy 0), E3 1474.0-2313.4 mm (copy 1).
+# Identifiers (ATLAS identifier dictionary, section 3): D4 tower 8 sampling 2, C10 tower 9 sampling 1, both two PMTs; E1-E4
+# towers 10, 11, 13, 15, sampling 3, one PMT (pmt 0). Special modules (Athena TileGeoG4LookupBuilder): C10 with one PMT in
+# modules 39-42 and 55-58 (pmt 0 on side C, pmt 1 on side A); D4 absent in EBA15 and EBC18, its energy going to D5.
+# Not modelled: the support girders, the cable troughs, E4' and the MBTS.
+TILE_ATLAS_GAP_EB_FRONT   = (3519.5*mm, 3534.5*mm)
+TILE_ATLAS_GAP_EB_TILES   = (3534.5*mm, 6090.0*mm)
+TILE_ATLAS_GAP_EB_END     = (6090.0*mm, 6110.0*mm)
+TILE_ATLAS_GAP_EB_PERIOD  = (6090.0 - 3534.5)/140*mm
+TILE_ATLAS_GAP_EB_PLATE_R = (2288*mm, 3860*mm)
+TILE_ATLAS_GAP_EB_PERIODS = {'A': (12, [9, 25, 28, 30, 48]), 'B': (11, [16, 27, 30, 32, 35]), 'D': (5, [65, 75])}
+TILE_ATLAS_GAP_D4  = dict(z=(3210.5*mm, 3519.5*mm), r=(3441.5*mm, 3818.5*mm), steel_r=(3440*mm, 3860*mm), periods=17)
+TILE_ATLAS_GAP_C10 = dict(z=(3424.8*mm, 3519.5*mm), r=(2991*mm, 3438*mm), periods=5, period=18.1318*mm, last=4.04*mm,
+                          rows=[(2991*mm, 3138*mm), (3141*mm, 3288*mm), (3291*mm, 3438*mm)])
+TILE_ATLAS_GAP_GAP   = dict(box=(3504.5*mm, 3519.5*mm), scint=(3506*mm, 3518*mm), box_r=(2308.8*mm, 2978.8*mm),
+                            cells={'E2': (2310.8*mm, 2650.8*mm), 'E1': (2652.8*mm, 2976.8*mm)})
+TILE_ATLAS_GAP_CRACK = dict(box=(3492*mm, 3500*mm), scint=(3493*mm, 3499*mm), box_r=(1309.4*mm, 2341.4*mm),
+                            cells={'E4': (1317.8*mm, 1473.4*mm), 'E3': (1474.0*mm, 2313.4*mm)})
+# (tower, sampling) of the ATLAS identifier, section 3
+TILE_ATLAS_GAP_ID = {'D4': (8, 2), 'C10': (9, 1), 'E1': (10, 3), 'E2': (11, 3), 'E3': (13, 3), 'E4': (15, 3)}
+# polyvinyltoluene of the Run 3 crack scintillators (tile::Polyvinyltoluene of the public GeoModel geometry)
+ATLAS_TILE_GAP_MIXTURES = {'ATLAS_TILE_PVT': (1.023002, {'C': 0.914709, 'H': 0.085291})}
 
 
 def _roundToPeriod(z, z0):
@@ -120,11 +161,12 @@ def _barrelRow(prefix, edges, zend, first=1, crosses_zero=False):
     return cells
 
 
-def getAtlasTileCells(sampling_name, side=1):
+def getAtlasTileCells(sampling_name, side=1, atlas_gap=False):
     """
     ATLAS tile cells for one sampling of the ATLAS-like tile calorimeter, as the (r, z) boxes read by CaloHitMaker.
     sampling_name: 'TileCal1', 'TileCal2', 'TileCal3' (long barrel) or 'TileExt1', 'TileExt2', 'TileExt3';
-    side: +1 or -1 for the extended barrel.
+    side: +1 or -1 for the extended barrel. atlas_gap: the extended barrel at the nominal ATLAS position, with the cells
+    of the ATLAS geometry database (see TILE_ATLAS_GAP_* above).
     """
     zb = TILE_ATLAS_BARREL_HALF_Z
     rb = TILE_ATLAS_BARREL_RADII
@@ -144,6 +186,13 @@ def getAtlasTileCells(sampling_name, side=1):
     prefix, edges, first, rmin, rmax = ext[sampling_name]
     z0, z1 = TILE_ATLAS_EXTENDED_Z_START, TILE_ATLAS_EXTENDED_Z_END
     bounds = [z0] + [_roundToPeriod(x, z0) for x in edges] + [z1]
+    if atlas_gap:
+        # nominal ATLAS extended barrel: cell boundaries from the number of periods of each cell (TICL-GEO-02)
+        z0, z1 = TILE_ATLAS_GAP_EB_TILES
+        first, counts = TILE_ATLAS_GAP_EB_PERIODS[prefix]
+        bounds = [z0]
+        for n in counts: bounds.append(bounds[-1] + n*TILE_ATLAS_GAP_EB_PERIOD)
+        bounds[-1] = z1
     s = '+' if side > 0 else '-'
     cells = []
     for k in range(len(bounds)-1):
@@ -329,7 +378,7 @@ def getTileBarrelCfg(atlas_geometry=False, atlas_cells=False):
 
 
 
-def getTileExtendedCfg(left_side=False, atlas_geometry=False, atlas_cells=False):
+def getTileExtendedCfg(left_side=False, atlas_geometry=False, atlas_cells=False, atlas_gap=False):
     """
     Defines the geometry and readout configuration for the Tile Calorimeter Extended Barrel.
 
@@ -344,6 +393,8 @@ def getTileExtendedCfg(left_side=False, atlas_geometry=False, atlas_cells=False)
                                18 mm period, ATLAS layer radii and z extent; see TILE_ATLAS_* above).
         atlas_cells (bool): If True (needs atlas_geometry), the cells are the ATLAS cells A12-A16, B11-B15, D5 and
                             D6 (see TILE_ATLAS_CELLS_* above) instead of the eta x phi grid.
+        atlas_gap (bool): If True (needs atlas_cells), the extended barrel at the nominal position of the ATLAS geometry,
+                          with its period and cells (see TILE_ATLAS_GAP_* above; F41 conserto 21).
 
     Returns:
         List[Calorimeter]: A list of configured Calorimeter detector objects for the Tile Extended Barrel.
@@ -362,6 +413,13 @@ def getTileExtendedCfg(left_side=False, atlas_geometry=False, atlas_cells=False)
         extended_barrel_start = TILE_ATLAS_EXTENDED_Z_START
         extended_barrel_zsize = TILE_ATLAS_EXTENDED_Z_END - TILE_ATLAS_EXTENDED_Z_START
         layers = _getAtlasTileLayers( TILE_ATLAS_EXTENDED_RADII, extended_barrel_zsize )
+        if atlas_gap:
+            if not atlas_cells:
+                raise ValueError("atlas_gap needs the ATLAS tile cells (atlas_cells).")
+            extended_barrel_start = TILE_ATLAS_GAP_EB_TILES[0]
+            extended_barrel_zsize = TILE_ATLAS_GAP_EB_TILES[1] - TILE_ATLAS_GAP_EB_TILES[0]
+            for lay in layers:
+                lay.update( NofLayers = 140, AbsorberThickness = TILE_ATLAS_GAP_EB_PERIOD - TILE_ATLAS_TILE - TILE_ATLAS_CLEARANCE )
     else:
         r1 = 228.3*cm + 4*(6.0*cm + 4.0*cm)
         r2 = r1 + 11*(6.2*cm + 3.8*cm)
@@ -407,9 +465,9 @@ def getTileExtendedCfg(left_side=False, atlas_geometry=False, atlas_cells=False)
     if atlas_cells:
         if not atlas_geometry:
             raise ValueError("The ATLAS tile cells (atlas_cells) need the ATLAS-like tile geometry (atlas_geometry).")
-        tilecalExt1_sv.Cells = getAtlasTileCells("TileExt1", sign)
-        tilecalExt2_sv.Cells = getAtlasTileCells("TileExt2", sign)
-        tilecalExt3_sv.Cells = getAtlasTileCells("TileExt3", sign)
+        tilecalExt1_sv.Cells = getAtlasTileCells("TileExt1", sign, atlas_gap)
+        tilecalExt2_sv.Cells = getAtlasTileCells("TileExt2", sign, atlas_gap)
+        tilecalExt3_sv.Cells = getAtlasTileCells("TileExt3", sign, atlas_gap)
 
 
     # Configure the electronic frontend and the detector parameters
@@ -450,3 +508,116 @@ def getTileExtendedCfg(left_side=False, atlas_geometry=False, atlas_cells=False)
     
     return [tilecalExt1_det, tilecalExt2_det, tilecalExt3_det]
 
+
+
+def _gapPv(name, absorber, gap, nlayers, absorber_t, gap_t, clearance, r, z, sign, envelope=False):
+    za, zb = (z[0], z[1]) if sign > 0 else (-z[1], -z[0])
+    pv = PhysicalVolume( Name = name, Plates = Plates.Vertical, AbsorberMaterial = absorber, GapMaterial = gap,
+                         NofLayers = nlayers, AbsorberThickness = absorber_t, GapThickness = gap_t, LayerClearance = clearance,
+                         RMin = r[0], RMax = r[1], ZSize = z[1] - z[0], X=0, Y=0, Z=0.5*(za + zb), Visualization = True,
+                         Color = 'salmon' )
+    if envelope: pv.Envelope = True
+    return pv
+
+
+def _gapCell(name, sign, r, z, extra=None):
+    """Cell table of one ATLAS gap/ITC cell (one box) for CaloHitMaker (see TILE_ATLAS_GAP_* above)."""
+    za, zb = (z[0], z[1]) if sign > 0 else (-z[1], -z[0])
+    tower, sampling = TILE_ATLAS_GAP_ID[name]
+    rc, zc = 0.5*(r[0] + r[1]), 0.5*(za + zb)
+    eta = math.asinh(zc/rc); deta = abs(math.asinh(zb/rc) - math.asinh(za/rc))
+    table = dict(Names=[name + ('+' if sign > 0 else '-')], Eta=[round(eta, 5)], DeltaEta=[round(deta, 5)],
+                 BoxRMin=[r[0]], BoxRMax=[r[1]], BoxZMin=[za], BoxZMax=[zb], BoxCell=[0],
+                 AtlasSection=[3], AtlasTower=[tower], AtlasSampling=[sampling], RCentre=[rc], ZCentre=[zc],
+                 NPmt=[1 if name.startswith('E') else 2])
+    if extra: table.update(extra)
+    return table
+
+
+def getAtlasTileGapCfg(left_side=False):
+    """
+    The ATLAS gap and crack scintillators (E1-E4) and the active ITC (C10, D4) on one side, as Calorimeter samplings with the
+    cells, identifiers and special modules of ATLAS (see TILE_ATLAS_GAP_* above; F41 conserto 21). Simulation only.
+    """
+    basepath = os.environ['LORENZETTI_GEOMETRY_DATA_DIR']
+    sign = -1 if left_side else 1
+    side_name = 'B' if left_side else 'A'
+    out = []
+    def calo(sv, key, sampling):
+        return Calorimeter( sv, -6, 4, -3, CollectionKey = key + "_" + side_name, Detector = Detector.TILE, Sampling = sampling,
+                            Shaper = basepath + "/pulseTile.dat", Noise = 20*MeV, Samples = 7,
+                            OFWeightsEnergy = [-0.3781, -0.3572, 0.1808, 0.8125, 0.2767, -0.2056, -0.3292],
+                            OFWeightsTime   = [0.197277, -2.336666, -18.474749, -0.247639, 14.832119, 4.627806, 1.401852] )
+    # D4: 17 periods; ATLAS U-shape of the long barrel, BC layer (tile rows 4-5); absent in EBA15 / EBC18 (energy to D5)
+    d4 = TILE_ATLAS_GAP_D4
+    period = (d4['z'][1] - d4['z'][0]) / d4['periods']
+    pv = _gapPv("TILE::ITC::D4::" + side_name, "G4_Fe", "PLASTIC SCINTILLATOR", d4['periods'],
+                period - TILE_ATLAS_TILE - TILE_ATLAS_CLEARANCE, TILE_ATLAS_TILE, TILE_ATLAS_CLEARANCE, d4['r'], d4['z'], sign)
+    d5 = getAtlasTileCells("TileExt3", sign, atlas_gap=True); i5 = [n.rstrip('+-') for n in d5['Names']].index('D5')
+    sv = SensitiveDetector( pv, DeltaEta = 0.1, DeltaPhi = pi/32, Segment = 5 )
+    sv.Cells = _gapCell('D4', sign, d4['r'], d4['z'],
+                        dict(UShapePart=0, UShapeLayer=1, SpecialModule=[14 if sign > 0 else 17], SpecialNPmt=[0],
+                             ReplaceSection=2, ReplaceTower=d5['AtlasTower'][i5], ReplaceSampling=d5['AtlasSampling'][i5],
+                             ReplaceRCentre=d5['RCentre'][i5], ReplaceZCentre=d5['ZCentre'][i5]))
+    out.append( calo(sv, "Collection_TileGapD4", CaloSampling.TileExt3) )
+    # C10: 5 periods and a last thin period (rows 1 and 3); the maker volume is an envelope over both; ATLAS U-shape of the
+    # long barrel, A layer (tile rows 1-3); one PMT in modules 39-42 and 55-58 (pmt 0 on side C, pmt 1 on side A)
+    c10 = TILE_ATLAS_GAP_C10
+    env = _gapPv("TILE::ITC::C10::" + side_name, "G4_Fe", "PLASTIC SCINTILLATOR", 1, 1*mm, 1*mm, 0, c10['r'], c10['z'], sign,
+                 envelope=True)
+    sv = SensitiveDetector( env, DeltaEta = 0.1, DeltaPhi = pi/32, Segment = 5 )
+    special = list(range(38, 42)) + list(range(54, 58))
+    sv.Cells = _gapCell('C10', sign, c10['r'], c10['z'],
+                        dict(UShapePart=0, UShapeLayer=0, SpecialModule=special, SpecialNPmt=[-1 if sign > 0 else 1]*len(special)))
+    out.append( calo(sv, "Collection_TileGapC10", CaloSampling.TileExt2) )
+    # E1-E4: one PMT (pmt 0)
+    for seg, (box, name, material) in enumerate(((TILE_ATLAS_GAP_GAP, 'E1', "PLASTIC SCINTILLATOR"),
+                                                 (TILE_ATLAS_GAP_GAP, 'E2', "PLASTIC SCINTILLATOR"),
+                                                 (TILE_ATLAS_GAP_CRACK, 'E3', "ATLAS_TILE_PVT"),
+                                                 (TILE_ATLAS_GAP_CRACK, 'E4', "ATLAS_TILE_PVT"))):
+        r = box['cells'][name]
+        z = (box['scint'][0], box['scint'][1] + (1*mm if name in ('E1', 'E2') else 0.5*mm))   # scintillator, then the air of the wrapper (as vacuum)
+        pv = _gapPv(f"TILE::Gap::{name}::" + side_name, "Vacuum", material, 1, z[1] - box['scint'][1],
+                    box['scint'][1] - box['scint'][0], 0, r, z, sign)
+        sv = SensitiveDetector( pv, DeltaEta = 0.1, DeltaPhi = pi/32, Segment = 5 + seg )
+        sv.Cells = _gapCell(name, sign, r, box['scint'])
+        out.append( calo(sv, f"Collection_TileGap{name}", CaloSampling.TileExt1) )
+    return out
+
+
+def getAtlasTileGapVolumesCfg(left_side=False):
+    """
+    Passive volumes of the ATLAS gap/ITC and of the nominal extended barrel on one side (see TILE_ATLAS_GAP_* above): the
+    front and end plates of the extended barrel, the steel of D4 above its tiles, the volumes of C10 (5 periods and the last
+    thin period) inside its envelope, and the aluminium boxes of the gap and crack scintillators. Simulation only.
+    """
+    from .PhysicalVolume import ProductionCuts
+    sign = -1 if left_side else 1
+    side_name = 'B' if left_side else 'A'
+    vols = []
+    def tube(name, material, r, z):
+        za, zb = (z[0], z[1]) if sign > 0 else (-z[1], -z[0])
+        pv = PhysicalVolume( Name = name + "::" + side_name, Plates = Plates.Vertical, AbsorberMaterial = material,
+                             GapMaterial = material, NofLayers = 1, AbsorberThickness = (z[1] - z[0])/2,
+                             GapThickness = (z[1] - z[0])/2, RMin = r[0], RMax = r[1], ZSize = z[1] - z[0], X=0, Y=0,
+                             Z=0.5*(za + zb), Visualization = True, Color = 'gray' )
+        pv.Cuts = ProductionCuts(ElectronCut = 1, PositronCut = 1, GammaCut = 1)
+        vols.append(pv)
+    tube("DM::TileGap::EBFrontPlate", "G4_Fe", TILE_ATLAS_GAP_EB_PLATE_R, TILE_ATLAS_GAP_EB_FRONT)
+    tube("DM::TileGap::EBEndPlate", "G4_Fe", TILE_ATLAS_GAP_EB_PLATE_R, TILE_ATLAS_GAP_EB_END)
+    d4 = TILE_ATLAS_GAP_D4
+    tube("DM::TileGap::D4Steel", "G4_Fe", (d4['r'][1], d4['steel_r'][1]), d4['z'])
+    c10 = TILE_ATLAS_GAP_C10
+    z5 = (c10['z'][0], c10['z'][0] + c10['periods']*c10['period'])
+    vols.append( _gapPv("TILE::ITC::C10::Periods::" + side_name, "G4_Fe", "PLASTIC SCINTILLATOR", c10['periods'],
+                        c10['period'] - TILE_ATLAS_TILE - TILE_ATLAS_CLEARANCE, TILE_ATLAS_TILE, TILE_ATLAS_CLEARANCE,
+                        c10['r'], z5, sign) )
+    zl = (z5[1], c10['z'][1])
+    for k, r in ((1, c10['rows'][0]), (3, c10['rows'][2])):
+        vols.append( _gapPv(f"TILE::ITC::C10::Last{k}::" + side_name, "G4_Fe", "PLASTIC SCINTILLATOR", 1,
+                            (zl[1] - zl[0]) - TILE_ATLAS_TILE, TILE_ATLAS_TILE, 0, r, zl, sign) )
+    tube("DM::TileGap::C10LastSteel", "G4_Fe", (c10['rows'][0][1], c10['rows'][2][0]), zl)
+    for name, box in (("Gap", TILE_ATLAS_GAP_GAP), ("Crack", TILE_ATLAS_GAP_CRACK)):
+        tube(f"DM::TileGap::{name}BoxFront", "G4_Al", box['box_r'], (box['box'][0], box['box'][0] + 0.5*mm))
+        tube(f"DM::TileGap::{name}BoxBack", "G4_Al", box['box_r'], (box['box'][1] - 0.5*mm, box['box'][1]))
+    return vols

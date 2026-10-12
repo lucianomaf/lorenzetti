@@ -123,7 +123,21 @@ class CaloHitMaker : public Gaugi::Algorithm
     // to its azimuthal position across the module. 0 = off (default), 1 = ATLAS U-shape, 2 = linear sharing.
     int m_tileDualReadout;
     bool isTile() const { return m_sampling >= 5 && m_sampling <= 10; }
-    void tilePmtWeights( float phiLocal, float z, float &w0, float &w1 ) const;
+    void tilePmtWeights( float phiLocal, float z, float &w0, float &w1, bool replaced=false ) const;
+    // ATLAS gap and ITC cells (F41 conserto 21): PMTs per cell (2, 1 = only pmt 0, -1 = only pmt 1), U-shape table of the
+    // long barrel by tile row (part, layer; -1 = from the sampling), special modules with their number of PMTs (0 = read as
+    // the replacement cell) and the replacement cell (D5 for the special D4)
+    std::vector<int> m_cellNPmt;
+    int m_uShapePart;
+    int m_uShapeLayer;
+    std::vector<int> m_specialModule;
+    std::vector<int> m_specialNPmt;
+    int m_replaceSection;
+    int m_replaceTower;
+    int m_replaceSampling;
+    float m_replaceRCentre;
+    float m_replaceZCentre;
+    int tileNPmt( int cell, int phiBin ) const;
     int findCell( float radius, float z ) const;
     // Radius used to find the (r, z) box of a step: r itself (CellRadiusModules = 0, the default) or, with N modules,
     // the radius on the axis of the module that contains phi, r cos(phi - phi_c), modules of 2 pi / N from phi = 0
@@ -181,7 +195,7 @@ class CaloHitMaker : public Gaugi::Algorithm
     std::vector<float> m_cellRCentre;
     std::vector<float> m_cellZCentre;
     void freeRunningTile( SG::EventContext &ctx, const G4Step *step, int cell, int phiBin, float edep, float w0,
-                          float w1 ) const;
+                          float w1, int npmt=2 ) const;
 
     // Free-running hits of the ATLAS-like LAr cells (F41 conserto 19; --atlas-emb-cells, --atlas-emec, --atlas-hec): the
     // fields of the ATLAS identifier of the cells of this maker (AtlasLArPart: 1 = LArEM, 2 = LArHEC, 0 = not set, the

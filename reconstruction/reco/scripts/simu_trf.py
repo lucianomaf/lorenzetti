@@ -134,6 +134,15 @@ def parse_args():
                              "ATLAS identifier dictionary found from the radius of the readout pads of each block, as "
                              "in the ATLAS simulation (JINST 3 (2008) S08003, sec. 5.3; Athena HECGeometry). "
                              "Use the same option in digit_trf.py. Off by default.")
+    parser.add_argument('--tile-atlas-gap', action='store_true',
+                        dest='tile_atlas_gap', required=False,
+                        help="Gap and crack scintillators E1-E4 (Run 3 geometry, the crack ones of polyvinyltoluene) and the "
+                             "active ITC cells C10 and D4 as in ATLAS, with the extended barrel at the nominal ATLAS position "
+                             "(front plate at |z| = 3519.5 mm, 140 periods of 18.25 mm, cells by the numbers of periods of "
+                             "ATLAS); from the public ATLAS GeoModel geometry and the Tile tables of the ATLAS geometry database, "
+                             "without the shift of the installed detector. Identifiers, PMTs and special modules as in ATLAS "
+                             "(E cells with one PMT). Needs --tile-atlas-itc, --atlas-emb-cells, --atlas-material-in-front and "
+                             "--atlas-barrel-cryostat. Simulation only. Off by default.")
     parser.add_argument('--atlas-fcal', action='store_true',
                         dest='atlas_fcal', required=False,
                         help="Forward calorimeter of ATLAS as passive material, without cells: the three modules (copper, then "
@@ -235,6 +244,7 @@ def main(logging_level: str,
          atlas_hec: bool,
          atlas_emec: bool,
          atlas_fcal: bool,
+         tile_atlas_gap: bool,
          atlas_endcap_cryostat: bool,
          atlas_barrel_cryostat: bool,
          tile_dual_readout: int,
@@ -277,6 +287,7 @@ def main(logging_level: str,
         atlas_hec (bool): HEC as in ATLAS (four samplings, nominal geometry and cells of ATLAS).
         atlas_emec (bool): EM end-cap as in ATLAS (two wheels, nominal geometry, composition and cells of ATLAS).
         atlas_fcal (bool): Forward calorimeter of ATLAS as passive material (three modules, no cells).
+        tile_atlas_gap (bool): Gap/crack scintillators E1-E4 and active ITC as in ATLAS, nominal extended barrel.
         atlas_endcap_cryostat (bool): Outer cylinders of the end-cap cryostats as in ATLAS.
         atlas_barrel_cryostat (bool): Outer part of the barrel cryostat as in ATLAS.
         tile_dual_readout (int): Two PMTs per tile cell: 0 = off, 1 = ATLAS U-shape, 2 = linear (needs tile_atlas_cells).
@@ -314,6 +325,7 @@ def main(logging_level: str,
                                                         AtlasHec=atlas_hec,
                                                         AtlasEmec=atlas_emec,
                                                         AtlasFcal=atlas_fcal,
+                                                        TileAtlasGap=tile_atlas_gap,
                                                         AtlasEndcapCryostat=atlas_endcap_cryostat,
                                                         AtlasBarrelCryostat=atlas_barrel_cryostat),
                                NumberOfThreads=number_of_threads,
@@ -386,6 +398,10 @@ if __name__ == "__main__":
         parser.error("--tile-dual-readout needs --tile-atlas-cells")
     if args.tile_atlas_itc and not args.tile_atlas_geometry:
         parser.error("--tile-atlas-itc needs --tile-atlas-geometry")
+    if args.tile_atlas_gap and not (args.tile_atlas_itc and args.tile_atlas_cells and args.atlas_emb_cells and
+                                    args.atlas_material_in_front and args.atlas_barrel_cryostat):
+        parser.error("--tile-atlas-gap needs --tile-atlas-itc, --tile-atlas-cells, --atlas-emb-cells, --atlas-material-in-front "
+                     "and --atlas-barrel-cryostat")
     if args.free_running_hits:
         # free-running hits as in the ATLAS simulation: ATLAS tile cells, active medium, Birks' law, U-shape dual readout
         if not (args.tile_atlas_geometry and args.tile_atlas_cells):
@@ -393,6 +409,9 @@ if __name__ == "__main__":
         # the LAr cells with the ATLAS identifier (F41 conserto 19)
         if not (args.atlas_emb_cells and args.atlas_hec and args.atlas_emec):
             parser.error("--free-running-hits needs --atlas-emb-cells, --atlas-hec and --atlas-emec (the LAr cells of ATLAS)")
+        # the gap/crack and ITC cells of ATLAS (F41 conserto 21)
+        if not args.tile_atlas_gap:
+            parser.error("--free-running-hits needs --tile-atlas-gap (the E1-E4, C10 and D4 cells of ATLAS)")
         if args.tile_dual_readout and args.tile_pmt_split != 'ushape':
             parser.error("--free-running-hits uses the U-shape sharing of the ATLAS simulation (--tile-pmt-split ushape)")
         args.active_energy_only = True
@@ -424,6 +443,7 @@ if __name__ == "__main__":
              atlas_hec             = args.atlas_hec,
              atlas_emec            = args.atlas_emec,
              atlas_fcal            = args.atlas_fcal,
+             tile_atlas_gap        = args.tile_atlas_gap,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,
              atlas_barrel_cryostat = args.atlas_barrel_cryostat,
              tile_dual_readout     = (0 if not args.tile_dual_readout else
