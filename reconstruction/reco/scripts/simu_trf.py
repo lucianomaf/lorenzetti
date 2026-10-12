@@ -3,6 +3,7 @@
 import multiprocessing
 import argparse
 import sys
+import os
 
 from pathlib                import Path
 from GaugiKernel.constants  import MINUTES
@@ -149,6 +150,19 @@ def parse_args():
                              "two of tungsten; r = 72-449.6 mm, z = 4668.5-6045.1 mm without the shift of the installed "
                              "detector) as tubes of the mean mixture of absorber, rods and liquid argon, from the public ATLAS "
                              "GeoModel geometry (JINST 3 (2008) S08003, Table 5.4). Simulation only. Off by default.")
+    parser.add_argument('--atlas-fcal-cells', action='store_true',
+                        dest='atlas_fcal_cells', required=False,
+                        help="The FCal of ATLAS with its electrodes and cells, instead of the mean mixture of --atlas-fcal: "
+                             "each module is a tube of absorber with one liquid argon gap per electrode (12260, 10200 and 8224 "
+                             "per side) and the cable troughs, from the public ATLAS GeoModel geometry; the cell of a deposit is "
+                             "the tile of its electrode, as in the ATLAS simulation. The electrodes come from the file given by "
+                             "--atlas-fcal-electrodes. The FCal cells go only to the free-running hits (LArHitFCAL). Needs "
+                             "--atlas-fcal and --free-running-hits. Simulation only. Off by default.")
+    parser.add_argument('--atlas-fcal-electrodes', action='store', dest='atlas_fcal_electrodes', required=False,
+                        type=str, default=os.environ.get('LORENZETTI_FCAL_ELECTRODES', ''),
+                        help="CSV file with the electrodes of the ATLAS FCal (table LArFCalElectrodes of the ATLAS geometry "
+                             "database), written by geometry/scripts/fcal_electrodes_from_geomdb.py. Default: the environment "
+                             "variable LORENZETTI_FCAL_ELECTRODES.")
     parser.add_argument('--atlas-emec', action='store_true',
                         dest='atlas_emec', required=False,
                         help="EM end-cap as in ATLAS, with the nominal values of the ATLAS geometry (without the shift of the "
@@ -244,6 +258,8 @@ def main(logging_level: str,
          atlas_hec: bool,
          atlas_emec: bool,
          atlas_fcal: bool,
+         atlas_fcal_cells: bool,
+         atlas_fcal_electrodes: str,
          tile_atlas_gap: bool,
          atlas_endcap_cryostat: bool,
          atlas_barrel_cryostat: bool,
@@ -287,6 +303,8 @@ def main(logging_level: str,
         atlas_hec (bool): HEC as in ATLAS (four samplings, nominal geometry and cells of ATLAS).
         atlas_emec (bool): EM end-cap as in ATLAS (two wheels, nominal geometry, composition and cells of ATLAS).
         atlas_fcal (bool): Forward calorimeter of ATLAS as passive material (three modules, no cells).
+        atlas_fcal_cells (bool): The FCal of ATLAS with its electrodes and cells (free-running hits only; needs atlas_fcal).
+        atlas_fcal_electrodes (str): CSV file of the electrodes of the ATLAS FCal (geometry/scripts/fcal_electrodes_from_geomdb.py).
         tile_atlas_gap (bool): Gap/crack scintillators E1-E4 and active ITC as in ATLAS, nominal extended barrel.
         atlas_endcap_cryostat (bool): Outer cylinders of the end-cap cryostats as in ATLAS.
         atlas_barrel_cryostat (bool): Outer part of the barrel cryostat as in ATLAS.
@@ -325,6 +343,8 @@ def main(logging_level: str,
                                                         AtlasHec=atlas_hec,
                                                         AtlasEmec=atlas_emec,
                                                         AtlasFcal=atlas_fcal,
+                                                        AtlasFcalCells=atlas_fcal_cells,
+                                                        AtlasFcalElectrodes=atlas_fcal_electrodes,
                                                         TileAtlasGap=tile_atlas_gap,
                                                         AtlasEndcapCryostat=atlas_endcap_cryostat,
                                                         AtlasBarrelCryostat=atlas_barrel_cryostat),
@@ -402,6 +422,11 @@ if __name__ == "__main__":
                                     args.atlas_material_in_front and args.atlas_barrel_cryostat):
         parser.error("--tile-atlas-gap needs --tile-atlas-itc, --tile-atlas-cells, --atlas-emb-cells, --atlas-material-in-front "
                      "and --atlas-barrel-cryostat")
+    if args.atlas_fcal_cells and not (args.atlas_fcal and args.free_running_hits):
+        parser.error("--atlas-fcal-cells needs --atlas-fcal and --free-running-hits")
+    if args.atlas_fcal_cells and not os.path.isfile(args.atlas_fcal_electrodes):
+        parser.error("--atlas-fcal-cells needs the file of the FCal electrodes (--atlas-fcal-electrodes or "
+                     "LORENZETTI_FCAL_ELECTRODES): '%s' not found" % args.atlas_fcal_electrodes)
     if args.free_running_hits:
         # free-running hits as in the ATLAS simulation: ATLAS tile cells, active medium, Birks' law, U-shape dual readout
         if not (args.tile_atlas_geometry and args.tile_atlas_cells):
@@ -412,6 +437,9 @@ if __name__ == "__main__":
         # the gap/crack and ITC cells of ATLAS (F41 conserto 21)
         if not args.tile_atlas_gap:
             parser.error("--free-running-hits needs --tile-atlas-gap (the E1-E4, C10 and D4 cells of ATLAS)")
+        # the FCal cells of ATLAS (F41 conserto 22)
+        if not args.atlas_fcal_cells:
+            parser.error("--free-running-hits needs --atlas-fcal-cells (the FCal cells of ATLAS)")
         if args.tile_dual_readout and args.tile_pmt_split != 'ushape':
             parser.error("--free-running-hits uses the U-shape sharing of the ATLAS simulation (--tile-pmt-split ushape)")
         args.active_energy_only = True
@@ -443,6 +471,8 @@ if __name__ == "__main__":
              atlas_hec             = args.atlas_hec,
              atlas_emec            = args.atlas_emec,
              atlas_fcal            = args.atlas_fcal,
+             atlas_fcal_cells      = args.atlas_fcal_cells,
+             atlas_fcal_electrodes = args.atlas_fcal_electrodes,
              tile_atlas_gap        = args.tile_atlas_gap,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,
              atlas_barrel_cryostat = args.atlas_barrel_cryostat,

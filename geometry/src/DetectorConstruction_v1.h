@@ -96,7 +96,27 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
     struct Mixture{ std::string name; double density; std::vector<std::string> symbols; std::vector<double> fractions; };
     struct PolyconePlanes{ std::vector<double> z, rmin, rmax; };
 
+    // One module of the ATLAS FCal with its electrodes (F41 conserto 22; geometry/python/v1/FCAL.py), as in the ATLAS geometry
+    // (FCALConstruction.cxx): a tube of absorber (rMin-rMax, centred at z, half length halfZ) holding the cable troughs
+    // (troughRMin-troughRMax, sector troughSPhi..troughSPhi+troughDPhi rotated about z by each of troughAngles) and then one
+    // gap of liquid argon per electrode at (x[k], y[k]), copy number k: a ring gapRMin-gapRMax, or, with rodR > 0, a cylinder
+    // holding a rod of rodMaterial. Lengths in mm, angles in rad. The gap is the sensitive volume <name>::Gap.
+    void AddFCalModule(std::string name, std::string absorberMaterial, std::string rodMaterial, std::string troughMaterial,
+                       double rMin, double rMax, double z, double halfZ, double gapRMin, double gapRMax, double rodR,
+                       double troughRMin, double troughRMax, double troughSPhi, double troughDPhi,
+                       std::vector<double> troughAngles, std::vector<double> x, std::vector<double> y,
+                       double electronCut, double positronCut, double gammaCut, double photonCut);
+    struct FCalModule{
+      std::string name, absorberMaterial, rodMaterial, troughMaterial;
+      double rMin, rMax, z, halfZ, gapRMin, gapRMax, rodR, troughRMin, troughRMax, troughSPhi, troughDPhi;
+      std::vector<double> troughAngles, x, y;
+      double electronCut, positronCut, gammaCut, photonCut;
+    };
+
   private:
+
+    std::vector<FCalModule> m_fcalModules;
+    void CreateFCalModule( G4LogicalVolume *motherLV, const FCalModule &m, G4Region *region );
 
     std::vector<Volume> m_volumes;
     std::map<std::string, AbsorberSplit> m_absorberSplit;

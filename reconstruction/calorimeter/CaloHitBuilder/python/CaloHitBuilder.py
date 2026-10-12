@@ -73,6 +73,20 @@ class CaloHitBuilder(Logger):
             self.__recoAlgs.append(alg)
             self.OutputCollectionKeys.append(samp.CollectionKey)
 
+        # ATLAS FCal with its electrodes (F41 conserto 22; geometry/python/v1/FCAL.py): one maker per module and side, only
+        # for the free-running hits (no hit collection, so not merged)
+        if self.FreeRunningHits:
+            for fm in getattr(self.__detector, 'fcal_modules', []):
+                MSG_INFO(self, "Create CaloHitMaker for %s (free-running hits only)", fm.Name)
+                self.__recoAlgs.append( CaloHitMaker("CaloHitMaker", fm,
+                                                     OutputCollectionKey="Collection_" + fm.name(),
+                                                     HistogramPath=self.HistogramPath + '/' + fm.name(),
+                                                     OutputLevel=self.OutputLevel,
+                                                     ActiveEnergyOnly=self.ActiveEnergyOnly,
+                                                     BirksLaw=self.BirksLaw,
+                                                     FreeRunningHits=self.FreeRunningHits,
+                                                     FreeRunningBinning=self.FreeRunningBinning) )
+
         MSG_INFO(
             self,
             "Create CaloHitMerge and dump all hit collections into"

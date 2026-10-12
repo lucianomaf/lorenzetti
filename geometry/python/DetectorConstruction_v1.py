@@ -27,6 +27,8 @@ from geometry.v1.AtlasBarrelFront import ATLAS_BARREL_FRONT_MIXTURES, ATLAS_BARR
 from geometry.v1.AtlasBarrelCryostat import ATLAS_BARREL_CRYOSTAT_MIXTURES
 from geometry.v1.AtlasFCal        import ATLAS_FCAL_MIXTURES
 from geometry.v1.DeadMaterials    import getAtlasFcalCfg
+from geometry.v1.AtlasFCal        import ATLAS_FCAL_CELL_MATERIALS
+from geometry.v1.FCAL             import getAtlasFcalCellsCfg
 #from geometry.detectors.Tracking      import *
 
 
@@ -59,6 +61,8 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasHec          : bool=False,
                 AtlasEmec         : bool=False,
                 AtlasFcal         : bool=False,
+                AtlasFcalCells    : bool=False,
+                AtlasFcalElectrodes : str="",
                 TileAtlasGap      : bool=False,
               ):
 
@@ -72,6 +76,9 @@ class DetectorConstruction_v1( Cpp ):
 
     self.samplings = []
     self.volumes = []
+    # Modules of the ATLAS FCal with their electrodes (AtlasFcalCells; geometry/python/v1/FCAL.py): built by AddFCalModule;
+    # their hit makers only feed the free-running hits (CaloHitBuilder)
+    self.fcal_modules = []
     # Mixtures defined by the geometry (name: (density in g/cm3, {element symbol: mass fraction})).
     self.mixtures = {}
     # With AtlasEmbCells and AtlasMaterialInFront the material in front of the barrel accordion is that of ATLAS, piece by
@@ -162,9 +169,19 @@ class DetectorConstruction_v1( Cpp ):
       self.volumes.extend( getAtlasHecPassiveCfg(left_side=True) )
     # Forward calorimeter of ATLAS as passive material, without cells (geometry/python/v1/AtlasFCal.py; F41 conserto 20).
     # Simulation only.
+    # With AtlasFcalCells (needs AtlasFcal) the modules are built as in ATLAS, a tube of absorber with one liquid argon gap per
+    # electrode and the cable troughs, the electrodes read from the CSV file AtlasFcalElectrodes (the table LArFCalElectrodes
+    # of the ATLAS geometry database, written by geometry/scripts/fcal_electrodes_from_geomdb.py; F41 conserto 22).
+    if AtlasFcalCells and not AtlasFcal:
+      raise ValueError("AtlasFcalCells needs AtlasFcal.")
     if AtlasFcal:
       self.mixtures.update( ATLAS_FCAL_MIXTURES )
-      self.volumes.extend( getAtlasFcalCfg() )
+      self.volumes.extend( getAtlasFcalCfg(cells=AtlasFcalCells) )
+    if AtlasFcalCells:
+      if not AtlasFcalElectrodes:
+        raise ValueError("AtlasFcalCells needs the file of the FCal electrodes (AtlasFcalElectrodes).")
+      self.mixtures.update( ATLAS_FCAL_CELL_MATERIALS )
+      self.fcal_modules = getAtlasFcalCellsCfg( AtlasFcalElectrodes )
     # Volumes of the ATLAS-like EMEC (radial bands and steps of the two wheels); their cells come from the samplings.
     if AtlasEmec:
       self.volumes.extend( getAtlasEmecVolumesCfg() )
@@ -214,6 +231,18 @@ class DetectorConstruction_v1( Cpp ):
         self._core.SetPolycone( pv.Name, zs, r0, r1 )
       if pv.InSolenoidField:
         self._core.SetInSolenoidField( pv.Name )
+
+    # Modules of the ATLAS FCal with their electrodes (F41 conserto 22)
+    def dvec( values ):
+      v = vector('double')()
+      for x in values: v.push_back(x)
+      return v
+    for fm in self.fcal_modules:
+      self._core.AddFCalModule( fm.Name, fm.Absorber, fm.RodMaterial, fm.TroughMaterial,
+                                fm.RMin, fm.RMax, fm.Z, fm.HalfZ, fm.GapRMin, fm.GapRMax, fm.RodR,
+                                fm.TroughRMin, fm.TroughRMax, fm.TroughSPhi, fm.TroughDPhi, dvec(fm.TroughAngles),
+                                dvec(fm.X), dvec(fm.Y),
+                                fm.Cuts.ElectronCut, fm.Cuts.PositronCut, fm.Cuts.GammaCut, fm.Cuts.PhotonCut )
 
   def summary(self):
 

@@ -215,6 +215,21 @@ class CaloHitMaker : public Gaugi::Algorithm
     // Birks constant of the liquid argon (k of LArG4BirksLaw): 0.05832 (default; ATLAS barrel, presamplers and EMEC) or
     // 0.0486 (ATLAS HEC and FCAL, LArG4HECConfig.py)
     double m_birksLArK;
+
+    // ATLAS FCal with its electrodes (F41 conserto 22; geometry/python/v1/FCAL.py, --atlas-fcal-cells): with FCalModule > 0
+    // (1-3) the maker takes only the steps in the liquid argon gaps of its module (the logical volume FCalGapVolume), the cell
+    // of a step is the tile of the copy number of its gap (FCalCopyEtaIndex, FCalCopyPhiIndex; the centre of the tile in
+    // FCalCopyEta, FCalCopyPhi), as in the ATLAS simulation (LArFCALCalculatorBase), and the deposits go only to the
+    // free-running hits (LArHitFCAL): the maker records no hit collection. 0 (the default): off.
+    int m_fcalModule;
+    int m_fcalSide;
+    std::string m_fcalGapVolume;
+    std::vector<int>   m_fcalCopyEtaIndex;
+    std::vector<int>   m_fcalCopyPhiIndex;
+    std::vector<float> m_fcalCopyEta;
+    std::vector<float> m_fcalCopyPhi;
+    bool isFCal() const { return m_fcalModule > 0; }
+    void freeRunningFCal( SG::EventContext &ctx, const G4Step *step ) const;
 };
 
 

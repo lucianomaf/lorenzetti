@@ -8,6 +8,8 @@
 #include "G4LogicalVolume.hh"
 #include "G4PVPlacement.hh"
 #include "G4PVReplica.hh"
+#include "G4RotationMatrix.hh"
+#include "G4Transform3D.hh"
 #include "G4GlobalMagFieldMessenger.hh"
 #include "G4ProductionCuts.hh"
 #include "G4AutoDelete.hh"
@@ -122,6 +124,18 @@ void DetectorConstruction_v1::SetPolycone(std::string region, std::vector<double
 void DetectorConstruction_v1::SetInSolenoidField(std::string region)
 {
   m_inSolenoidField.insert(region);
+}
+
+void DetectorConstruction_v1::AddFCalModule(std::string name, std::string absorberMaterial, std::string rodMaterial,
+                                            std::string troughMaterial, double rMin, double rMax, double z, double halfZ,
+                                            double gapRMin, double gapRMax, double rodR, double troughRMin, double troughRMax,
+                                            double troughSPhi, double troughDPhi, std::vector<double> troughAngles,
+                                            std::vector<double> x, std::vector<double> y,
+                                            double electronCut, double positronCut, double gammaCut, double photonCut)
+{
+  m_fcalModules.push_back(FCalModule{name, absorberMaterial, rodMaterial, troughMaterial, rMin, rMax, z, halfZ, gapRMin, gapRMax,
+                                     rodR, troughRMin, troughRMax, troughSPhi, troughDPhi, troughAngles, x, y,
+                                     electronCut, positronCut, gammaCut, photonCut});
 }
 
 
@@ -271,6 +285,19 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
       MSG_FATAL("Volume type is not recognize. Abort!");
     }
   }// Loop over volumes
+
+  // Modules of the ATLAS FCal with their electrodes (F41 conserto 22)
+  for (auto &fm : m_fcalModules){
+    MSG_INFO( "Creating FCal module " << fm.name << " with " << fm.x.size() << " electrodes" );
+    auto region = GetRegion(fm.name);
+    CreateFCalModule( worldLV, fm, region );
+    G4ProductionCuts* cuts=new G4ProductionCuts();
+    cuts->SetProductionCut(fm.gammaCut,"gamma");
+    cuts->SetProductionCut(fm.electronCut,"e-");
+    cuts->SetProductionCut(fm.positronCut,"e+");
+    cuts->SetProductionCut(fm.photonCut,"proton");
+    region->SetProductionCuts(cuts);
+  }
 
   return worldPV;
 }
@@ -781,4 +808,52 @@ void DetectorConstruction_v1::CreatePolycone( G4LogicalVolume *motherLV, std::st
 G4Region* DetectorConstruction_v1::GetRegion( std::string name ){
   auto reg = G4RegionStore::GetInstance()->GetRegion(name);
   return reg ? reg : new G4Region(name);
+}
+
+
+// One module of the ATLAS FCal with its electrodes (F41 conserto 22), as the ATLAS geometry builds it (Athena,
+// LArCalorimeter/LArGeoModel/LArGeoFcal/src/FCALConstruction.cxx; dimensions and materials of the public GeoModel geometry,
+// geometry/python/v1/AtlasFCal.py): the absorber, then its daughters in the order of the GeoModel, the cable troughs and the
+// gaps, the gap k with copy number k (GeoSerialIdentifier(0)), with the rod of FCal2 and FCal3 as daughter of the gap. In the
+// ATLAS geometry two electrodes of FCal1 reach into a cable trough; they are kept as they are. The overlaps of the troughs and
+// of the gaps are not checked here (tens of thousands of daughters).
+void DetectorConstruction_v1::CreateFCalModule( G4LogicalVolume *motherLV, const FCalModule &m, G4Region *region )
+{
+  if (m_cutOnPhi){
+    MSG_FATAL("The FCal with its electrodes (" << m.name << ") cannot be built with CutOnPhi. Abort!");
+  }
+  G4Material *absorber = G4Material::GetMaterial(m.absorberMaterial);
+  G4Material *trough   = G4Material::GetMaterial(m.troughMaterial);
+  G4Material *lar      = G4Material::GetMaterial("liquidArgon");
+  G4Material *rod      = m.rodR > 0 ? G4Material::GetMaterial(m.rodMaterial) : nullptr;
+  if ( !absorber || !trough || !lar || (m.rodR > 0 && !rod) || m.x.size() != m.y.size() ){
+    G4ExceptionDescription msg;
+    msg << "Cannot build the FCal module " << m.name;
+    G4Exception("DetectorConstruction_v1::CreateFCalModule()", "MyCode0004", FatalException, msg);
+  }
+
+  auto *absS  = new G4Tubs( m.name, m.rMin, m.rMax, m.halfZ, 0*deg, 360*deg );
+  auto *absLV = new G4LogicalVolume( absS, absorber, m.name );
+  new G4PVPlacement( 0, G4ThreeVector(0, 0, m.z), absLV, m.name, motherLV, false, 0, m_checkOverlaps );
+  region->AddRootLogicalVolume(absLV);
+
+  // cable troughs
+  auto *trS  = new G4Tubs( m.name + "::CableTrough", m.troughRMin, m.troughRMax, m.halfZ, m.troughSPhi, m.troughDPhi );
+  auto *trLV = new G4LogicalVolume( trS, trough, m.name + "::CableTrough" );
+  for (size_t k = 0; k < m.troughAngles.size(); ++k){
+    G4RotationMatrix rot; rot.rotateZ( m.troughAngles[k] );
+    new G4PVPlacement( G4Transform3D(rot, G4ThreeVector()), trLV, m.name + "::CableTrough", absLV, false, (G4int)k, false );
+  }
+
+  // gaps of liquid argon, one per electrode (the sensitive volume), with the rod inside in FCal2 and FCal3
+  auto *gapS  = new G4Tubs( m.name + "::Gap", m.gapRMin, m.gapRMax, m.halfZ, 0*deg, 360*deg );
+  auto *gapLV = new G4LogicalVolume( gapS, lar, m.name + "::Gap" );
+  if (rod){
+    auto *rodS  = new G4Tubs( m.name + "::Rod", 0, m.rodR, m.halfZ, 0*deg, 360*deg );
+    auto *rodLV = new G4LogicalVolume( rodS, rod, m.name + "::Rod" );
+    new G4PVPlacement( 0, G4ThreeVector(), rodLV, m.name + "::Rod", gapLV, false, 0, false );
+  }
+  for (size_t k = 0; k < m.x.size(); ++k){
+    new G4PVPlacement( 0, G4ThreeVector(m.x[k], m.y[k], 0), gapLV, m.name + "::Gap", absLV, false, (G4int)k, false );
+  }
 }

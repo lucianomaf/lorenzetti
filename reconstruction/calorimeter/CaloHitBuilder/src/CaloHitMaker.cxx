@@ -15,6 +15,8 @@
 #include "G4SystemOfUnits.hh"
 #include "G4Step.hh"
 #include "G4Material.hh"
+#include "G4VPhysicalVolume.hh"
+#include "G4LogicalVolume.hh"
 #include <cmath>
 
 #include "TH1F.h"
@@ -146,6 +148,15 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "ReplaceSampling"          , m_replaceSampling=0                   );
   declareProperty( "ReplaceRCentre"           , m_replaceRCentre=0                    );
   declareProperty( "ReplaceZCentre"           , m_replaceZCentre=0                    );
+  // ATLAS FCal with its electrodes (F41 conserto 22): module (1-3; 0 = off), side (+1, -1), logical volume of its gaps, and
+  // the cell (dictionary eta and phi indices) and tile centre of each copy number
+  declareProperty( "FCalModule"               , m_fcalModule=0                        );
+  declareProperty( "FCalSide"                 , m_fcalSide=1                          );
+  declareProperty( "FCalGapVolume"            , m_fcalGapVolume=""                    );
+  declareProperty( "FCalCopyEtaIndex"         , m_fcalCopyEtaIndex                    );
+  declareProperty( "FCalCopyPhiIndex"         , m_fcalCopyPhiIndex                    );
+  declareProperty( "FCalCopyEta"              , m_fcalCopyEta                         );
+  declareProperty( "FCalCopyPhi"              , m_fcalCopyPhi                         );
 
 
 
@@ -193,6 +204,12 @@ StatusCode CaloHitMaker::initialize()
     }
   }
 
+  if( isFCal() && ( !m_freeRunningHits || m_fcalModule > 3 || m_fcalGapVolume.empty() || m_fcalCopyEtaIndex.empty() ||
+                    m_fcalCopyPhiIndex.size() != m_fcalCopyEtaIndex.size() || m_fcalCopyEta.size() != m_fcalCopyEtaIndex.size() ||
+                    m_fcalCopyPhi.size() != m_fcalCopyEtaIndex.size() || useCells() ) ){
+    MSG_FATAL( "FCalModule needs the free-running hits and the cell of every electrode (geometry/python/v1/FCAL.py)." );
+  }
+
   return StatusCode::SUCCESS;
 }
 
@@ -234,6 +251,9 @@ StatusCode CaloHitMaker::pre_execute( EventContext &ctx ) const
     SG::WriteHandle<CaloFreeRunningHitList> list( m_freeRunningListKey, ctx );
     list.record( std::unique_ptr<CaloFreeRunningHitList>(new CaloFreeRunningHitList()) );
   }
+
+  // The ATLAS FCal makers feed only the free-running hits: no hit collection
+  if( isFCal() ) return StatusCode::SUCCESS;
 
   // Build the CaloHitCollection and attach into the EventContext
   // Create the hit collection into the event context
@@ -311,6 +331,12 @@ StatusCode CaloHitMaker::pre_execute( EventContext &ctx ) const
  */
 StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
 {
+  // ATLAS FCal with its electrodes: the cell from the copy number of the gap, only to the free-running hits
+  if( isFCal() ){
+    freeRunningFCal( ctx, step );
+    return StatusCode::SUCCESS;
+  }
+
   SG::ReadHandle<xAOD::CaloHitCollection> collection( m_collectionKey, ctx );
 
   if( !collection.isValid() ){
@@ -625,6 +651,63 @@ void CaloHitMaker::freeRunningLAr( SG::EventContext &ctx, const G4Step *step, in
 
 //!=====================================================================
 
+// Free-running hits of the ATLAS FCal with its electrodes (F41 conserto 22), as the ATLAS simulation makes them (Athena,
+// LArCalorimeter/LArG4/LArG4FCAL/src/LArFCALCalculatorBase.cc; copies and report in the F41 notes of the group,
+// c22_fcal_celulas/):
+// - sensitive: only the liquid argon gaps of the module (LArG4SDToolConfig.py: LAr::FCAL::Module<m>::Gap); not the rods;
+// - cell: the tile of the copy number of the gap (FCAL_ChannelMap::getTubeByCopyNumber), from the table LArFCalElectrodes of
+//   the ATLAS geometry database (geometry/python/v1/FCAL.py);
+// - identifier: channel_id(pos_neg, module, eta, phi) of LArFCAL_ID, pos_neg = +2 for the mid point of the step at z > 0 and -2
+//   otherwise; the 32-bit compact identifier in the upper half of the 64-bit integer, with the bit layout read from the ATLAS
+//   HITS ntuple (c22_bits_fcal_5k.py): LArCalorimeter 1 (3 bits) | part 5 (3) | pos_neg -2 -> 0, +2 -> 1 (1) | module - 1 (2) |
+//   eta (6) | phi (4) | 0 (13);
+// - energy: the deposit of the step with Birks' law (BirksLaw, BirksLArK = 0.0486 as LArG4FCALConfig.py, field 10 kV/cm); no
+//   high voltage scale (FCALHVEnable is false by default);
+// - time: mean of the pre- and post-step global times minus |r|/c of the mid point, in ns; time bins and sums as the other LAr
+//   (LArG4SimpleSD, TimeBinType Default; see freeRunningLAr); no time window.
+void CaloHitMaker::freeRunningFCal( SG::EventContext &ctx, const G4Step *step ) const
+{
+  const G4StepPoint *preP = step->GetPreStepPoint(), *postP = step->GetPostStepPoint();
+  const G4VPhysicalVolume *pv = preP->GetPhysicalVolume();
+  if( !pv || pv->GetLogicalVolume()->GetName() != m_fcalGapVolume ) return;
+  if( m_activeEnergyOnly ){
+    const G4Material *material = preP->GetMaterial();
+    if( !material || material->GetName() != "liquidArgon" ) return;
+  }
+  const int copy = pv->GetCopyNo();
+  if( copy < 0 || copy >= (int)m_fcalCopyEtaIndex.size() ){
+    MSG_FATAL( "FCal module " << m_fcalModule << ": copy number " << copy << " without a cell" );
+  }
+  const float edep = m_birksLaw ? birksEnergy(step) : (float)step->GetTotalEnergyDeposit();
+  if( edep <= 0 ) return;
+
+  SG::ReadHandle<CaloFreeRunningHitList> list( m_freeRunningListKey, ctx );
+  if( !list.isValid() ){
+    MSG_FATAL("It's not possible to retrieve the CaloFreeRunningHitList using this key: " << m_freeRunningListKey);
+  }
+  const G4ThreeVector mid = 0.5 * ( preP->GetPosition() + postP->GetPosition() );
+  const int posNeg = mid.z() > 0 ? 2 : -2;
+  const unsigned long long id32 = (1ULL << 29) | (5ULL << 26) | ((unsigned long long)(posNeg > 0 ? 1 : 0) << 25)
+                                | ((unsigned long long)(m_fcalModule - 1) << 23)
+                                | ((unsigned long long)m_fcalCopyEtaIndex[copy] << 17)
+                                | ((unsigned long long)m_fcalCopyPhiIndex[copy] << 13);
+  const long long cellID = (long long)( id32 << 32 );
+  const double tglobal = 0.5 * ( preP->GetGlobalTime() + postP->GetGlobalTime() ) / ns;
+  const double t = tglobal - mid.mag() / CLHEP::c_light;
+  int timeBin = -1;   // -1: no binning (one entry per step)
+  if( m_freeRunningBinning ){
+    if     ( t < 0.   ) timeBin = 0;
+    else if( t < 10.  ) timeBin = (int)( t / 2.5 );
+    else if( t < 50.  ) timeBin = 4 + (int)( ( t - 10. ) / 5. );
+    else if( t < 100. ) timeBin = 12 + (int)( ( t - 50. ) / 25. );
+    else                timeBin = 14;
+  }
+  // the module goes to the field sampling of the list (LArHitFCAL_module), pos_neg to side
+  list->addLAr( cellID, edep / MeV, t, tglobal, m_fcalCopyEta[copy], m_fcalCopyPhi[copy], m_fcalModule, posNeg, 0, 4, timeBin );
+}
+
+//!=====================================================================
+
 // Energy of the step after Birks' law, following the ATLAS simulation (Athena):
 // - plastic scintillator (TileGeoG4SDCalc::BirkLaw): E / (1 + kB dE/dx), kB = 0.02002 g/(MeV cm2)
 //   ("value updated for G4 10.6.p03"), second-order term 0, only for charged particles,
@@ -686,9 +769,11 @@ StatusCode CaloHitMaker::post_execute( EventContext &/*ctx*/ ) const
 
 StatusCode CaloHitMaker::fillHistograms( EventContext &ctx ) const
 {
+  // the ATLAS FCal makers have no hit collection
+  if( isFCal() ) return StatusCode::SUCCESS;
   auto store = ctx.getStoreGateSvc();
   SG::ReadHandle<xAOD::CaloHitCollection> collection( m_collectionKey, ctx );
- 
+
   if( !collection.isValid() ){
     MSG_FATAL("It's not possible to retrieve the CaloHitCollection using this key: " << m_collectionKey);
   }

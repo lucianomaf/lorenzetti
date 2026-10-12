@@ -291,14 +291,19 @@ def getAtlasBarrelFrontCfg():
     return _volumesFromTable(ATLAS_BARREL_FRONT_VOLUMES)
 
 
-def getAtlasFcalCfg():
+def getAtlasFcalCfg(cells=False):
     """
     The ATLAS forward calorimeter as passive material, without cells, on both sides (geometry/python/v1/AtlasFCal.py): the
     three modules as tubes of the mean mixture of absorber, rods and liquid argon (ATLAS_FCAL_MIXTURES, defined by
     DetectorConstruction_v1) and the liquid argon between them, at the nominal z of the public GeoModel geometry. F41
     conserto 20, 11/10/2026.
+
+    Args:
+        cells (bool): If True, only the liquid argon between the modules: the modules themselves are built with their
+                      electrodes (geometry/python/v1/FCAL.py, --atlas-fcal-cells; F41 conserto 22).
     """
-    return _volumesFromTable(ATLAS_FCAL_VOLUMES)
+    table = [v for v in ATLAS_FCAL_VOLUMES if not (cells and '::LAr' not in v['name'])]
+    return _volumesFromTable(table)
 
 
 def _volumesFromTable(table):

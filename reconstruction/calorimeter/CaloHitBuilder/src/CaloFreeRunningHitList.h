@@ -50,8 +50,9 @@ class CaloFreeRunningHitList : public SG::DataHandle
 
     /*! LAr deposit (F41 conserto 19): with timeBin >= 0 the deposits of a cell in the same time bin (LArG4SimpleSD,
         TimeBinType Default) go to one entry, with the energy weighted mean time (LArHit::Add and finalize); timeBin < 0:
-        one entry per deposit. det: 1 = EMB, 2 = EMEC, 3 = HEC (the container of the ATLAS ntuple). The fields sampling,
-        barrel_ec (or pos_neg) and region of the dictionary go to sampling, side and module. */
+        one entry per deposit. det: 1 = EMB, 2 = EMEC, 3 = HEC, 4 = FCAL (F41 conserto 22; the container of the ATLAS ntuple).
+        The fields sampling, barrel_ec (or pos_neg) and region of the dictionary go to sampling, side and module; in the FCAL,
+        the module goes to sampling and pos_neg to side. */
     void addLAr( long long cellID, double energy, double time, double tglobal, double eta, double phi,
                  int sampling, int barrelEc, int region, int det, int timeBin ) const
     {
@@ -68,7 +69,7 @@ class CaloFreeRunningHitList : public SG::DataHandle
     }
 
     size_t size() const { return m_cellID.size(); }
-    /*! 0 = tile, 1 = EMB, 2 = EMEC, 3 = HEC */
+    /*! 0 = tile, 1 = EMB, 2 = EMEC, 3 = HEC, 4 = FCAL */
     const std::vector<int>&       det()      const { return m_det;      }
     /*! hit time: the bin centre (tile, with binning) or the energy weighted mean time of the entry (LAr) [ns] */
     std::vector<double> hitTime() const

@@ -127,6 +127,17 @@ class CaloHitMaker( Cpp ):
     phi_shift = getattr( sampling.sensitive(), "PhiShift", None )
     if phi_shift:
       self.setProperty( "PhiShift"              , float(phi_shift)            )
+    # ATLAS FCal with its electrodes (F41 conserto 22; geometry/python/v1/FCAL.py): module, side, logical volume of the gaps
+    # and the cell and tile centre of each copy number (CaloHitMaker::freeRunningFCal)
+    fcal_module = getattr( sampling, "Module", None )
+    if fcal_module:
+      self.setProperty( "FCalModule"            , int(fcal_module)                         )
+      self.setProperty( "FCalSide"              , int(sampling.Side)                       )
+      self.setProperty( "FCalGapVolume"         , sampling.GapVolume                       )
+      self.setProperty( "FCalCopyEtaIndex"      , [int(x) for x in sampling.CopyEtaIndex]  )
+      self.setProperty( "FCalCopyPhiIndex"      , [int(x) for x in sampling.CopyPhiIndex]  )
+      self.setProperty( "FCalCopyEta"           , [float(x) for x in sampling.CopyEta]     )
+      self.setProperty( "FCalCopyPhi"           , [float(x) for x in sampling.CopyPhi]     )
     birks_k = getattr( sampling.sensitive(), "BirksLArK", None )
     if birks_k:
       self.setProperty( "BirksLArK"             , float(birks_k)              )

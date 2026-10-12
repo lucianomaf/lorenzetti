@@ -220,7 +220,7 @@ StatusCode CaloFreeRunningHitWriter::serialize( EventContext &ctx ) const
   Container emb ("LArHitEMB" , {"region", "sampling", "barrel_ec"});
   Container emec("LArHitEMEC", {"region", "sampling", "barrel_ec"});
   Container hec ("LArHitHEC" , {"region", "sampling", "pos_neg"});
-  Container fcal("LArHitFCAL", {"module"});   // FCAL out of the ATLAS-like LAr (decision of 06/10/2026): branches stay empty
+  Container fcal("LArHitFCAL", {"module"});   // filled with --atlas-fcal-cells (F41 conserto 22); empty without it
   tile.link(tree);
   emb.link(tree);
   emec.link(tree);
@@ -242,6 +242,10 @@ StatusCode CaloFreeRunningHitWriter::serialize( EventContext &ctx ) const
       // tile hits (per PMT), with the ATLAS identifier fields filled by CaloHitMaker::freeRunningTile
       tile.push( list->cellID()[i], list->energy()[i], hitTime[i], tglobal[i], list->eta()[i], list->phi()[i],
                  list->sampling()[i], list->side()[i], list->module()[i], list->tower()[i] );
+    }else if( det == 4 ){
+      // FCAL hits (F41 conserto 22; CaloHitMaker::freeRunningFCal): the module, kept in the field sampling of the list
+      fcal.push( list->cellID()[i], list->energy()[i], hitTime[i], tglobal[i], list->eta()[i], list->phi()[i],
+                 list->sampling()[i] );
     }else{
       // LAr hits (F41 conserto 19; CaloHitMaker::freeRunningLAr): region, sampling, barrel_ec / pos_neg, in the order of
       // the ATLAS ntuple branches (the list keeps sampling, barrel_ec and region in sampling, side and module)
