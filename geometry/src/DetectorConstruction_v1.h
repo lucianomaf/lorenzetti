@@ -9,6 +9,8 @@
 #include "G4Region.hh"
 #include "globals.hh"
 #include "G4Cache.hh"
+#include "G4Transform3D.hh"
+#include <memory>
 #include <map>
 #include <set>
 #include <vector>
@@ -22,6 +24,7 @@
 class G4VPhysicalVolume;
 
 class G4GlobalMagFieldMessenger;
+class AtlasGeoModelImport;
 
 class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgService, public Gaugi::PropertyService
 {
@@ -49,6 +52,9 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
       double gammaCut;
       double photonCut;
     };
+
+    // A cloned ATLAS volume that holds Lorenzetti volumes (--atlas-run4; F41 conserto 27)
+    struct AtlasContainer { G4LogicalVolume *lv; G4Transform3D x; int depth; std::string name; };
 
     DetectorConstruction_v1(std::string);
     virtual ~DetectorConstruction_v1();
@@ -121,6 +127,16 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
     // Geant4 settings of the ATLAS production (F41 conserto 24): liquid argon of 1.396 g/cm3, the prefixes of the volumes of the LAr
     // tree (photon Russian roulette) and the volumes of the dead material shower (AtlasDeadMaterialShower)
     bool m_atlasG4;
+    // The ATLAS Run 4 geometry of the simulation (F41 conserto 27): the GeoModel dump of the ATLAS geometry, its import, and the cloned ATLAS
+    // volumes that hold Lorenzetti volumes (deepest first) with their global transformation
+    bool m_atlasRun4;
+    std::string m_atlasRun4Geometry;
+    std::unique_ptr<AtlasGeoModelImport> m_atlasImport;
+    std::vector<AtlasContainer> m_atlasContainers;
+    std::map<G4LogicalVolume*, G4Transform3D> m_containerX;
+    void BuildAtlasRun4( G4LogicalVolume *worldLV );
+    G4LogicalVolume* MotherFor( const std::vector<G4ThreeVector> &points, G4LogicalVolume *worldLV ) const;
+    void PlaceGlobal( G4LogicalVolume *lv, const G4ThreeVector &pos, const std::string &name, G4LogicalVolume *motherLV );
     std::vector<std::string> m_larTreeVolumes;
     std::vector<std::string> m_deadMaterialVolumes;
     std::string m_fcalShowerLibDir;

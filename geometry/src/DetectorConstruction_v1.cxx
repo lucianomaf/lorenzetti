@@ -12,6 +12,9 @@
 #include "G4Transform3D.hh"
 #include "FCalFrozenShowerModel.h"
 #include "AtlasDeadMaterialShower.h"
+#include "AtlasGeoModelImport.h"
+#include <algorithm>
+#include <cmath>
 #include "G4Kernel/AtlasG4Settings.h"
 #include "G4GlobalMagFieldMessenger.hh"
 #include "G4ProductionCuts.hh"
@@ -75,6 +78,10 @@ DetectorConstruction_v1::DetectorConstruction_v1(std::string name)
   // Geant4 settings of the ATLAS production (F41 conserto 24)
   declareProperty( "AtlasG4"                    , m_atlasG4=false             );
   declareProperty( "LArTreeVolumes"             , m_larTreeVolumes            );
+  // The ATLAS Run 4 geometry of the simulation (--atlas-run4; F41 conserto 27): the inner detector (ITk, HGTD), the beam pipe and the
+  // end-cap cryostats of the LAr imported from the GeoModel dump AtlasRun4Geometry; world of air up to |z| = 21 m
+  declareProperty( "AtlasRun4"                  , m_atlasRun4=false           );
+  declareProperty( "AtlasRun4Geometry"          , m_atlasRun4Geometry=""      );
   declareProperty( "DeadMaterialVolumes"        , m_deadMaterialVolumes       );
   declareProperty( "FCalShowerLibDir"           , m_fcalShowerLibDir=""       );
   declareProperty( "OutputLevel"                , m_outputLevel=0             ); 
@@ -167,14 +174,16 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
   G4VSolid* worldS = new G4Tubs( "World",     // its name
                                  0,           // R min
                                  6*m,         // R max
-                                 10*m,        // Z max
+                                 m_atlasRun4 ? 21*m : 10*m,  // Z max (the forward beam pipe of ATLAS reaches |z| = 20.94 m)
                                  0*deg,       // phi_min
                                  (!m_cutOnPhi)?(360*deg):(235*deg)      // phi_max
                                  );
 
+  // the world of the ATLAS simulation is air (--atlas-run4)
+  G4Material *worldMaterial = m_atlasRun4 ? G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR") : defaultMaterial;
   G4LogicalVolume* worldLV = new G4LogicalVolume(
                                  worldS,           // its solid
-                                 defaultMaterial,  // its material
+                                 worldMaterial,    // its material
                                  "World");         // its name
 
   G4VPhysicalVolume* worldPV = new G4PVPlacement(
@@ -193,7 +202,10 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
   // Vacuum cylinder filling the inside of the ATLAS central solenoid, which carries the
   // solenoid field (see ConstructSDandField). Dimensions from JINST 3 (2008) S08003, table 2.1:
   // inner diameter 2.46 m, axial length 5.8 m. The coil and its cryostat are not modelled.
-  if (m_useSolenoidField){
+  if (m_useSolenoidField && m_atlasRun4){
+    MSG_INFO( "AtlasRun4: no solenoid field volume (the inner detector of ATLAS fills it)" );
+  }
+  if (m_useSolenoidField && !m_atlasRun4){
     if (m_useMagneticField){
       MSG_FATAL("UseSolenoidField and UseMagneticField cannot be enabled together. Abort!");
     }
@@ -212,6 +224,8 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
   }
 
 
+  if (m_atlasRun4) BuildAtlasRun4( worldLV );
+
   for (auto &volume : m_volumes){
 
     MSG_INFO( "Creating Volume with name " << volume.name );
@@ -220,6 +234,24 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
     if (m_inSolenoidField.count(volume.name)){
       if (m_solenoidLV){ motherLV = m_solenoidLV; }
       else{ MSG_INFO( "No solenoid field volume: " << volume.name << " placed in the world" ); }
+    }
+    // inside the deepest imported ATLAS volume that contains it (--atlas-run4): points of its (r, z) outline at four phi
+    if (!m_atlasContainers.empty()){
+      std::vector<G4ThreeVector> pts;
+      std::vector<std::pair<double,double>> rz;
+      auto pc = m_polycones.find(volume.name);
+      if (volume.plates == 2 && pc != m_polycones.end()){
+        for (size_t k = 0; k < pc->second.z.size(); ++k){
+          rz.push_back({pc->second.rmin[k], pc->second.z[k]}); rz.push_back({pc->second.rmax[k], pc->second.z[k]});
+          rz.push_back({0.5*(pc->second.rmin[k] + pc->second.rmax[k]), pc->second.z[k]});
+        }
+      }else{
+        for (double r : {volume.rMin, 0.5*(volume.rMin + volume.rMax), volume.rMax})
+          for (double z : {volume.z - 0.5*volume.zSize, volume.z, volume.z + 0.5*volume.zSize}) rz.push_back({r, z});
+      }
+      for (auto &p : rz)
+        for (double phi : {0.1, 1.67, 3.24, 4.81}) pts.push_back( G4ThreeVector( p.first*std::cos(phi), p.first*std::sin(phi), p.second ) );
+      motherLV = MotherFor( pts, worldLV );
     }
 
     if(volume.plates == 0){ //Plates::Horizontal){
@@ -303,7 +335,14 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
   for (auto &fm : m_fcalModules){
     MSG_INFO( "Creating FCal module " << fm.name << " with " << fm.x.size() << " electrodes" );
     auto region = GetRegion(fm.name);
-    CreateFCalModule( worldLV, fm, region );
+    G4LogicalVolume *fcalMother = worldLV;
+    if (!m_atlasContainers.empty()){
+      std::vector<G4ThreeVector> pts;
+      for (double r : {fm.rMin, fm.rMax}) for (double z : {fm.z - fm.halfZ, fm.z + fm.halfZ}) for (double phi : {0.1, 1.67, 3.24, 4.81})
+        pts.push_back( G4ThreeVector( r*std::cos(phi), r*std::sin(phi), z ) );
+      fcalMother = MotherFor( pts, worldLV );
+    }
+    CreateFCalModule( fcalMother, fm, region );
     G4ProductionCuts* cuts=new G4ProductionCuts();
     cuts->SetProductionCut(fm.gammaCut,"gamma");
     cuts->SetProductionCut(fm.electronCut,"e-");
@@ -479,15 +518,7 @@ void DetectorConstruction_v1::CreateHorizontalPlates(  G4LogicalVolume *worldLV,
   G4LogicalVolume* calorLV = new G4LogicalVolume( calorimeterS,     // its solid
                                                   defaultMaterial,  // its material
                                                   name);   // its name
-  new G4PVPlacement(
-                 0,                 // no rotation
-                 center_pos,        // at (0,0,0)
-                 calorLV,           // its logical volume
-                 name,              // its name
-                 worldLV,           // its mother  volume
-                 false,             // no boolean operation
-                 0,                 // copy number
-                 m_checkOverlaps);  // checking overlaps
+  PlaceGlobal( calorLV, center_pos, name, worldLV );
   
   region->AddRootLogicalVolume(calorLV);
 
@@ -653,15 +684,7 @@ void DetectorConstruction_v1::CreateVerticalPlates(  G4LogicalVolume *worldLV,
                                                   name);   // its name
 
 
-  new G4PVPlacement(
-                 0,                 // no rotation
-                 center_pos,        // at (0,0,0)
-                 calorLV,           // its logical volume
-                 name,              // its name
-                 worldLV,           // its mother  volume
-                 false,             // no boolean operation
-                 0,                 // copy number
-                 m_checkOverlaps);  // checking overlaps
+  PlaceGlobal( calorLV, center_pos, name, worldLV );
   
   region->AddRootLogicalVolume(calorLV);
 
@@ -847,7 +870,7 @@ void DetectorConstruction_v1::CreatePolycone( G4LogicalVolume *motherLV, std::st
   auto *solid = new G4Polycone( name, 0*deg, (!m_cutOnPhi)?(360*deg):(235*deg), (G4int)planes.z.size(),
                                 planes.z.data(), planes.rmin.data(), planes.rmax.data() );
   auto *lv = new G4LogicalVolume( solid, material, name );
-  new G4PVPlacement( 0, G4ThreeVector(), lv, name, motherLV, false, 0, m_checkOverlaps );
+  PlaceGlobal( lv, G4ThreeVector(), name, motherLV );
   region->AddRootLogicalVolume(lv);
 }
 
@@ -881,7 +904,7 @@ void DetectorConstruction_v1::CreateFCalModule( G4LogicalVolume *motherLV, const
 
   auto *absS  = new G4Tubs( m.name, m.rMin, m.rMax, m.halfZ, 0*deg, 360*deg );
   auto *absLV = new G4LogicalVolume( absS, absorber, m.name );
-  new G4PVPlacement( 0, G4ThreeVector(0, 0, m.z), absLV, m.name, motherLV, false, 0, m_checkOverlaps );
+  PlaceGlobal( absLV, G4ThreeVector(0, 0, m.z), m.name, motherLV );
   region->AddRootLogicalVolume(absLV);
 
   // cable troughs
@@ -903,4 +926,102 @@ void DetectorConstruction_v1::CreateFCalModule( G4LogicalVolume *motherLV, const
   for (size_t k = 0; k < m.x.size(); ++k){
     new G4PVPlacement( 0, G4ThreeVector(m.x[k], m.y[k], 0), gapLV, m.name + "::Gap", absLV, false, (G4int)k, false );
   }
+}
+
+// The ATLAS Run 4 geometry of the simulation (--atlas-run4; F41 conserto 27), read from the GeoModel dump of ATLAS-P2-RUN4-01-01-00 made in
+// the simulation mode (geometry/scripts/atlas_run4_dumpgeo.sh):
+// - the beam pipe (BeamPipeCentral, BeamPipeFwd on both sides), the ITk (ITkPixel, ITkStrip) and the HGTD, whole and passive;
+// - the end-cap cryostats of the LAr (the children of LAr::Endcap::Cryostat::MotherVolume, whose own material is the air of the world)
+//   without the volumes that Lorenzetti builds (EMEC wheels, HEC modules, FCal modules, end-cap presampler argon); the ATLAS volumes that
+//   held them (LAr::Endcap::Cryostat::EmecHecLAr, LAr::EMEC::Mother, LAr::HEC::LiquidArgon, LAr::FCAL::LiquidArgonC, the cold front wall
+//   of the presampler) are cloned per side and receive the Lorenzetti volumes (MotherFor, PlaceGlobal);
+// - with AtlasG4, the regions of the ATLAS simulation on these volumes (Athena release 23.0.14, G4PhysicsRegionConfig.py, as
+//   getATLAS_RegionCreatorList activates them for Run 4): ITkPixel, ITkStrip and HGTD on their sensors (0.05 mm), EMEC on
+//   LAr::EMEC::Mother (0.1 mm), HEC on LAr::HEC::LiquidArgon (1 mm), FCAL on LAr::FCAL::LiquidArgonC (0.03 mm) and DeadMaterial (1 mm,
+//   with the dead material shower) on the cylinders and cones of the end-cap cryostats and the sections F191-F199 of the forward beam
+//   pipe. The volume names are those of the ATLAS configuration, including the two pixel sensor names that do not exist in this
+//   geometry (InnerQuadMod_Sensor, OuterQuadMod_Sensor; notes of the group, achados_athena_para_reportar.md, item 8).
+void DetectorConstruction_v1::BuildAtlasRun4( G4LogicalVolume *worldLV )
+{
+  if (!AtlasGeoModelImport::available()){
+    MSG_FATAL( "AtlasRun4 needs Lorenzetti built with the GeoModel libraries (GEOMODEL_DIR). Abort!" );
+  }
+  if (m_atlasRun4Geometry.empty()){
+    MSG_FATAL( "AtlasRun4 needs the GeoModel dump of the ATLAS geometry of the simulation (AtlasRun4Geometry). Abort!" );
+  }
+  MSG_INFO( "AtlasRun4: importing the ATLAS geometry of the simulation from " << m_atlasRun4Geometry );
+  m_atlasImport.reset( new AtlasGeoModelImport( m_atlasRun4Geometry ) );
+  m_atlasImport->placeWorldChildren( worldLV, {"BeamPipeCentral", "BeamPipeFwd", "ITkPixel", "ITkStrip", "HGTD"}, m_checkOverlaps );
+  const std::vector<std::string> dropped = { "LAr::EMEC::Pos::InnerWheel", "LAr::EMEC::Pos::OuterWheel", "LAr::EMEC::Neg::InnerWheel",
+                                             "LAr::EMEC::Neg::OuterWheel", "LAr::HEC::Module", "LAr::FCAL::Module",
+                                             "LAr::Endcap::Presampler::LiquidArgon" };
+  for (auto &c : m_atlasImport->placeUnwrapped( worldLV, "LAr::Endcap::Cryostat::MotherVolume", dropped, m_checkOverlaps )){
+    m_atlasContainers.push_back( AtlasContainer{ c.lv, c.x, c.depth, c.name } );
+    m_containerX[c.lv] = c.x;
+  }
+  std::stable_sort( m_atlasContainers.begin(), m_atlasContainers.end(),
+                    []( const AtlasContainer &a, const AtlasContainer &b ){ return a.depth > b.depth; } );
+  for (auto &c : m_atlasContainers) MSG_INFO( "AtlasRun4: container " << c.name << " (depth " << c.depth << ", z "
+                                              << c.x.getTranslation().z()/mm << " mm)" );
+
+  if (!m_atlasG4) return;
+  auto region = [&]( const std::string &name, const std::set<std::string> &volumes, double cut ){
+    auto lvs = m_atlasImport->logicalVolumes( volumes );
+    if (lvs.empty()){ MSG_INFO( "AtlasRun4: region " << name << " has no volume in this geometry" ); return; }
+    G4Region *r = GetRegion( name );
+    for (auto *lv : lvs) r->AddRootLogicalVolume( lv );
+    auto *cuts = new G4ProductionCuts();
+    cuts->SetProductionCut( cut*mm, "gamma" ); cuts->SetProductionCut( cut*mm, "e-" ); cuts->SetProductionCut( cut*mm, "e+" );
+    cuts->SetProductionCut( 1.0*mm, "proton" );
+    r->SetProductionCuts( cuts );
+    MSG_INFO( "AtlasRun4: region " << name << " (" << cut << " mm) on " << lvs.size() << " logical volumes" );
+  };
+  region( "ITkPixel", { "ITkPixel::InnerBarrelSingleMod_Sensor", "ITkPixel::InnerRingSingleMod_Sensor", "ITkPixel::InnerQuadMod_Sensor",
+                        "ITkPixel::OuterQuadMod_Sensor", "ITkPixel::InclinedQuadMod_Sensor" }, 0.05 );
+  region( "ITkStrip", { "ITkStrip::BRLSensorSS", "ITkStrip::BRLSensorMS", "ITkStrip::ECSensor0", "ITkStrip::ECSensor1",
+                        "ITkStrip::ECSensor2", "ITkStrip::ECSensor3", "ITkStrip::ECSensor4", "ITkStrip::ECSensor5",
+                        "ITkStrip::ECSensorBack0", "ITkStrip::ECSensorBack1", "ITkStrip::ECSensorBack2", "ITkStrip::ECSensorBack3",
+                        "ITkStrip::ECSensorBack4", "ITkStrip::ECSensorBack5" }, 0.05 );
+  region( "HGTD", { "HGTD::HGTDSiSensorPosL0", "HGTD::HGTDSiSensorPosL1", "HGTD::HGTDSiSensorPosL2", "HGTD::HGTDSiSensorPosL3",
+                    "HGTD::HGTDSiSensorNegL0", "HGTD::HGTDSiSensorNegL1", "HGTD::HGTDSiSensorNegL2", "HGTD::HGTDSiSensorNegL3",
+                    "HGTD::HGTDSiSensor" }, 0.05 );
+  const std::string cryo = "LAr::Endcap::Cryostat::MotherVolume::";
+  region( "EMEC", { cryo + "LAr::EMEC::Mother" }, 0.1 );
+  region( "HEC" , { cryo + "LAr::HEC::LiquidArgon" }, 1.0 );
+  region( "FCAL", { cryo + "LAr::FCAL::LiquidArgonC" }, 0.03 );
+  std::set<std::string> dm = { cryo + "LAr::Endcap::Cryostat::Cylinder", cryo + "LAr::Endcap::Cryostat::Cylinder::Mixed",
+                               cryo + "LAr::Endcap::Cryostat::Cone::Mixed", cryo + "LAr::Endcap::Cryostat::Cone" };
+  for (int k = 191; k < 200; ++k) dm.insert( "BeamPipeFwd::SectionF" + std::to_string(k) );
+  region( "DeadMaterial", dm, 1.0 );
+  if (G4RegionStore::GetInstance()->GetRegion( "DeadMaterial", false )) m_deadMaterialVolumes.push_back( "DeadMaterial" );
+}
+
+
+// The deepest imported ATLAS volume (--atlas-run4) whose solid contains all the points (global, mm), or the world.
+G4LogicalVolume* DetectorConstruction_v1::MotherFor( const std::vector<G4ThreeVector> &points, G4LogicalVolume *worldLV ) const
+{
+  for (const auto &c : m_atlasContainers){
+    const G4Transform3D inv = c.x.inverse();
+    bool all = true;
+    for (const auto &p : points){
+      const G4ThreeVector local = inv * G4Point3D( p );
+      if (c.lv->GetSolid()->Inside( local ) == kOutside){ all = false; break; }
+    }
+    if (all) return c.lv;
+  }
+  return worldLV;
+}
+
+
+// Places a Lorenzetti volume given at the global position pos (no rotation) in its mother: the world, or an imported ATLAS volume
+// (--atlas-run4), with the transformation to the frame of that volume (including the rotation of the C side).
+void DetectorConstruction_v1::PlaceGlobal( G4LogicalVolume *lv, const G4ThreeVector &pos, const std::string &name,
+                                           G4LogicalVolume *motherLV )
+{
+  auto it = m_containerX.find( motherLV );
+  if (it == m_containerX.end()){
+    new G4PVPlacement( 0, pos, lv, name, motherLV, false, 0, m_checkOverlaps );
+    return;
+  }
+  new G4PVPlacement( it->second.inverse() * G4Translate3D( pos ), lv, name, motherLV, false, 0, m_checkOverlaps );
 }

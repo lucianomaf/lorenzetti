@@ -67,9 +67,15 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasFcalShowerLibDir : str="",
                 AtlasG4           : bool=False,
                 TileAtlasGap      : bool=False,
+                AtlasRun4         : bool=False,
+                AtlasRun4Geometry : str="",
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
+    # The EMEC of the ATLAS Run 4 geometry of the simulation leaves the crack between its wheels to the transversal bars of ATLAS
+    # (geometry/python/v1/EMEC.py; F41 conserto 27)
+    import geometry.v1.EMEC as _emec
+    _emec.EMEC_ATLAS_CRACK_EDGES_INSIDE = bool(AtlasRun4)
 
     self.setProperty( "UseMagneticField", UseMagneticField  )
     # 2 T field only inside the ATLAS central solenoid volume (R < 1.23 m, |z| < 2.9 m);
@@ -205,6 +211,26 @@ class DetectorConstruction_v1( Cpp ):
     if AtlasEmbCells:
       self.samplings = [s for s in self.samplings if s.Sampling != CaloSampling.PSE]
       self.samplings.extend( getAtlasPseCfg() + getAtlasPseCfg(left_side=True) )
+    # The ATLAS Run 4 geometry of the simulation (geometry/python/v1/AtlasRun4.py; F41 conserto 27): the LAr end-cap (presampler, EMEC,
+    # HEC, FCal) 45 mm further from the interaction point, where the ATLAS simulation places it, with its cells. Needs the ATLAS-like
+    # end-cap and barrel options.
+    self.AtlasRun4 = AtlasRun4
+    if AtlasRun4:
+      if not (AtlasEmec and AtlasHec and AtlasEmbCells and AtlasFcalCells and AtlasEndcapCryostat):
+        raise ValueError("AtlasRun4 needs AtlasEmec, AtlasHec, AtlasEmbCells, AtlasFcalCells and AtlasEndcapCryostat.")
+      from geometry.v1.AtlasRun4 import shiftLArEndcap
+      shiftLArEndcap( self.volumes, self.samplings, self.fcal_modules )
+      # The end-cap cryostats are those of the ATLAS geometry, imported with the inner detector and the beam pipe from the GeoModel dump
+      # AtlasRun4Geometry (default: LORENZETTI_ATLAS_RUN4_GEOMETRY; geometry/scripts/atlas_run4_dumpgeo.sh writes it): the block of the
+      # EM crack, the cylinders of the end-cap cryostat of AtlasEndcapCryostat and the liquid argon between the HEC wheels (the bath of the
+      # cryostat, LAr::Endcap::Cryostat::EmecHecLAr, in ATLAS) leave
+      self.volumes = [ v for v in self.volumes if not v.Name.startswith( ('DM::Crack::EM', 'DM::EndcapCryostat', 'DM::HEC::WheelGap') ) ]
+      import os
+      geometry = AtlasRun4Geometry or os.environ.get( 'LORENZETTI_ATLAS_RUN4_GEOMETRY', '' )
+      if not geometry:
+        raise ValueError("AtlasRun4 needs the GeoModel dump of the ATLAS geometry (AtlasRun4Geometry or LORENZETTI_ATLAS_RUN4_GEOMETRY).")
+      self.setProperty( "AtlasRun4", True )
+      self.setProperty( "AtlasRun4Geometry", geometry )
     
   
   # Geant4 settings of the ATLAS production (F41 conserto 24; Athena release 23.0.14, G4PhysicsRegionConfig.py and

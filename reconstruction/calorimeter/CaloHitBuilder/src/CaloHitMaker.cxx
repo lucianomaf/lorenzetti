@@ -108,6 +108,9 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "EmbMode"                  , m_embMode=0                           );
   declareProperty( "EmbSampling"              , m_embSampling=0                       );
   declareProperty( "EmbRegion"                , m_embRegion=0                         );
+  // EmbMode = 2: the end-cap presampler moved by EmbZShift (mm) from its nominal |z| (the ATLAS end-cap of the simulation, --atlas-run4;
+  // F41 conserto 27); its eta is that of the point moved back, as the local coordinates of the ATLAS simulation. 0 (the default): none.
+  declareProperty( "EmbZShift"                , m_embZShift=0                         );
   // EmbMode = 3: ATLAS-like barrel presampler with the cell from the gap of the electrode (see psbGapCell); radius of the
   // middle of the active layer, in mm
   declareProperty( "PsbR0"                    , m_psbR0=0.                            );
@@ -1091,6 +1094,7 @@ int CaloHitMaker::psbGapCell( double x, double y, double z ) const
 int CaloHitMaker::embFindCell( double x, double y, double z ) const
 {
   if( m_embMode == 3 ) return psbGapCell( x, y, z );
+  if( m_embMode == 2 && m_embZShift != 0 ) z = std::copysign( std::fabs(z) - m_embZShift, z );
   const double mag = std::sqrt( x*x + y*y + z*z );
   double eta;
   if( mag == 0 ) eta = 0;

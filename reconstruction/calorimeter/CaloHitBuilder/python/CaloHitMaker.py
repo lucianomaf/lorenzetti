@@ -84,6 +84,9 @@ class CaloHitMaker( Cpp ):
         self.setProperty( "EmbMode"             , int(cells["EmbMode"])                   )
         self.setProperty( "EmbSampling"         , int(cells["EmbSampling"])               )
         self.setProperty( "EmbRegion"           , int(cells["EmbRegion"])                 )
+        # end-cap presampler moved with the ATLAS end-cap of the simulation (--atlas-run4; F41 conserto 27)
+        if "EmbZShift" in cells:
+          self.setProperty( "EmbZShift"         , float(cells["EmbZShift"])               )
       # ATLAS-like barrel EM with the sampling boundaries and rules of the ATLAS simulation (F41 conserto 18)
       if "EmbSampSeg" in cells:
         self.setProperty( "EmbSampSeg"          , bool(cells["EmbSampSeg"])               )

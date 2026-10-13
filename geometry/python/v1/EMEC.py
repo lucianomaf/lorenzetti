@@ -363,13 +363,23 @@ def atlasEmecAbsorberThickness(wheel):
             EMEC_ATLAS_ELECTRODE_PI)
 
 
+# With the ATLAS Run 4 geometry of the simulation (--atlas-run4; F41 conserto 27) the crack between the wheels holds the inner transversal
+# bars of ATLAS (LAr::EMEC::InnerTransversalBars, a conical shell of 1.5 mm in the middle of the 3 mm crack): the edges of the slices at the
+# crack are then taken at the end of the slice where the wheel is narrower (inner wheel: front; outer wheel: back), so that no step reaches
+# into the crack. Set by DetectorConstruction_v1 before the EMEC is built.
+EMEC_ATLAS_CRACK_EDGES_INSIDE = False
+
+
 def _atlasEmecSliceEdges(wheel, zmid):
     # inner and outer radius of the wheel at the middle z of a slice (side A)
+    half = 0.5 * EMEC_ATLAS_THICKNESS / EMEC_ATLAS_SLICES
     if wheel == "outer":
-        return (atlasEmecConeRadius(EMEC_ATLAS_ETA_MID, zmid) + EMEC_ATLAS_HALF_CRACK,
+        zc = zmid + half if EMEC_ATLAS_CRACK_EDGES_INSIDE else zmid
+        return (atlasEmecConeRadius(EMEC_ATLAS_ETA_MID, zc) + EMEC_ATLAS_HALF_CRACK,
                 min(atlasEmecConeRadius(EMEC_ATLAS_ETA_LOW, zmid), EMEC_ATLAS_R_OUTER))
+    zc = zmid - half if EMEC_ATLAS_CRACK_EDGES_INSIDE else zmid
     return (atlasEmecConeRadius(EMEC_ATLAS_ETA_HIGH, zmid),
-            atlasEmecConeRadius(EMEC_ATLAS_ETA_MID, zmid) - EMEC_ATLAS_HALF_CRACK)
+            atlasEmecConeRadius(EMEC_ATLAS_ETA_MID, zc) - EMEC_ATLAS_HALF_CRACK)
 
 
 def atlasEmecRings(wheel):

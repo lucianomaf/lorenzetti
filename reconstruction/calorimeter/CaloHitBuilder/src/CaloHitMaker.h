@@ -170,6 +170,8 @@ class CaloHitMaker : public Gaugi::Algorithm
     int m_embMode;
     int m_embSampling;
     int m_embRegion;
+    // EmbMode = 2: |z| subtracted before the eta of the end-cap presampler (the shift of the ATLAS end-cap, F41 conserto 27)
+    double m_embZShift;
     // EmbMode = 3: radius of the middle of the active layer of the barrel presampler (mm)
     double m_psbR0;
     // Barrel EM (EmbMode = 1, EmbSampling 1-3) with the sampling, region and cell of the ATLAS simulation (F41 conserto 18):

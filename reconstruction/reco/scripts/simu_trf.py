@@ -172,6 +172,14 @@ def parse_args():
                              "deposits multiplied by the track weight, the looper killer (1000100 steps, event aborted), the dead "
                              "material shower behind the FCal (|z| > 5698 mm in the endcap cryostat) and liquid argon of 1.396 g/cm3. "
                              "Simulation only. Off by default.")
+    parser.add_argument('--atlas-run4', action='store_true', dest='atlas_run4', required=False,
+                        help="The ATLAS Run 4 geometry of the simulation of the reference production (ATLAS-P2-RUN4-01-01-00, Athena "
+                             "23.0.14): the LAr end-cap (presampler, EMEC, HEC, FCal) 45 mm further from the interaction point, where the "
+                             "ATLAS simulation places it, with its cells. Needs --atlas-emec, --atlas-hec, --atlas-emb-cells, "
+                             "--atlas-fcal-cells and --atlas-endcap-cryostat. Simulation only. Off by default.")
+    parser.add_argument('--atlas-run4-geometry', action='store', dest='atlas_run4_geometry', required=False, type=str, default="",
+                        help="GeoModel dump of the ATLAS geometry of the simulation for --atlas-run4 (written by "
+                             "geometry/scripts/atlas_run4_dumpgeo.sh); default: the environment variable LORENZETTI_ATLAS_RUN4_GEOMETRY.")
     parser.add_argument('--free-running-atlas-format', action='store_true', dest='free_running_atlas_format', required=False,
                         help="Write the free-running hits as the ATLAS HITS ntuple: the LAr energy and time compressed as the ATLAS "
                              "HITS (LArHitContainerCnv_p2) and filtered as FilterHit_tf (LArHitFilter, including its layer cuts in the "
@@ -282,6 +290,8 @@ def main(logging_level: str,
          atlas_fcal_electrodes: str,
          atlas_fcal_frozen_showers: bool,
          atlas_g4: bool,
+         atlas_run4: bool,
+         atlas_run4_geometry: str,
          free_running_atlas_format: bool,
          tile_atlas_gap: bool,
          atlas_endcap_cryostat: bool,
@@ -372,7 +382,9 @@ def main(logging_level: str,
                                                         AtlasG4=atlas_g4,
                                                         TileAtlasGap=tile_atlas_gap,
                                                         AtlasEndcapCryostat=atlas_endcap_cryostat,
-                                                        AtlasBarrelCryostat=atlas_barrel_cryostat),
+                                                        AtlasBarrelCryostat=atlas_barrel_cryostat,
+                                                        AtlasRun4=atlas_run4,
+                                                        AtlasRun4Geometry=atlas_run4_geometry),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
                                Timeout=timeout * MINUTES,
@@ -511,6 +523,8 @@ if __name__ == "__main__":
              atlas_fcal_electrodes = args.atlas_fcal_electrodes,
              atlas_fcal_frozen_showers = args.atlas_fcal_frozen_showers,
              atlas_g4              = args.atlas_g4,
+             atlas_run4            = args.atlas_run4,
+             atlas_run4_geometry   = args.atlas_run4_geometry,
              free_running_atlas_format = args.free_running_atlas_format,
              tile_atlas_gap        = args.tile_atlas_gap,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,
