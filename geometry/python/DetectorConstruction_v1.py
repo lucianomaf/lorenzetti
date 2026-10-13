@@ -65,6 +65,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasFcalElectrodes : str="",
                 AtlasFcalFrozenShowers : bool=False,
                 AtlasFcalShowerLibDir : str="",
+                AtlasG4           : bool=False,
                 TileAtlasGap      : bool=False,
               ):
 
@@ -198,6 +199,7 @@ class DetectorConstruction_v1( Cpp ):
       self.volumes.extend( getAtlasEmecVolumesCfg() )
       self.volumes.extend( getAtlasEmecVolumesCfg(left_side=True) )
     self.samplings = flatten(self.samplings)
+    self.AtlasG4 = AtlasG4
     # With AtlasEmbCells the end-cap presampler is that of ATLAS (|z| = 3622-3626 mm, in a cavity of DM::Crack::EM, with the
     # cells of the dictionary; geometry/python/v1/ECAL.py) instead of the one of EMEC.py.
     if AtlasEmbCells:
@@ -205,8 +207,38 @@ class DetectorConstruction_v1( Cpp ):
       self.samplings.extend( getAtlasPseCfg() + getAtlasPseCfg(left_side=True) )
     
   
+  # Geant4 settings of the ATLAS production (F41 conserto 24; Athena release 23.0.14, G4PhysicsRegionConfig.py and
+  # G4GeometryToolConfig.py): the production cuts of the ATLAS regions (gamma, e-, e+; proton 1 mm everywhere): EMB (the accordion,
+  # LAr::EMB::STAC) and EMEC (LAr::EMEC::Mother) 0.1 mm, FCAL (LAr::FCAL::LiquidArgonC, the modules and the argon between them) 0.03 mm,
+  # everything else 1 mm (HEC, presamplers, dead material, tile: GeneralCut).
+  @staticmethod
+  def atlasCut( name ):
+    from geometry.v1.PhysicalVolume import ProductionCuts
+    if name.startswith(('LAr::EMB1', 'LAr::EMB2', 'LAr::EMB3', 'LAr::EMEC')):
+      c = 0.1
+    elif name.startswith(('LAr::FCAL', 'DM::FCal')):
+      c = 0.03
+    else:
+      c = 1.0
+    return ProductionCuts( GammaCut = c, ElectronCut = c, PositronCut = c, PhotonCut = 1.0 )   # PhotonCut is the proton cut
+
+  # Lorenzetti volumes that stand for volumes of the LAr tree of the ATLAS geometry (physical volume names beginning with "LAr", where
+  # the photon Russian roulette acts): the LAr calorimeters and presamplers (LAr::, the HEC FCal::HEC and DM::HEC, the argon between the
+  # FCal modules DM::FCal), the barrel cryostat with its walls, solenoid (cylinders of LAr::Barrel::Cryostat in the GeoModel geometry)
+  # and argon (DM::Barrel, DM::BarrelCryostat, DM::EMBEnd), the endcap cryostat (DM::EndcapCryostat, DM::Crack::EM). Not: tile, ITC.
+  ATLAS_LAR_TREE = [ 'LAr::', 'FCal::HEC', 'DM::HEC', 'DM::FCal', 'DM::Barrel', 'DM::EMBEnd', 'DM::EndcapCryostat', 'DM::Crack::EM' ]
+
   def compile(self):
     # Create all volumes inside of the detector
+    if self.AtlasG4:
+      self.setProperty( "AtlasG4", True )
+      self.setProperty( "LArTreeVolumes", self.ATLAS_LAR_TREE )
+      # the endcap cryostat of ATLAS (LAr::Endcap::Cryostat cylinders and cones of the region DeadMaterial): the dead material shower
+      dm = sorted( { pv.Name for pv in self.volumes if pv.Name.startswith('DM::EndcapCryostat') } )
+      if dm: self.setProperty( "DeadMaterialVolumes", dm )
+      for pv in self.volumes: pv.Cuts = self.atlasCut( pv.Name )
+      for samp in self.samplings: samp.volume().Cuts = self.atlasCut( samp.volume().Name )
+      for fm in self.fcal_modules: fm.Cuts = self.atlasCut( fm.Name )
     
     from ROOT.std import vector
     for name, (density, fractions) in self.mixtures.items():

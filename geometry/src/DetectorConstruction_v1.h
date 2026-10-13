@@ -118,6 +118,11 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
     std::vector<FCalModule> m_fcalModules;
     // Frozen showers of the ATLAS FCal (F41 conserto 23; FCalFrozenShowerModel): on/off and the directory of the libraries
     bool m_fcalFrozenShowers;
+    // Geant4 settings of the ATLAS production (F41 conserto 24): liquid argon of 1.396 g/cm3, the prefixes of the volumes of the LAr
+    // tree (photon Russian roulette) and the volumes of the dead material shower (AtlasDeadMaterialShower)
+    bool m_atlasG4;
+    std::vector<std::string> m_larTreeVolumes;
+    std::vector<std::string> m_deadMaterialVolumes;
     std::string m_fcalShowerLibDir;
     void CreateFCalModule( G4LogicalVolume *motherLV, const FCalModule &m, G4Region *region );
 

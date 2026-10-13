@@ -830,7 +830,10 @@ void CaloHitMaker::freeRunningFCalSpot( SG::EventContext &ctx, const G4Step *ste
 // Other materials are left unchanged.
 float CaloHitMaker::birksEnergy( const G4Step *step ) const
 {
-  const double edep = step->GetTotalEnergyDeposit();
+  // the deposit times the weight of the track (1 unless a Russian roulette of the ATLAS settings acted; F41 conserto 24), before Birks,
+  // as the ATLAS simulation does it (LAr calculators: GetTotalEnergyDeposit() * GetWeight(); TileGeoG4SDCalc): the saturation of a
+  // track of weight 10 is computed with 10 times its dE/dx, as in ATLAS
+  const double edep = step->GetTotalEnergyDeposit() * ( step->GetTrack() ? step->GetTrack()->GetWeight() : 1. );
   const double length = step->GetStepLength();
   const G4Material *material = step->GetPreStepPoint()->GetMaterial();
   if( !material || edep <= 0 || length <= 0 ) return (float)edep;

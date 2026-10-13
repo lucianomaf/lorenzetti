@@ -164,6 +164,14 @@ def parse_args():
                              "release 23.0.14): e- of 3 (FCal1) or 1 (FCal2, FCal3) to 1000 MeV, photons below 10 MeV and neutrons "
                              "below 100 MeV in the FCal modules are replaced by showers of the ATLAS libraries (MC23_v1, in "
                              "geometry/data/LArG4ShowerLibData). Needs --atlas-fcal-cells. Simulation only. Off by default.")
+    parser.add_argument('--atlas-g4', action='store_true', dest='atlas_g4', required=False,
+                        help="Geant4 settings of the ATLAS production (Athena release 23.0.14, campaign PhaseII): physics list "
+                             "FTFP_BERT_ATL, production cuts of the ATLAS regions (0.1 mm in the EM barrel and endcap, 0.03 mm in the "
+                             "FCal, 1 mm elsewhere), applyCuts, GammaGeneralProcess, the stacking action of ATLAS (neutron Russian "
+                             "roulette below 2 MeV and photon Russian roulette below 0.5 MeV in the LAr, weight 10; neutrinos killed), "
+                             "deposits multiplied by the track weight, the looper killer (1000100 steps, event aborted), the dead "
+                             "material shower behind the FCal (|z| > 5698 mm in the endcap cryostat) and liquid argon of 1.396 g/cm3. "
+                             "Simulation only. Off by default.")
     parser.add_argument('--atlas-fcal-electrodes', action='store', dest='atlas_fcal_electrodes', required=False,
                         type=str, default=os.environ.get('LORENZETTI_FCAL_ELECTRODES',
                                   os.path.join(os.environ.get('LORENZETTI_GEOMETRY_DATA_DIR', ''), 'LArFCalElectrodes-06.csv')),
@@ -269,6 +277,7 @@ def main(logging_level: str,
          atlas_fcal_cells: bool,
          atlas_fcal_electrodes: str,
          atlas_fcal_frozen_showers: bool,
+         atlas_g4: bool,
          tile_atlas_gap: bool,
          atlas_endcap_cryostat: bool,
          atlas_barrel_cryostat: bool,
@@ -355,6 +364,7 @@ def main(logging_level: str,
                                                         AtlasFcalCells=atlas_fcal_cells,
                                                         AtlasFcalElectrodes=atlas_fcal_electrodes,
                                                         AtlasFcalFrozenShowers=atlas_fcal_frozen_showers,
+                                                        AtlasG4=atlas_g4,
                                                         TileAtlasGap=tile_atlas_gap,
                                                         AtlasEndcapCryostat=atlas_endcap_cryostat,
                                                         AtlasBarrelCryostat=atlas_barrel_cryostat),
@@ -362,7 +372,8 @@ def main(logging_level: str,
                                OutputFile=output_file,
                                Timeout=timeout * MINUTES,
                                NeutronTimeCut=neutron_time_cut,
-                               FastSimulation=atlas_fcal_frozen_showers)
+                               FastSimulation=atlas_fcal_frozen_showers,
+                               AtlasG4=atlas_g4)
 
     gun = EventReader("EventReader", input_file,
                       # outputs
@@ -456,6 +467,9 @@ if __name__ == "__main__":
         # the frozen showers of the ATLAS FCal (F41 conserto 23)
         if not args.atlas_fcal_frozen_showers:
             parser.error("--free-running-hits needs --atlas-fcal-frozen-showers (the frozen showers of the ATLAS FCal)")
+        # the Geant4 settings of the ATLAS production (F41 conserto 24)
+        if not args.atlas_g4:
+            parser.error("--free-running-hits needs --atlas-g4 (the Geant4 settings of the ATLAS production)")
         if args.tile_dual_readout and args.tile_pmt_split != 'ushape':
             parser.error("--free-running-hits uses the U-shape sharing of the ATLAS simulation (--tile-pmt-split ushape)")
         args.active_energy_only = True
@@ -490,6 +504,7 @@ if __name__ == "__main__":
              atlas_fcal_cells      = args.atlas_fcal_cells,
              atlas_fcal_electrodes = args.atlas_fcal_electrodes,
              atlas_fcal_frozen_showers = args.atlas_fcal_frozen_showers,
+             atlas_g4              = args.atlas_g4,
              tile_atlas_gap        = args.tile_atlas_gap,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,
              atlas_barrel_cryostat = args.atlas_barrel_cryostat,

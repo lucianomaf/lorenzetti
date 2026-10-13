@@ -11,6 +11,8 @@
 #include "G4RotationMatrix.hh"
 #include "G4Transform3D.hh"
 #include "FCalFrozenShowerModel.h"
+#include "AtlasDeadMaterialShower.h"
+#include "G4Kernel/AtlasG4Settings.h"
 #include "G4GlobalMagFieldMessenger.hh"
 #include "G4ProductionCuts.hh"
 #include "G4AutoDelete.hh"
@@ -70,6 +72,10 @@ DetectorConstruction_v1::DetectorConstruction_v1(std::string name)
   // Frozen showers of the ATLAS FCal in the modules built by AddFCalModule (F41 conserto 23; needs the fast simulation process of
   // the RunManager, FastSimulation) and the directory of the libraries LArG4ShowerLib.FCAL<1,2>.<11,22,2112>.root
   declareProperty( "FCalFrozenShowers"          , m_fcalFrozenShowers=false   );
+  // Geant4 settings of the ATLAS production (F41 conserto 24)
+  declareProperty( "AtlasG4"                    , m_atlasG4=false             );
+  declareProperty( "LArTreeVolumes"             , m_larTreeVolumes            );
+  declareProperty( "DeadMaterialVolumes"        , m_deadMaterialVolumes       );
   declareProperty( "FCalShowerLibDir"           , m_fcalShowerLibDir=""       );
   declareProperty( "OutputLevel"                , m_outputLevel=0             ); 
 }
@@ -147,6 +153,8 @@ void DetectorConstruction_v1::AddFCalModule(std::string name, std::string absorb
 
 G4VPhysicalVolume* DetectorConstruction_v1::Construct()
 {
+  // volumes of the LAr tree, for the photon Russian roulette of the ATLAS stacking action (F41 conserto 24)
+  if (m_atlasG4) AtlasG4Settings::instance().larTreeVolumes = m_larTreeVolumes;
   // Define materials
   DefineMaterials();
   // Define volumes
@@ -330,7 +338,9 @@ void DetectorConstruction_v1::DefineMaterials()
   G4double z;  // z=mean number of protons;
   G4double density;
   // The argon by NIST Manager is a gas with a different density
-  new G4Material("liquidArgon", z=18., a= 39.95*g/mole, density= 1.390*g/cm3);
+  // With the ATLAS Geant4 settings, std::LiquidArgon of the ATLAS geometry: pure argon, 1.396 g/cm3, A = 39.948 g/mol (F41 conserto 24)
+  if (m_atlasG4) new G4Material("liquidArgon", z=18., a= 39.948*g/mole, density= 1.396*g/cm3);
+  else           new G4Material("liquidArgon", z=18., a= 39.95*g/mole, density= 1.390*g/cm3);
 
   // Vacuum
   new G4Material("Vacuum", z=1., a=1.01*g/mole,density= universe_mean_density,kStateGas, 2.73*kelvin, 3.e-18*pascal);
@@ -762,6 +772,16 @@ void DetectorConstruction_v1::CreateVerticalPlates(  G4LogicalVolume *worldLV,
 
 
 void DetectorConstruction_v1::ConstructSDandField(){
+
+  // Dead material shower of the ATLAS settings (F41 conserto 24): HighEnergy 1000 GeV, LowEnergy 0, ZCutoff 5698 mm
+  if (m_atlasG4){
+    for (const auto &name : m_deadMaterialVolumes){
+      auto *region = G4RegionStore::GetInstance()->GetRegion(name);
+      if (!region){ MSG_FATAL("No region for the dead material volume " << name); }
+      new AtlasDeadMaterialShower( name + "::DeadMaterialShower", region, 1000.*GeV, 0., 5698.*mm );
+    }
+    MSG_INFO("Dead material shower in " << m_deadMaterialVolumes.size() << " volumes");
+  }
 
   // Frozen showers of the ATLAS FCal (F41 conserto 23): one model per module and side, as LArG4FastSimulationConfig.py of the Athena
   // release 23.0.14 (FCALFastShower in the region of FCal1 with the libraries FCAL1; FCAL2FastShower in FCal2 and FCal3 with the

@@ -16,6 +16,9 @@
 #include "G4UImanager.hh"
 #include "G4UIcommand.hh"
 #include "FTFP_BERT.hh"
+#include "FTFP_BERT_ATL.hh"
+#include "G4EmParameters.hh"
+#include "G4Kernel/AtlasG4Settings.h"
 #include "G4NeutronTrackingCut.hh"
 #include "G4FastSimulationPhysics.hh"
 #include "G4SystemOfUnits.hh"
@@ -49,6 +52,10 @@ RunManager::RunManager( std::string name ):
   // Fast simulation process for e-, e+, gamma and neutron (G4FastSimulationPhysics), needed by the fast simulation models of the
   // geometry: the frozen showers of the ATLAS FCal (F41 conserto 23). Off by default.
   declareProperty( "FastSimulation" , m_fastSimulation=false   );
+  // Geant4 settings of the ATLAS production we compare with (F41 conserto 24; Athena release 23.0.14, campaign PhaseII): the physics
+  // list FTFP_BERT_ATL, the default production cut of 1 mm (GeneralCut), /process/em/applyCuts true, /process/em/UseGeneralProcess
+  // true, the ATLAS stacking action (Russian roulettes, neutrinos) and the looper killer (AtlasG4Settings). Off by default.
+  declareProperty( "AtlasG4"        , m_atlasG4=false          );
   MSG_INFO( "Run manager was created." );
 
 }
@@ -125,7 +132,15 @@ void RunManager::run( int evt )
     runManager->SetUserInitialization(m_detector);
   }
 
-  G4VModularPhysicsList* physicsList = new FTFP_BERT;
+  G4VModularPhysicsList* physicsList = m_atlasG4 ? (G4VModularPhysicsList*) new FTFP_BERT_ATL : (G4VModularPhysicsList*) new FTFP_BERT;
+  if( m_atlasG4 ){
+    // GeneralCut = 1 mm (G4AtlasServicesConfig.py, PhysicsListSvc.cxx); the regions of the calorimeters set their own cuts
+    physicsList->SetDefaultCutValue( 1.0 * mm );
+    G4EmParameters::Instance()->SetApplyCuts( true );
+    G4EmParameters::Instance()->SetGeneralProcessActive( true );
+    AtlasG4Settings::instance().enabled = true;
+    MSG_INFO( "ATLAS Geant4 settings: FTFP_BERT_ATL, default cut 1 mm, applyCuts, GeneralProcess, stacking action, looper killer" );
+  }
   if( m_neutronTimeCut > 0 ){
     auto *neutronCut = dynamic_cast<G4NeutronTrackingCut*>( const_cast<G4VPhysicsConstructor*>(
                          physicsList->GetPhysics("neutronTrackingCut") ) );
@@ -138,6 +153,8 @@ void RunManager::run( int evt )
   if( m_fastSimulation ){
     auto *fastSim = new G4FastSimulationPhysics();
     for( const char *p : {"e-", "e+", "gamma", "neutron"} ) fastSim->ActivateFastSimulation( p );
+    // pions for the dead material shower of the ATLAS settings (AtlasDeadMaterialShower)
+    if( m_atlasG4 ) for( const char *p : {"pi+", "pi-"} ) fastSim->ActivateFastSimulation( p );
     physicsList->RegisterPhysics( fastSim );
     MSG_INFO( "Fast simulation process for e-, e+, gamma and neutron" );
   }
