@@ -10,6 +10,7 @@
 #include "G4PVReplica.hh"
 #include "G4RotationMatrix.hh"
 #include "G4Transform3D.hh"
+#include "FCalFrozenShowerModel.h"
 #include "G4GlobalMagFieldMessenger.hh"
 #include "G4ProductionCuts.hh"
 #include "G4AutoDelete.hh"
@@ -66,6 +67,10 @@ DetectorConstruction_v1::DetectorConstruction_v1(std::string name)
   // in front of the barrel accordion, F41 conserto 17c)
   declareProperty( "SolenoidFieldRadius"        , m_solenoidFieldRadius=1230.  );
   declareProperty( "CutOnPhi"                 , m_cutOnPhi=false            );
+  // Frozen showers of the ATLAS FCal in the modules built by AddFCalModule (F41 conserto 23; needs the fast simulation process of
+  // the RunManager, FastSimulation) and the directory of the libraries LArG4ShowerLib.FCAL<1,2>.<11,22,2112>.root
+  declareProperty( "FCalFrozenShowers"          , m_fcalFrozenShowers=false   );
+  declareProperty( "FCalShowerLibDir"           , m_fcalShowerLibDir=""       );
   declareProperty( "OutputLevel"                , m_outputLevel=0             ); 
 }
 
@@ -757,6 +762,28 @@ void DetectorConstruction_v1::CreateVerticalPlates(  G4LogicalVolume *worldLV,
 
 
 void DetectorConstruction_v1::ConstructSDandField(){
+
+  // Frozen showers of the ATLAS FCal (F41 conserto 23): one model per module and side, as LArG4FastSimulationConfig.py of the Athena
+  // release 23.0.14 (FCALFastShower in the region of FCal1 with the libraries FCAL1; FCAL2FastShower in FCal2 and FCal3 with the
+  // libraries FCAL2). Energies in MeV.
+  if (m_fcalFrozenShowers && !m_fcalModules.empty()){
+    auto libs = FCalFrozenShowerModel::loadLibraries( m_fcalShowerLibDir );
+    for (auto &fm : m_fcalModules){
+      const bool fcal1 = fm.name.find("Module1") != std::string::npos;
+      FCalFrozenShowerModel::Config cfg;
+      cfg.library = fcal1 ? "FCAL1" : "FCAL2";
+      cfg.eMin = fcal1 ? 3.0 : 1.0;  cfg.eMax = 1000.;
+      cfg.gMin = 0.;  cfg.gMax = 10.;
+      cfg.nMin = 0.;  cfg.nMax = 100.;
+      cfg.containLow  = !fcal1;  cfg.absLowEta  = fcal1 ? 4.0 : 3.8;
+      cfg.containHigh = !fcal1;  cfg.absHighEta = fcal1 ? 4.6 : 4.4;
+      cfg.containCrack = true;   cfg.absCrackEta1 = 0.5;  cfg.absCrackEta2 = 1.1;   // not used: ContainCrack is true
+      auto *region = G4RegionStore::GetInstance()->GetRegion(fm.name);
+      if (!region){ MSG_FATAL("No region for the FCal module " << fm.name); }
+      new FCalFrozenShowerModel( fm.name + "::FrozenShower", region, cfg, libs.at(cfg.library) );
+      MSG_INFO("Frozen showers (" << cfg.library << ") in " << fm.name);
+    }
+  }
 
   if (m_useMagneticField){
     MSG_INFO("Set magnetic field")

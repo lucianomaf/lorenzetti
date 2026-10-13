@@ -158,6 +158,12 @@ def parse_args():
                              "the tile of its electrode, as in the ATLAS simulation. The electrodes come from the file given by "
                              "--atlas-fcal-electrodes. The FCal cells go only to the free-running hits (LArHitFCAL). Needs "
                              "--atlas-fcal and --free-running-hits. Simulation only. Off by default.")
+    parser.add_argument('--atlas-fcal-frozen-showers', action='store_true',
+                        dest='atlas_fcal_frozen_showers', required=False,
+                        help="Frozen showers in the FCal of ATLAS, as the ATLAS simulation (FrozenShowersFCalOnly of the Athena "
+                             "release 23.0.14): e- of 3 (FCal1) or 1 (FCal2, FCal3) to 1000 MeV, photons below 10 MeV and neutrons "
+                             "below 100 MeV in the FCal modules are replaced by showers of the ATLAS libraries (MC23_v1, in "
+                             "geometry/data/LArG4ShowerLibData). Needs --atlas-fcal-cells. Simulation only. Off by default.")
     parser.add_argument('--atlas-fcal-electrodes', action='store', dest='atlas_fcal_electrodes', required=False,
                         type=str, default=os.environ.get('LORENZETTI_FCAL_ELECTRODES',
                                   os.path.join(os.environ.get('LORENZETTI_GEOMETRY_DATA_DIR', ''), 'LArFCalElectrodes-06.csv')),
@@ -262,6 +268,7 @@ def main(logging_level: str,
          atlas_fcal: bool,
          atlas_fcal_cells: bool,
          atlas_fcal_electrodes: str,
+         atlas_fcal_frozen_showers: bool,
          tile_atlas_gap: bool,
          atlas_endcap_cryostat: bool,
          atlas_barrel_cryostat: bool,
@@ -347,13 +354,15 @@ def main(logging_level: str,
                                                         AtlasFcal=atlas_fcal,
                                                         AtlasFcalCells=atlas_fcal_cells,
                                                         AtlasFcalElectrodes=atlas_fcal_electrodes,
+                                                        AtlasFcalFrozenShowers=atlas_fcal_frozen_showers,
                                                         TileAtlasGap=tile_atlas_gap,
                                                         AtlasEndcapCryostat=atlas_endcap_cryostat,
                                                         AtlasBarrelCryostat=atlas_barrel_cryostat),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
                                Timeout=timeout * MINUTES,
-                               NeutronTimeCut=neutron_time_cut)
+                               NeutronTimeCut=neutron_time_cut,
+                               FastSimulation=atlas_fcal_frozen_showers)
 
     gun = EventReader("EventReader", input_file,
                       # outputs
@@ -424,6 +433,8 @@ if __name__ == "__main__":
                                     args.atlas_material_in_front and args.atlas_barrel_cryostat):
         parser.error("--tile-atlas-gap needs --tile-atlas-itc, --tile-atlas-cells, --atlas-emb-cells, --atlas-material-in-front "
                      "and --atlas-barrel-cryostat")
+    if args.atlas_fcal_frozen_showers and not args.atlas_fcal_cells:
+        parser.error("--atlas-fcal-frozen-showers needs --atlas-fcal-cells")
     if args.atlas_fcal_cells and not (args.atlas_fcal and args.free_running_hits):
         parser.error("--atlas-fcal-cells needs --atlas-fcal and --free-running-hits")
     if args.atlas_fcal_cells and not os.path.isfile(args.atlas_fcal_electrodes):
@@ -442,6 +453,9 @@ if __name__ == "__main__":
         # the FCal cells of ATLAS (F41 conserto 22)
         if not args.atlas_fcal_cells:
             parser.error("--free-running-hits needs --atlas-fcal-cells (the FCal cells of ATLAS)")
+        # the frozen showers of the ATLAS FCal (F41 conserto 23)
+        if not args.atlas_fcal_frozen_showers:
+            parser.error("--free-running-hits needs --atlas-fcal-frozen-showers (the frozen showers of the ATLAS FCal)")
         if args.tile_dual_readout and args.tile_pmt_split != 'ushape':
             parser.error("--free-running-hits uses the U-shape sharing of the ATLAS simulation (--tile-pmt-split ushape)")
         args.active_energy_only = True
@@ -475,6 +489,7 @@ if __name__ == "__main__":
              atlas_fcal            = args.atlas_fcal,
              atlas_fcal_cells      = args.atlas_fcal_cells,
              atlas_fcal_electrodes = args.atlas_fcal_electrodes,
+             atlas_fcal_frozen_showers = args.atlas_fcal_frozen_showers,
              tile_atlas_gap        = args.tile_atlas_gap,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,
              atlas_barrel_cryostat = args.atlas_barrel_cryostat,

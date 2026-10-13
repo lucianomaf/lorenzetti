@@ -17,6 +17,7 @@
 #include "G4UIcommand.hh"
 #include "FTFP_BERT.hh"
 #include "G4NeutronTrackingCut.hh"
+#include "G4FastSimulationPhysics.hh"
 #include "G4SystemOfUnits.hh"
 #include "Randomize.hh"
 #include "G4VisExecutive.hh"
@@ -45,6 +46,9 @@ RunManager::RunManager( std::string name ):
   // default (10 us in FTFP_BERT). ATLAS uses 150 ns (Sim.NeutronTimeCut, Athena; ATLAS simulation paper, arXiv:1005.4568,
   // sec. 5.5: "a Geant4 neutron time cut is applied which removes all neutrons 150 ns after the primary interaction").
   declareProperty( "NeutronTimeCut" , m_neutronTimeCut=0       );
+  // Fast simulation process for e-, e+, gamma and neutron (G4FastSimulationPhysics), needed by the fast simulation models of the
+  // geometry: the frozen showers of the ATLAS FCal (F41 conserto 23). Off by default.
+  declareProperty( "FastSimulation" , m_fastSimulation=false   );
   MSG_INFO( "Run manager was created." );
 
 }
@@ -130,6 +134,12 @@ void RunManager::run( int evt )
     }
     neutronCut->SetTimeLimit( m_neutronTimeCut * ns );
     MSG_INFO( "Neutron time cut: " << m_neutronTimeCut << " ns" );
+  }
+  if( m_fastSimulation ){
+    auto *fastSim = new G4FastSimulationPhysics();
+    for( const char *p : {"e-", "e+", "gamma", "neutron"} ) fastSim->ActivateFastSimulation( p );
+    physicsList->RegisterPhysics( fastSim );
+    MSG_INFO( "Fast simulation process for e-, e+, gamma and neutron" );
   }
   runManager->SetUserInitialization(physicsList);
 

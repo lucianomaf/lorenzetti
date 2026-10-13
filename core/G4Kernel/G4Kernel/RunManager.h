@@ -43,6 +43,8 @@ class RunManager: public MsgService,
     bool        m_useGUI;
     // Time limit of the neutron killer of the physics list, in ns (0 = the default of Geant4, 10 us in FTFP_BERT)
     double      m_neutronTimeCut;
+    // G4FastSimulationPhysics for e-, e+, gamma and neutron (the frozen showers of the ATLAS FCal, F41 conserto 23)
+    bool        m_fastSimulation;
     std::string m_output;
 
     std::vector< Gaugi::Algorithm* >   m_acc;

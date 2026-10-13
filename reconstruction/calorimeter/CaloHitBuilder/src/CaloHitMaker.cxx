@@ -157,6 +157,11 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "FCalCopyPhiIndex"         , m_fcalCopyPhiIndex                    );
   declareProperty( "FCalCopyEta"              , m_fcalCopyEta                         );
   declareProperty( "FCalCopyPhi"              , m_fcalCopyPhi                         );
+  // grid indices and position (mm) of each electrode, for the cell of the spots of the frozen showers (F41 conserto 23)
+  declareProperty( "FCalCopyI"                , m_fcalCopyI                           );
+  declareProperty( "FCalCopyJ"                , m_fcalCopyJ                           );
+  declareProperty( "FCalCopyX"                , m_fcalCopyX                           );
+  declareProperty( "FCalCopyY"                , m_fcalCopyY                           );
 
 
 
@@ -208,6 +213,24 @@ StatusCode CaloHitMaker::initialize()
                     m_fcalCopyPhiIndex.size() != m_fcalCopyEtaIndex.size() || m_fcalCopyEta.size() != m_fcalCopyEtaIndex.size() ||
                     m_fcalCopyPhi.size() != m_fcalCopyEtaIndex.size() || useCells() ) ){
     MSG_FATAL( "FCalModule needs the free-running hits and the cell of every electrode (geometry/python/v1/FCAL.py)." );
+  }
+  // tube map of FCAL_ChannelMap::add_tube (F41 conserto 23)
+  if( isFCal() && !m_fcalCopyI.empty() ){
+    const size_t n = m_fcalCopyEtaIndex.size();
+    if( m_fcalCopyJ.size() != n || m_fcalCopyX.size() != n || m_fcalCopyY.size() != n || m_fcalCopyI.size() != n ){
+      MSG_FATAL( "FCalCopyI, FCalCopyJ, FCalCopyX and FCalCopyY need one entry per electrode." );
+    }
+    std::map<unsigned int, size_t> first;
+    for( size_t k = 0; k < n; ++k ){
+      const unsigned int key = ( (unsigned int)( m_fcalCopyJ[k] + 200 ) << 16 ) + (unsigned int)( m_fcalCopyI[k] + 200 );
+      m_fcalTubeMap.emplace( key, std::make_pair( m_fcalCopyEtaIndex[k], m_fcalCopyPhiIndex[k] ) );
+      first.emplace( key, k );
+      m_fcalTileCentre.emplace( std::make_pair( m_fcalCopyEtaIndex[k], m_fcalCopyPhiIndex[k] ),
+                                std::make_pair( m_fcalCopyEta[k], m_fcalCopyPhi[k] ) );
+    }
+    m_fcalFirstTube  = first.begin()->first;
+    m_fcalFirstTubeX = m_fcalCopyX[first.begin()->second];
+    m_fcalFirstTubeY = m_fcalCopyY[first.begin()->second];
   }
 
   return StatusCode::SUCCESS;
@@ -331,6 +354,12 @@ StatusCode CaloHitMaker::pre_execute( EventContext &ctx ) const
  */
 StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
 {
+  // Spots of the frozen showers of the ATLAS FCal (F41 conserto 23): only for the FCal makers
+  if( isShowerSpot(step) ){
+    if( isFCal() && !m_fcalTubeMap.empty() ) freeRunningFCalSpot( ctx, step );
+    return StatusCode::SUCCESS;
+  }
+
   // ATLAS FCal with its electrodes: the cell from the copy number of the gap, only to the free-running hits
   if( isFCal() ){
     freeRunningFCal( ctx, step );
@@ -704,6 +733,88 @@ void CaloHitMaker::freeRunningFCal( SG::EventContext &ctx, const G4Step *step ) 
   }
   // the module goes to the field sampling of the list (LArHitFCAL_module), pos_neg to side
   list->addLAr( cellID, edep / MeV, t, tglobal, m_fcalCopyEta[copy], m_fcalCopyPhi[copy], m_fcalModule, posNeg, 0, 4, timeBin );
+}
+
+//!=====================================================================
+
+bool CaloHitMaker::isShowerSpot( const G4Step *step )
+{
+  return step->GetPreStepPoint()->GetTouchable() == nullptr;
+}
+
+// Cell of a point (x, y) in the frame of the module, in mm, as FCAL_ChannelMap::getTileID of the Athena release 23.0.14 used by the
+// ATLAS production we compare with (copy in the F41 notes of the group, c23_chuveiros_congelados/fontes_athena/r23.0.14/): the tube of
+// the hexagonal grid (tubeDx = spacing / 2, tubeDy = spacing * sqrt(3) / 2; spacing 7.5, 8.179 and 9.0 mm), the offset taken from the
+// first tube of the map, the parity of the grid corrected as in Athena, and the tile of that tube; false if there is no tube there.
+bool CaloHitMaker::fcalTileID( double x, double y, int &eta, int &phi ) const
+{
+  static const double spacing[3] = { 7.5, 8.179, 9.0 };
+  const double tubeDx = spacing[m_fcalModule - 1] / 2., tubeDy = spacing[m_fcalModule - 1] * std::sqrt(3.) / 2.;
+  int ktx = (int)( x / tubeDx );
+  int kty = (int)( y / tubeDy );
+  if( x < 0. ) ktx--;
+  if( y < 0. ) kty--;
+  const unsigned int firstId = m_fcalFirstTube;
+  int ix = ktx + ( (int)( (firstId & 0xffff) - m_fcalFirstTubeX / tubeDx ) ) + 1;
+  int iy = kty + ( (int)( (firstId >> 16) - m_fcalFirstTubeY / tubeDy ) ) + 1;
+  const int isOddEven = ( ( (firstId >> 16) % 2 ) + ( firstId % 2 ) ) % 2;
+  bool movex = false;
+  if( ( iy % 2 ) != ( ( ix + isOddEven ) % 2 ) ){
+    const double yc = y / tubeDy - kty - 0.5;
+    if( std::fabs(yc) > 0.5 / std::sqrt(3) ){
+      double xk = x / tubeDx - ktx;
+      if( xk > 0.5 ) xk = 1 - xk;
+      const double yn = 0.5 - xk * ( 1. / 3 );
+      if( std::fabs(yc) > std::fabs(yn) ){
+        if( yc > 0 ) iy++; else iy--;
+      }else movex = true;
+    }else movex = true;
+    if( movex ){
+      if( x / tubeDx - ktx > 0.5 ) ix++; else ix--;
+    }
+  }
+  const unsigned int tubeID = ( (unsigned int)iy << 16 ) + (unsigned int)ix;
+  auto it = m_fcalTubeMap.find( tubeID );
+  if( it == m_fcalTubeMap.end() ) return false;
+  eta = it->second.first; phi = it->second.second;
+  return true;
+}
+
+// A spot of a frozen shower (F41 conserto 23; Athena FCALFastSimDedicatedSD::ProcessSpot, release 23.0.14): the spot of this
+// maker's module and side (z inside the module), the cell by the position in the frame of the module (the global x and y: the
+// electrodes of side C sit at the same x and y as those of side A, geometry/python/v1/FCAL.py), the energy of the spot as it comes
+// (no Birks, weight 1), the time of the spot (already the shower time plus the global time of the particle minus |r|/c). Spots
+// outside every module or outside every tile are dropped, as in Athena.
+void CaloHitMaker::freeRunningFCalSpot( SG::EventContext &ctx, const G4Step *step ) const
+{
+  const G4StepPoint *preP = step->GetPreStepPoint();
+  const G4ThreeVector pos = preP->GetPosition();
+  if( !( pos.z() > m_zMin && pos.z() <= m_zMax ) ) return;
+  const double edep = step->GetTotalEnergyDeposit();
+  if( edep <= 0 ) return;
+  int etaIndex, phiIndex;
+  if( !fcalTileID( (float)pos.x(), (float)pos.y(), etaIndex, phiIndex ) ) return;   // float, as Athena passes it
+  SG::ReadHandle<CaloFreeRunningHitList> list( m_freeRunningListKey, ctx );
+  if( !list.isValid() ){
+    MSG_FATAL("It's not possible to retrieve the CaloFreeRunningHitList using this key: " << m_freeRunningListKey);
+  }
+  const int posNeg = pos.z() > 0 ? 2 : -2;
+  const unsigned long long id32 = (1ULL << 29) | (5ULL << 26) | ((unsigned long long)(posNeg > 0 ? 1 : 0) << 25)
+                                | ((unsigned long long)(m_fcalModule - 1) << 23)
+                                | ((unsigned long long)etaIndex << 17) | ((unsigned long long)phiIndex << 13);
+  const long long cellID = (long long)( id32 << 32 );
+  const double t = preP->GetGlobalTime() / ns;
+  const double tglobal = t + pos.mag() / CLHEP::c_light;   // extra branch: the time without the -|r|/c of the ATLAS convention
+  int timeBin = -1;
+  if( m_freeRunningBinning ){
+    if     ( t < 0.   ) timeBin = 0;
+    else if( t < 10.  ) timeBin = (int)( t / 2.5 );
+    else if( t < 50.  ) timeBin = 4 + (int)( ( t - 10. ) / 5. );
+    else if( t < 100. ) timeBin = 12 + (int)( ( t - 50. ) / 25. );
+    else                timeBin = 14;
+  }
+  const auto &c = m_fcalTileCentre.at( std::make_pair( etaIndex, phiIndex ) );
+  list->addLAr( cellID, edep / MeV, t, tglobal, c.first, c.second, m_fcalModule, posNeg, 0, 4, timeBin );
 }
 
 //!=====================================================================

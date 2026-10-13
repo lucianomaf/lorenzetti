@@ -230,6 +230,23 @@ class CaloHitMaker : public Gaugi::Algorithm
     std::vector<float> m_fcalCopyPhi;
     bool isFCal() const { return m_fcalModule > 0; }
     void freeRunningFCal( SG::EventContext &ctx, const G4Step *step ) const;
+    // Frozen showers of the ATLAS FCal (F41 conserto 23): the grid indices (I, J) and position (mm) of each electrode, the tube map
+    // of FCAL_ChannelMap (key ((J + 200) << 16) + (I + 200) -> tile eta and phi indices, the first tube and its position) and the
+    // tile centre of each (eta, phi); a spot of a frozen shower is a G4Step without touchable (see freeRunningFCalSpot).
+    std::vector<int>   m_fcalCopyI;
+    std::vector<int>   m_fcalCopyJ;
+    std::vector<float> m_fcalCopyX;
+    std::vector<float> m_fcalCopyY;
+    std::map<unsigned int, std::pair<int,int>> m_fcalTubeMap;
+    unsigned int m_fcalFirstTube;
+    double m_fcalFirstTubeX, m_fcalFirstTubeY;
+    std::map<std::pair<int,int>, std::pair<float,float>> m_fcalTileCentre;
+    bool fcalTileID( double x, double y, int &eta, int &phi ) const;
+    void freeRunningFCalSpot( SG::EventContext &ctx, const G4Step *step ) const;
+  public:
+    /*! A step that is a spot of a frozen shower (no touchable). */
+    static bool isShowerSpot( const G4Step *step );
+  private:
 };
 
 

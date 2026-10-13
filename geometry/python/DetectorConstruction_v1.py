@@ -63,6 +63,8 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasFcal         : bool=False,
                 AtlasFcalCells    : bool=False,
                 AtlasFcalElectrodes : str="",
+                AtlasFcalFrozenShowers : bool=False,
+                AtlasFcalShowerLibDir : str="",
                 TileAtlasGap      : bool=False,
               ):
 
@@ -182,6 +184,15 @@ class DetectorConstruction_v1( Cpp ):
         raise ValueError("AtlasFcalCells needs the file of the FCal electrodes (AtlasFcalElectrodes).")
       self.mixtures.update( ATLAS_FCAL_CELL_MATERIALS )
       self.fcal_modules = getAtlasFcalCellsCfg( AtlasFcalElectrodes )
+    # Frozen showers of the ATLAS FCal (needs AtlasFcalCells; geometry/src/FCalFrozenShowerModel.h; F41 conserto 23), with the libraries
+    # of the directory AtlasFcalShowerLibDir (default geometry/data/LArG4ShowerLibData/MC23_v1, those of the Athena release 23.0.14)
+    if AtlasFcalFrozenShowers and not AtlasFcalCells:
+      raise ValueError("AtlasFcalFrozenShowers needs AtlasFcalCells.")
+    self.setProperty( "FCalFrozenShowers", AtlasFcalFrozenShowers )
+    if AtlasFcalFrozenShowers:
+      import os
+      libdir = AtlasFcalShowerLibDir or os.path.join( os.environ.get('LORENZETTI_GEOMETRY_DATA_DIR', ''), 'LArG4ShowerLibData', 'MC23_v1' )
+      self.setProperty( "FCalShowerLibDir", libdir )
     # Volumes of the ATLAS-like EMEC (radial bands and steps of the two wheels); their cells come from the samplings.
     if AtlasEmec:
       self.volumes.extend( getAtlasEmecVolumesCfg() )

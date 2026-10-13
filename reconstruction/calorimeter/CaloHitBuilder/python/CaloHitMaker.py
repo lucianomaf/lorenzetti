@@ -138,6 +138,11 @@ class CaloHitMaker( Cpp ):
       self.setProperty( "FCalCopyPhiIndex"      , [int(x) for x in sampling.CopyPhiIndex]  )
       self.setProperty( "FCalCopyEta"           , [float(x) for x in sampling.CopyEta]     )
       self.setProperty( "FCalCopyPhi"           , [float(x) for x in sampling.CopyPhi]     )
+      # grid indices and position of each electrode, for the spots of the frozen showers (F41 conserto 23)
+      self.setProperty( "FCalCopyI"             , [int(x) for x in sampling.CopyI]         )
+      self.setProperty( "FCalCopyJ"             , [int(x) for x in sampling.CopyJ]         )
+      self.setProperty( "FCalCopyX"             , [float(x) for x in sampling.X]           )
+      self.setProperty( "FCalCopyY"             , [float(x) for x in sampling.Y]           )
     birks_k = getattr( sampling.sensitive(), "BirksLArK", None )
     if birks_k:
       self.setProperty( "BirksLArK"             , float(birks_k)              )

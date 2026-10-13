@@ -35,7 +35,8 @@ FCAL_BIRKS_K = 0.0486
 def readAtlasFcalElectrodes( path ):
     """
     Electrodes of the ATLAS FCal from the CSV file of geometry/scripts/fcal_electrodes_from_geomdb.py: for each module (1-3),
-    the list of (x, y, phi index, eta index) in mm, in the order of the rows of the table (the copy number of the gap).
+    the list of (x, y, phi index, eta index, I, J), x and y in mm, in the order of the rows of the table (the copy number of the
+    gap); I and J are the indices of the electrode in the hexagonal grid of FCAL_ChannelMap.
     """
     out = {1: [], 2: [], 3: []}
     with open( path, newline='' ) as f:
@@ -44,7 +45,8 @@ def readAtlasFcalElectrodes( path ):
         rows.sort( key = lambda r: int(r['LARFCALELECTRODES_DATA_ID']) )
     for r in rows:
         name = r['TILENAME']
-        out[int(r['MODNUMBER'])].append( (float(r['X']) * 10., float(r['Y']) * 10., int(name[3:5]), int(name[6:9])) )
+        out[int(r['MODNUMBER'])].append( (float(r['X']) * 10., float(r['Y']) * 10., int(name[3:5]), int(name[6:9]),
+                                          int(r['I']), int(r['J'])) )
     for m in ATLAS_FCAL_CELL_MODULES:
         if len( out[m['module']] ) != m['electrodes']:
             raise RuntimeError( f"FCal{m['module']}: {len(out[m['module']])} electrodes in {path}, "
@@ -77,8 +79,10 @@ class AtlasFcalModule:
         # cell of each copy number and the centre of its tile (mean of its electrodes; z of the centre of the module)
         self.CopyPhiIndex = [e[2] for e in electrodes]
         self.CopyEtaIndex = [e[3] for e in electrodes]
+        # grid indices of each electrode (FCAL_ChannelMap), for the cell of the spots of the frozen showers (F41 conserto 23)
+        self.CopyI = [e[4] for e in electrodes];  self.CopyJ = [e[5] for e in electrodes]
         sums = {}
-        for x, y, ip, ie in electrodes:
+        for x, y, ip, ie, *_ in electrodes:
             s = sums.setdefault( (ip, ie), [0., 0., 0] ); s[0] += x; s[1] += y; s[2] += 1
         centre = {}
         for k, (sx, sy, n) in sums.items():

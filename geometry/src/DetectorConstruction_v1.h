@@ -116,6 +116,9 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
   private:
 
     std::vector<FCalModule> m_fcalModules;
+    // Frozen showers of the ATLAS FCal (F41 conserto 23; FCalFrozenShowerModel): on/off and the directory of the libraries
+    bool m_fcalFrozenShowers;
+    std::string m_fcalShowerLibDir;
     void CreateFCalModule( G4LogicalVolume *motherLV, const FCalModule &m, G4Region *region );
 
     std::vector<Volume> m_volumes;
