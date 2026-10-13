@@ -249,6 +249,11 @@ class DetectorConstruction_v1( Cpp ):
     volumes = [pv for pv in self.volumes]
     # The envelopes of the ATLAS-like EMEC and barrel (Envelope = True) only give the limits of their hit makers: not built.
     volumes.extend( [samp.volume() for samp in self.samplings if not getattr(samp.volume(), 'Envelope', False)] )
+    # Each volume once: hit makers that share a volume (the two regions of a sampling of the ATLAS-like HEC) would build it twice, one
+    # copy on top of the other (fixed in F41 conserto 27; present since conserto 15)
+    unique = {}
+    for pv in volumes: unique.setdefault( id(pv), pv )
+    volumes = list( unique.values() )
           
     for pv in tqdm( volumes, desc="Compiling  volumes...", ncols=70):
       self._core.AddVolume( pv.Name, pv.Plates, pv.AbsorberMaterial, pv.GapMaterial, 
