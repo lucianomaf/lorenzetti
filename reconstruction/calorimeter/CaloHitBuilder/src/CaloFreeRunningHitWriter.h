@@ -46,6 +46,8 @@ class CaloFreeRunningHitWriter : public Gaugi::Algorithm
     std::string m_inputListKey;
     std::string m_inputEventKey;
     std::string m_ntupleName;
+    // the format of the ATLAS HITS ntuple (F41 conserto 25): LAr compressed and filtered as FilterHit_tf, no tglobal branches
+    bool m_atlasFormat;
 };
 
 #endif

@@ -25,6 +25,7 @@ class CaloHitBuilder(Logger):
                  FreeRunningHits: bool = False,
                  FreeRunningBinning: bool = True,
                  FreeRunningNtupleName: str = "CollectionTree",
+                 FreeRunningAtlasFormat: bool = False,
                  InputEventKey: str = "Events",
                  ):
 
@@ -41,6 +42,7 @@ class CaloHitBuilder(Logger):
         self.FreeRunningHits = FreeRunningHits
         self.FreeRunningBinning = FreeRunningBinning
         self.FreeRunningNtupleName = FreeRunningNtupleName
+        self.FreeRunningAtlasFormat = FreeRunningAtlasFormat
         self.InputEventKey = InputEventKey
         self.OutputCollectionKeys = []
 
@@ -105,6 +107,7 @@ class CaloHitBuilder(Logger):
             self.__recoAlgs.append( CaloFreeRunningHitWriter("CaloFreeRunningHitWriter",
                                                              InputEventKey=self.InputEventKey,
                                                              NtupleName=self.FreeRunningNtupleName,
+                                                             AtlasFormat=self.FreeRunningAtlasFormat,
                                                              OutputLevel=self.OutputLevel) )
 
     def merge(self, acc: ComponentAccumulator):

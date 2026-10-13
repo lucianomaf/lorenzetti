@@ -172,6 +172,10 @@ def parse_args():
                              "deposits multiplied by the track weight, the looper killer (1000100 steps, event aborted), the dead "
                              "material shower behind the FCal (|z| > 5698 mm in the endcap cryostat) and liquid argon of 1.396 g/cm3. "
                              "Simulation only. Off by default.")
+    parser.add_argument('--free-running-atlas-format', action='store_true', dest='free_running_atlas_format', required=False,
+                        help="Write the free-running hits as the ATLAS HITS ntuple: the LAr energy and time compressed as the ATLAS "
+                             "HITS (LArHitContainerCnv_p2) and filtered as FilterHit_tf (LArHitFilter, including its layer cuts in the "
+                             "HEC and FCAL), without the extra tglobal branches. Needs --free-running-hits. Off by default.")
     parser.add_argument('--atlas-fcal-electrodes', action='store', dest='atlas_fcal_electrodes', required=False,
                         type=str, default=os.environ.get('LORENZETTI_FCAL_ELECTRODES',
                                   os.path.join(os.environ.get('LORENZETTI_GEOMETRY_DATA_DIR', ''), 'LArFCalElectrodes-06.csv')),
@@ -278,6 +282,7 @@ def main(logging_level: str,
          atlas_fcal_electrodes: str,
          atlas_fcal_frozen_showers: bool,
          atlas_g4: bool,
+         free_running_atlas_format: bool,
          tile_atlas_gap: bool,
          atlas_endcap_cryostat: bool,
          atlas_barrel_cryostat: bool,
@@ -391,6 +396,7 @@ def main(logging_level: str,
                                  FreeRunningHits=free_running_hits,
                                  FreeRunningBinning=free_running_binning,
                                  FreeRunningNtupleName=("FreeRunningTree" if free_running_keep_hits else "CollectionTree"),
+                                 FreeRunningAtlasFormat=free_running_atlas_format,
                                  InputEventKey=recordable("Events")
                                  )
     
@@ -478,8 +484,8 @@ if __name__ == "__main__":
         args.tile_pmt_split = 'ushape'
         if args.neutron_time_cut is None:
             args.neutron_time_cut = 150.
-    elif args.free_running_no_binning or args.free_running_keep_hits:
-        parser.error("--free-running-no-binning and --free-running-keep-hits need --free-running-hits")
+    elif args.free_running_no_binning or args.free_running_keep_hits or args.free_running_atlas_format:
+        parser.error("--free-running-no-binning, --free-running-keep-hits and --free-running-atlas-format need --free-running-hits")
     print(f"output file: {args.output_file}")
     print(f"number of threads: {args.number_of_threads}")
 
@@ -505,6 +511,7 @@ if __name__ == "__main__":
              atlas_fcal_electrodes = args.atlas_fcal_electrodes,
              atlas_fcal_frozen_showers = args.atlas_fcal_frozen_showers,
              atlas_g4              = args.atlas_g4,
+             free_running_atlas_format = args.free_running_atlas_format,
              tile_atlas_gap        = args.tile_atlas_gap,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,
              atlas_barrel_cryostat = args.atlas_barrel_cryostat,

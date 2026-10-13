@@ -17,6 +17,7 @@ class CaloFreeRunningHitWriter( Cpp ):
                 InputEventKey : str = "Events",
                 NtupleName    : str = "CollectionTree",
                 OutputLevel   : int = LoggingLevel.toC('INFO'),
+                AtlasFormat   : bool = False,
               ):
 
     Cpp.__init__(self, ROOT.CaloFreeRunningHitWriter(name) )
@@ -24,3 +25,5 @@ class CaloFreeRunningHitWriter( Cpp ):
     self.setProperty( "InputEventKey" , InputEventKey )
     self.setProperty( "NtupleName"    , NtupleName    )
     self.setProperty( "OutputLevel"   , OutputLevel   )
+    # format of the ATLAS HITS ntuple: LAr compressed and filtered as FilterHit_tf (with its layer defects), no tglobal (F41 conserto 25)
+    self.setProperty( "AtlasFormat"   , AtlasFormat   )
