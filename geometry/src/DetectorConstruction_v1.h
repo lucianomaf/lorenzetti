@@ -135,6 +135,11 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
     std::vector<AtlasContainer> m_atlasContainers;
     std::map<G4LogicalVolume*, G4Transform3D> m_containerX;
     void BuildAtlasRun4( G4LogicalVolume *worldLV );
+    // the field map of the ATLAS simulation (--atlas-run4) and the envelopes that get their own field manager, as in ATLAS
+    std::string m_atlasFieldMap;
+    G4LogicalVolume *m_itkEnvelopeLV = nullptr;
+    G4LogicalVolume *m_beamPipeEnvelopeLV = nullptr;
+    void ConstructAtlasField();
     G4LogicalVolume* MotherFor( const std::vector<G4ThreeVector> &points, G4LogicalVolume *worldLV ) const;
     void PlaceGlobal( G4LogicalVolume *lv, const G4ThreeVector &pos, const std::string &name, G4LogicalVolume *motherLV );
     std::vector<std::string> m_larTreeVolumes;

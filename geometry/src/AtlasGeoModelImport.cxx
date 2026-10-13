@@ -5,6 +5,7 @@
 #include "G4PVPlacement.hh"
 #include "G4RotationMatrix.hh"
 #include "G4ThreeVector.hh"
+#include "G4UnionSolid.hh"
 #include <map>
 #include <stdexcept>
 #include <functional>
@@ -18,6 +19,7 @@
 #include "GeoMaterial2G4/Geo2G4MaterialFactory.h"
 #include "GeoModelKernel/GeoVPhysVol.h"
 #include "GeoModelKernel/GeoLogVol.h"
+#include "G4DisplacedSolid.hh"
 
 namespace {
   G4Transform3D toG4( const GeoTrf::Transform3D &x )
@@ -95,6 +97,40 @@ void AtlasGeoModelImport::placeWorldChildren( G4LogicalVolume *mother, const std
 }
 
 
+G4LogicalVolume* AtlasGeoModelImport::placeWorldChildrenInEnvelope( G4LogicalVolume *mother, const std::string &envelope,
+                                                                    const std::set<std::string> &names, bool checkOverlaps )
+{
+  const PVConstLink &world = m_impl->world;
+  std::vector<unsigned int> kids;
+  for( unsigned int i = 0; i < world->getNChildVols(); ++i )
+    if( names.count( world->getChildVol( i )->getLogVol()->getName() ) ) kids.push_back( i );
+  if( kids.empty() ) return nullptr;
+  // the union of the shapes with their transformations, in the material of the first one (Geo2G4Builder::BuildTree)
+  G4VSolid *shape = nullptr;
+  for( unsigned int i : kids ){
+    const GeoLogVol *glv = world->getChildVol( i )->getLogVol();
+    G4VSolid *s = m_impl->solids.Build( glv->getShape(), glv->getName() );
+    const G4Transform3D x = toG4( world->getXToChildVol( i ) );
+    if( !shape ) shape = new G4DisplacedSolid( envelope, s, x );
+    else         shape = new G4UnionSolid( envelope, shape, s, x );
+  }
+  G4LogicalVolume *env = new G4LogicalVolume( shape, m_impl->materials.Build( world->getChildVol( kids[0] )->getLogVol()->getMaterial() ),
+                                              envelope );
+  new G4PVPlacement( G4Transform3D(), env, envelope, mother, false, 0, checkOverlaps );
+  m_impl->byName[ envelope + "::" + envelope ].insert( env );
+  for( unsigned int i : kids ){
+    PVConstLink child = world->getChildVol( i );
+    const std::string name = child->getLogVol()->getName();
+    ExtParameterisedVolumeBuilder builder( name );
+    G4LogicalVolume *lv = builder.Build( child );
+    new G4PVPlacement( toG4( world->getXToChildVol( i ) ), lv, name, env, false, i, checkOverlaps );
+    std::set<G4LogicalVolume*> seen;
+    m_impl->collect( name, lv, seen );
+  }
+  return env;
+}
+
+
 std::vector<AtlasGeoModelImport::Container> AtlasGeoModelImport::placeUnwrapped( G4LogicalVolume *mother, const std::string &name,
                                                                                  const std::vector<std::string> &dropped, bool checkOverlaps )
 {
@@ -162,6 +198,8 @@ AtlasGeoModelImport::AtlasGeoModelImport( const std::string & )
 AtlasGeoModelImport::~AtlasGeoModelImport() = default;
 bool AtlasGeoModelImport::available() { return false; }
 void AtlasGeoModelImport::placeWorldChildren( G4LogicalVolume *, const std::set<std::string> &, bool ) {}
+G4LogicalVolume* AtlasGeoModelImport::placeWorldChildrenInEnvelope( G4LogicalVolume *, const std::string &, const std::set<std::string> &,
+                                                                    bool ) { return nullptr; }
 std::vector<AtlasGeoModelImport::Container> AtlasGeoModelImport::placeUnwrapped( G4LogicalVolume *, const std::string &,
                                                                                  const std::vector<std::string> &, bool ) { return {}; }
 std::vector<G4LogicalVolume*> AtlasGeoModelImport::logicalVolumes( const std::set<std::string> & ) const { return {}; }

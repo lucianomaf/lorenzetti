@@ -38,6 +38,12 @@ class AtlasGeoModelImport
     // The children of the world with these logical volume names, whole, placed in mother with their transformation.
     void placeWorldChildren( G4LogicalVolume *mother, const std::set<std::string> &names, bool checkOverlaps );
 
+    // The children of the world with these names placed in an envelope of the given name, placed in mother at the origin: the union of
+    // their shapes, of the material of the first one, as the Geo2G4Builder of Athena builds a detector with several top volumes (the
+    // beam pipe of Run 4: BeamPipe = BeamPipeCentral and the two BeamPipeFwd). Returns the envelope.
+    G4LogicalVolume* placeWorldChildrenInEnvelope( G4LogicalVolume *mother, const std::string &envelope,
+                                                   const std::set<std::string> &names, bool checkOverlaps );
+
     // The children of the world volumes named `name` placed in mother without the volume itself (its own material is the air of the
     // world), with the composed transformation. The descendants whose logical volume name starts with one of `dropped` are left out
     // (Lorenzetti builds them); every volume that has one of them below it is cloned per placement and returned as a container.

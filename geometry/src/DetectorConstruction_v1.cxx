@@ -13,6 +13,14 @@
 #include "FCalFrozenShowerModel.h"
 #include "AtlasDeadMaterialShower.h"
 #include "AtlasGeoModelImport.h"
+#include "AtlasMagneticField.h"
+#include "TightMuonSteppingFieldManager.h"
+#include "SimpleFastKiller.h"
+#include "G4AtlasRK4.h"
+#include "G4IntegrationDriver.hh"
+#include "G4Mag_UsualEqRhs.hh"
+#include "G4ChordFinder.hh"
+#include <mutex>
 #include <algorithm>
 #include <cmath>
 #include "G4Kernel/AtlasG4Settings.h"
@@ -82,6 +90,8 @@ DetectorConstruction_v1::DetectorConstruction_v1(std::string name)
   // end-cap cryostats of the LAr imported from the GeoModel dump AtlasRun4Geometry; world of air up to |z| = 21 m
   declareProperty( "AtlasRun4"                  , m_atlasRun4=false           );
   declareProperty( "AtlasRun4Geometry"          , m_atlasRun4Geometry=""      );
+  // the field map of the ATLAS simulation for --atlas-run4 (bfieldmap_7730_20400_14m.root, the GlobalMap of /GLOBAL/BField/Maps)
+  declareProperty( "AtlasFieldMap"              , m_atlasFieldMap=""          );
   declareProperty( "DeadMaterialVolumes"        , m_deadMaterialVolumes       );
   declareProperty( "FCalShowerLibDir"           , m_fcalShowerLibDir=""       );
   declareProperty( "OutputLevel"                , m_outputLevel=0             ); 
@@ -796,6 +806,13 @@ void DetectorConstruction_v1::CreateVerticalPlates(  G4LogicalVolume *worldLV,
 
 void DetectorConstruction_v1::ConstructSDandField(){
 
+  // The field and the beam pipe killer of the ATLAS Run 4 simulation (--atlas-run4; F41 conserto 27)
+  if (m_atlasRun4){
+    ConstructAtlasField();
+    auto *bp = G4RegionStore::GetInstance()->GetRegion( "BeampipeFwdCut", false );
+    if (bp) new SimpleFastKiller( "SimpleFastKiller", bp );
+  }
+
   // Dead material shower of the ATLAS settings (F41 conserto 24): HighEnergy 1000 GeV, LowEnergy 0, ZCutoff 5698 mm
   if (m_atlasG4){
     for (const auto &name : m_deadMaterialVolumes){
@@ -951,7 +968,29 @@ void DetectorConstruction_v1::BuildAtlasRun4( G4LogicalVolume *worldLV )
   }
   MSG_INFO( "AtlasRun4: importing the ATLAS geometry of the simulation from " << m_atlasRun4Geometry );
   m_atlasImport.reset( new AtlasGeoModelImport( m_atlasRun4Geometry ) );
-  m_atlasImport->placeWorldChildren( worldLV, {"BeamPipeCentral", "BeamPipeFwd", "ITkPixel", "ITkStrip", "HGTD"}, m_checkOverlaps );
+  // the envelopes of the Geant4 geometry of ATLAS: ITK, a cylinder of air with the ITk and the HGTD (G4GeometryToolConfig.py, ITKEnvelopeCfg:
+  // r = 28.8-1148 mm, |z| < 3545 mm for Run 4), and BeamPipe, the union of the top volumes of the beam pipe (Geo2G4Builder)
+  auto *itkS = new G4Tubs( "ITK", 28.8*mm, 1148.*mm, 3545.*mm, 0*deg, 360*deg );
+  m_itkEnvelopeLV = new G4LogicalVolume( itkS, G4NistManager::Instance()->FindOrBuildMaterial("G4_AIR"), "ITK" );
+  new G4PVPlacement( 0, G4ThreeVector(), m_itkEnvelopeLV, "ITK", worldLV, false, 0, m_checkOverlaps );
+  m_atlasImport->placeWorldChildren( m_itkEnvelopeLV, {"ITkPixel", "ITkStrip", "HGTD"}, m_checkOverlaps );
+  m_beamPipeEnvelopeLV = m_atlasImport->placeWorldChildrenInEnvelope( worldLV, "BeamPipe", {"BeamPipeCentral", "BeamPipeFwd"},
+                                                                      m_checkOverlaps );
+  // the forward beam pipe of the PhaseII campaign (enableBeamPipeKill: Sim.BeamPipeSimMode = FastSim): the region BeampipeFwdCut on the
+  // sections F198-F200 (cuts of 10 mm), where the SimpleFastKiller kills every particle (ConstructSDandField)
+  {
+    auto lvs = m_atlasImport->logicalVolumes( { "BeamPipe::SectionF198", "BeamPipe::SectionF199", "BeamPipe::SectionF200",
+                                                "BeamPipeFwd::SectionF198", "BeamPipeFwd::SectionF199", "BeamPipeFwd::SectionF200" } );
+    if (lvs.empty()){ MSG_FATAL( "AtlasRun4: no section F198-F200 of the forward beam pipe. Abort!" ); }
+    G4Region *r = GetRegion( "BeampipeFwdCut" );
+    // as the RegionCreator of Athena: SetRegion before AddRootLogicalVolume (see the region lambda below)
+    for (auto *lv : lvs){ lv->SetRegion( r ); r->AddRootLogicalVolume( lv ); }
+    auto *cuts = new G4ProductionCuts();
+    cuts->SetProductionCut( 10*mm, "gamma" ); cuts->SetProductionCut( 10*mm, "e-" ); cuts->SetProductionCut( 10*mm, "e+" );
+    cuts->SetProductionCut( 1*mm, "proton" );
+    r->SetProductionCuts( cuts );
+    MSG_INFO( "AtlasRun4: region BeampipeFwdCut (10 mm, SimpleFastKiller) on " << lvs.size() << " logical volumes" );
+  }
   const std::vector<std::string> dropped = { "LAr::EMEC::Pos::InnerWheel", "LAr::EMEC::Pos::OuterWheel", "LAr::EMEC::Neg::InnerWheel",
                                              "LAr::EMEC::Neg::OuterWheel", "LAr::HEC::Module", "LAr::FCAL::Module",
                                              "LAr::Endcap::Presampler::LiquidArgon" };
@@ -969,7 +1008,10 @@ void DetectorConstruction_v1::BuildAtlasRun4( G4LogicalVolume *worldLV )
     auto lvs = m_atlasImport->logicalVolumes( volumes );
     if (lvs.empty()){ MSG_INFO( "AtlasRun4: region " << name << " has no volume in this geometry" ); return; }
     G4Region *r = GetRegion( name );
-    for (auto *lv : lvs) r->AddRootLogicalVolume( lv );
+    // as the RegionCreator of Athena (G4AtlasTools/src/RegionCreator.cxx): SetRegion before AddRootLogicalVolume, so that a volume listed by
+    // two regions (the sections F198 and F199 of the forward beam pipe, in BeampipeFwdCut and DeadMaterial) is root of both and ends in the
+    // last one created (DeadMaterial), as in the ATLAS simulation (notes of the group, achados_athena_para_reportar.md, item 10)
+    for (auto *lv : lvs){ lv->SetRegion( r ); r->AddRootLogicalVolume( lv ); }
     auto *cuts = new G4ProductionCuts();
     cuts->SetProductionCut( cut*mm, "gamma" ); cuts->SetProductionCut( cut*mm, "e-" ); cuts->SetProductionCut( cut*mm, "e+" );
     cuts->SetProductionCut( 1.0*mm, "proton" );
@@ -1024,4 +1066,60 @@ void DetectorConstruction_v1::PlaceGlobal( G4LogicalVolume *lv, const G4ThreeVec
     return;
   }
   new G4PVPlacement( it->second.inverse() * G4Translate3D( pos ), lv, name, motherLV, false, 0, m_checkOverlaps );
+}
+
+
+
+// The magnetic field of the ATLAS simulation (--atlas-run4; F41 conserto 27), as the PhaseII campaign of Athena 23.0.14 sets it up
+// (G4FieldConfig.py, ATLAS_FieldMgrListCfg in G4GeometryToolConfig.py, StandardFieldSvc): the field map of the production
+// (MagFieldElements, ported to geometry/MagFieldElements) with the currents of the map (7730 and 20400 A); the global field manager
+// TightMuonSteppingFieldManager (Sim.TightMuonStepping = True), with the stepper AtlasRK4 (Sim.G4Stepper; G4IntegrationDriver, minimum step
+// 0.01 mm) and the Geant4 defaults for the other particles; and the field managers of the envelopes BeamPipe and ITK (BeamPipeFieldManager,
+// ITkFieldManager: DeltaIntersection 1e-5, DeltaOneStep 1e-4, MaximumEpsilonStep 1e-3, MinimumEpsilonStep 1e-5 mm). The map is read
+// once and shared; the field cache is per thread (it is not thread safe).
+void DetectorConstruction_v1::ConstructAtlasField()
+{
+  static std::shared_ptr<MagField::AtlasFieldMap> map;
+  static std::mutex mapMutex;
+  {
+    std::lock_guard<std::mutex> lock( mapMutex );
+    if (!map){
+      if (m_atlasFieldMap.empty()){ MSG_FATAL( "AtlasRun4 needs the field map of ATLAS (AtlasFieldMap). Abort!" ); }
+      map = AtlasMagneticField::loadMap( m_atlasFieldMap, 7730., 20400. );
+      if (!map){ MSG_FATAL( "AtlasRun4: cannot read the field map " << m_atlasFieldMap << ". Abort!" ); }
+      MSG_INFO( "AtlasRun4: field map " << m_atlasFieldMap );
+    }
+  }
+  auto *field = new AtlasMagneticField( map.get(), 1., 1. );
+  G4AutoDelete::Register( field );
+  const G4double minStep = 1e-2*mm;
+  auto driverFor = [&]( G4MagneticField *f ) -> G4VIntegrationDriver* {
+    auto *eq = new G4Mag_UsualEqRhs( f );
+    auto *stepper = new G4AtlasRK4( eq );
+    return new G4IntegrationDriver<G4AtlasRK4>( minStep, stepper, stepper->GetNumberOfVariables() );
+  };
+
+  // global: TightMuonSteppingFieldManager (GlobalFieldManagerTool with UseTightMuonStepping)
+  auto *transport = G4TransportationManager::GetTransportationManager();
+  auto *global = new TightMuonSteppingFieldManager();
+  transport->SetFieldManager( global );
+  global->SetDetectorField( field );
+  global->CreateChordFinder( field );
+  global->GetChordFinder()->SetIntegrationDriver( driverFor( field ) );
+
+  // the envelopes (DetectorFieldManagerTool): the parameters are set between the two CreateChordFinder of the ATLAS tool
+  for (auto *lv : { m_beamPipeEnvelopeLV, m_itkEnvelopeLV }){
+    if (!lv) continue;
+    auto *fm = new G4FieldManager();
+    fm->SetDetectorField( field );
+    fm->CreateChordFinder( field );
+    fm->SetDeltaOneStep( 0.0001*mm );
+    fm->SetDeltaIntersection( 0.00001*mm );
+    fm->SetMinimumEpsilonStep( 0.00001 );
+    fm->SetMaximumEpsilonStep( 0.001 );
+    fm->CreateChordFinder( field );
+    fm->GetChordFinder()->SetIntegrationDriver( driverFor( field ) );
+    lv->SetFieldManager( fm, true );
+    MSG_INFO( "AtlasRun4: field manager of " << lv->GetName() );
+  }
 }

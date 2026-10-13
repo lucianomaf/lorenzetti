@@ -69,6 +69,7 @@ class DetectorConstruction_v1( Cpp ):
                 TileAtlasGap      : bool=False,
                 AtlasRun4         : bool=False,
                 AtlasRun4Geometry : str="",
+                AtlasFieldMap     : str="",
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -231,6 +232,14 @@ class DetectorConstruction_v1( Cpp ):
         raise ValueError("AtlasRun4 needs the GeoModel dump of the ATLAS geometry (AtlasRun4Geometry or LORENZETTI_ATLAS_RUN4_GEOMETRY).")
       self.setProperty( "AtlasRun4", True )
       self.setProperty( "AtlasRun4Geometry", geometry )
+      # The field of the ATLAS simulation: the map of the production (default: LORENZETTI_FIELD_MAP), instead of UseSolenoidField or
+      # UseMagneticField
+      fieldmap = AtlasFieldMap or os.environ.get( 'LORENZETTI_FIELD_MAP', '' )
+      if not fieldmap:
+        raise ValueError("AtlasRun4 needs the field map of ATLAS (AtlasFieldMap or LORENZETTI_FIELD_MAP; bfieldmap_7730_20400_14m.root).")
+      if UseMagneticField:
+        raise ValueError("AtlasRun4 has the field of ATLAS: UseMagneticField cannot be set.")
+      self.setProperty( "AtlasFieldMap", fieldmap )
     
   
   # Geant4 settings of the ATLAS production (F41 conserto 24; Athena release 23.0.14, G4PhysicsRegionConfig.py and
