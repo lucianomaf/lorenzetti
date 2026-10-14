@@ -58,14 +58,19 @@ def shiftLArEndcap( volumes, samplings, fcal_modules ):
     for pv in volumes:
         if _isEndcap( pv.Name ) and id(pv) not in done:
             _shiftVolume( pv, math.copysign( _shiftOf( pv.Name ), pv.Z ) ); done.add( id(pv) )
+    # Several samplings of the EMEC and of the HEC share one volume: the volume moves once, but the cells of EVERY sampling move with it
+    # (each hit maker has its own Cells; a set by Cells keeps a shared one from moving twice).
+    cells_done = set()
     for s in samplings:
         pv = s.volume()
-        if not _isEndcap( pv.Name ) or id(pv) in done: continue
+        if not _isEndcap( pv.Name ): continue
         sign = 1 if pv.Z > 0 else -1
         shift = _shiftOf( pv.Name )
-        _shiftVolume( pv, sign * shift ); done.add( id(pv) )
+        if id(pv) not in done:
+            _shiftVolume( pv, sign * shift ); done.add( id(pv) )
         cells = getattr( s.sensitive(), 'Cells', None )
-        if not cells: continue
+        if not cells or id(cells) in cells_done: continue
+        cells_done.add( id(cells) )
         if 'EmecFocalShift' in cells:
             cells['EmecFocalShift'] = cells['EmecFocalShift'] + shift
             for k in ('EmecWheelZMin', 'EmecWheelZMax'):
