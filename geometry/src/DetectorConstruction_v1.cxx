@@ -1070,6 +1070,27 @@ void DetectorConstruction_v1::PlaceGlobal( G4LogicalVolume *lv, const G4ThreeVec
 
 
 
+// The field of the ATLAS map only inside the cylinder that holds the calorimeters (--atlas-run4; F41 conserto 27, decision of Luciano on
+// 14/10/2026): r <= 3860 mm (DM::TileGap, the outermost volume of the calorimeters) and |z| <= 6780.5 mm (the back of the mother of the
+// end-cap cryostat of ATLAS); zero outside. Beyond the calorimeters ATLAS has the end-cap toroid, the forward shielding and the muon
+// system, which absorb what leaves the calorimeters; Lorenzetti has empty air there, where the field of the map would only make
+// particles curl (the timeouts of the first test: electrons below 10 keV at |z| = 8-18 m) and come back. Not modelled either way: the
+// albedo of that ATLAS material.
+class AtlasCaloBoundedField : public G4MagneticField
+{
+  public:
+    AtlasCaloBoundedField( G4MagneticField *field, double rMax, double zMax ) : m_field( field ), m_r2( rMax*rMax ), m_zMax( zMax ) {}
+    void GetFieldValue( const double *point, double *b ) const override
+    {
+      if( point[0]*point[0] + point[1]*point[1] > m_r2 || std::fabs( point[2] ) > m_zMax ){ b[0] = b[1] = b[2] = 0.; return; }
+      m_field->GetFieldValue( point, b );
+    }
+  private:
+    G4MagneticField *m_field;
+    double m_r2, m_zMax;
+};
+
+
 // The magnetic field of the ATLAS simulation (--atlas-run4; F41 conserto 27), as the PhaseII campaign of Athena 23.0.14 sets it up
 // (G4FieldConfig.py, ATLAS_FieldMgrListCfg in G4GeometryToolConfig.py, StandardFieldSvc): the field map of the production
 // (MagFieldElements, ported to geometry/MagFieldElements) with the currents of the map (7730 and 20400 A); the global field manager
@@ -1090,7 +1111,9 @@ void DetectorConstruction_v1::ConstructAtlasField()
       MSG_INFO( "AtlasRun4: field map " << m_atlasFieldMap );
     }
   }
-  auto *field = new AtlasMagneticField( map.get(), 1., 1. );
+  auto *atlasField = new AtlasMagneticField( map.get(), 1., 1. );
+  G4AutoDelete::Register( atlasField );
+  auto *field = new AtlasCaloBoundedField( atlasField, 3860.*mm, 6780.5*mm );
   G4AutoDelete::Register( field );
   const G4double minStep = 1e-2*mm;
   auto driverFor = [&]( G4MagneticField *f ) -> G4VIntegrationDriver* {
