@@ -276,7 +276,13 @@ StatusCode CaloFreeRunningHitWriter::serialize( EventContext &ctx ) const
   double etot = 0;
   std::vector<double> tglobal = list->tglobal();
   std::vector<double> hitTime = list->hitTime();
-  for ( size_t i = 0; i < list->size(); ++i )
+  // order of the entries: as filled, except that the FCAL entries of the frozen shower spots go after those of the Geant4 steps, as
+  // the FCALFastSimDedicatedSD writes after the SDs of the modules in SDWrapper::EndOfAthenaEvent (F41 conserto 28)
+  std::vector<size_t> order;
+  order.reserve( list->size() );
+  for ( size_t i = 0; i < list->size(); ++i ) if( !( list->det()[i] == 4 && list->source()[i] == 1 ) ) order.push_back( i );
+  for ( size_t i = 0; i < list->size(); ++i ) if(    list->det()[i] == 4 && list->source()[i] == 1   ) order.push_back( i );
+  for ( size_t i : order )
   {
     const int det = list->det()[i];
     if( det == 0 ){

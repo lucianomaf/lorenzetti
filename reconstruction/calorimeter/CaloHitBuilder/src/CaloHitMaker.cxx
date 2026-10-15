@@ -817,7 +817,8 @@ void CaloHitMaker::freeRunningFCalSpot( SG::EventContext &ctx, const G4Step *ste
     else                timeBin = 14;
   }
   const auto &c = m_fcalTileCentre.at( std::make_pair( etaIndex, phiIndex ) );
-  list->addLAr( cellID, edep / MeV, t, tglobal, c.first, c.second, m_fcalModule, posNeg, 0, 4, timeBin );
+  // source 1: the hit of the FCALFastSimDedicatedSD, kept apart from the Geant4 steps of the same cell and bin (F41 conserto 28)
+  list->addLAr( cellID, edep / MeV, t, tglobal, c.first, c.second, m_fcalModule, posNeg, 0, 4, timeBin, 1 );
 }
 
 //!=====================================================================

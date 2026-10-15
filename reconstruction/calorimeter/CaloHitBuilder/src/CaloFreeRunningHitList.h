@@ -4,6 +4,7 @@
 #include "GaugiKernel/DataHandle.h"
 #include <cmath>
 #include <map>
+#include <tuple>
 #include <vector>
 
 /**
@@ -52,12 +53,16 @@ class CaloFreeRunningHitList : public SG::DataHandle
         TimeBinType Default) go to one entry, with the energy weighted mean time (LArHit::Add and finalize); timeBin < 0:
         one entry per deposit. det: 1 = EMB, 2 = EMEC, 3 = HEC, 4 = FCAL (F41 conserto 22; the container of the ATLAS ntuple).
         The fields sampling, barrel_ec (or pos_neg) and region of the dictionary go to sampling, side and module; in the FCAL,
-        the module goes to sampling and pos_neg to side. */
+        the module goes to sampling and pos_neg to side. source: the sensitive detector of the ATLAS simulation that makes the hit
+        (0: the Geant4 steps; 1: the spots of the frozen showers, the FCALFastSimDedicatedSD of Athena). Each source keeps its own
+        entries, as each SD of the SimpleSDWrapper of Athena keeps its own time bins and all write to the same collection without
+        merging (FCALSDTool, SDWrapper::EndOfAthenaEvent, release 23.0.14; F41 conserto 28): a cell can have one entry per source
+        in the same time bin. */
     void addLAr( long long cellID, double energy, double time, double tglobal, double eta, double phi,
-                 int sampling, int barrelEc, int region, int det, int timeBin ) const
+                 int sampling, int barrelEc, int region, int det, int timeBin, int source = 0 ) const
     {
       if( timeBin >= 0 ){
-        auto &entry = m_larBins[std::make_pair(cellID, timeBin)];
+        auto &entry = m_larBins[std::make_tuple(cellID, timeBin, source)];
         if( entry > 0 ){
           size_t i = entry - 1;
           m_energy[i] += energy;  m_sumET[i] += energy * time;  m_sumETglobal[i] += energy * tglobal;
@@ -66,11 +71,14 @@ class CaloFreeRunningHitList : public SG::DataHandle
         entry = m_cellID.size() + 1;
       }
       push( cellID, energy, time, tglobal, eta, phi, sampling, barrelEc, region, 0, det );
+      m_source.back() = source;
     }
 
     size_t size() const { return m_cellID.size(); }
     /*! 0 = tile, 1 = EMB, 2 = EMEC, 3 = HEC, 4 = FCAL */
     const std::vector<int>&       det()      const { return m_det;      }
+    /*! sensitive detector that made the entry (addLAr): 0 = Geant4 steps, 1 = frozen shower spots */
+    const std::vector<int>&       source()   const { return m_source;   }
     /*! hit time: the bin centre (tile, with binning) or the energy weighted mean time of the entry (LAr) [ns] */
     std::vector<double> hitTime() const
     {
@@ -103,7 +111,7 @@ class CaloFreeRunningHitList : public SG::DataHandle
                int sampling, int side, int module, int tower, int det = 0 ) const
     {
       m_cellID.push_back(cellID);   m_energy.push_back(energy);   m_time.push_back(time);
-      m_sumET.push_back(energy * time);   m_det.push_back(det);
+      m_sumET.push_back(energy * time);   m_det.push_back(det);   m_source.push_back(0);
       m_sumETglobal.push_back(energy * tglobal);   m_firstTglobal.push_back(tglobal);
       m_eta.push_back(eta);   m_phi.push_back(phi);
       m_sampling.push_back(sampling);   m_side.push_back(side);   m_module.push_back(module);   m_tower.push_back(tower);
@@ -130,7 +138,8 @@ class CaloFreeRunningHitList : public SG::DataHandle
     /*! LAr: sum of energy x time of each entry, detector of each entry, and entry + 1 of each (cell, time bin) */
     mutable std::vector<double>    m_sumET;
     mutable std::vector<int>       m_det;
-    mutable std::map<std::pair<long long, int>, size_t> m_larBins;
+    mutable std::vector<int>       m_source;
+    mutable std::map<std::tuple<long long, int, int>, size_t> m_larBins;
 };
 
 #endif

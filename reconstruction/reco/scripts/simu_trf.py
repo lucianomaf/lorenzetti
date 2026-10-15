@@ -441,6 +441,26 @@ def main(logging_level: str,
     if not dry_run:
         acc.run(number_of_events)
         exec(post_exec)
+        if free_running_atlas_format:
+            keep_only_collection_tree(output_file)
+
+
+def keep_only_collection_tree(path):
+    """
+    The file of --free-running-atlas-format as the ATLAS ntuple (F41 conserto 28): only the CollectionTree, without the monitoring
+    directories of the framework (Event/, Expert/). The tree is copied as it is (fast clone, same compression settings).
+    """
+    import ROOT
+    src = ROOT.TFile.Open(path)
+    tree = src.Get("CollectionTree")
+    if not tree:
+        src.Close()
+        return
+    tmp = path + ".tmp"
+    dst = ROOT.TFile(tmp, "RECREATE", "", src.GetCompressionSettings())
+    tree.CloneTree(-1, "fast").Write()
+    dst.Close(); src.Close()
+    os.replace(tmp, path)
 
 
 
