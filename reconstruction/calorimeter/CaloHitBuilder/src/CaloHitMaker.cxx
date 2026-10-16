@@ -34,6 +34,16 @@
 // the ported ATLAS charge collection of the EM end-cap (F41 conserto 29)
 #include "LArG4EC/EnergyCalculator.h"
 #include "LArG4EC/EMECDataCSV.h"
+#include "G4AffineTransform.hh"
+#include "G4RotationMatrix.hh"
+
+// Deposits of the EMEC free-running hits with the charge collection, and those discarded because the HV helper of ATLAS throws
+// (decision of Luciano of 15/10/2026: no ATLAS hit there), per wheel (0 outer, 1 inner): steps and energy before the correction (the
+// energy of the hit without the option); printed at the end of the run by the first EMEC maker that finalizes.
+static std::mutex s_emecDiscardMutex;
+static long   s_emecSteps[2] = {0, 0}, s_emecDiscardedSteps[2] = {0, 0};
+static double s_emecEnergy[2] = {0., 0.}, s_emecDiscardedEnergy[2] = {0., 0.};
+static bool   s_emecDiscardPrinted = false;
 
 using namespace Gaugi;
 using namespace SG;
@@ -281,6 +291,17 @@ StatusCode CaloHitMaker::initialize()
 
 StatusCode CaloHitMaker::finalize()
 {
+  // charge collection of the ATLAS EM end-cap (F41 conserto 29): the deposits discarded because the HV helper of ATLAS throws
+  if( m_emecCalculator ){
+    std::lock_guard<std::mutex> lock( s_emecDiscardMutex );
+    if( !s_emecDiscardPrinted ){
+      s_emecDiscardPrinted = true;
+      for( int w = 0; w < 2; ++w )
+        MSG_INFO( "EMEC charge collection, " << ( w ? "inner" : "outer" ) << " wheel: " << s_emecSteps[w] << " steps, "
+                  << s_emecEnergy[w] << " MeV before the correction; discarded (HV eta range): " << s_emecDiscardedSteps[w]
+                  << " steps, " << s_emecDiscardedEnergy[w] << " MeV" );
+    }
+  }
   return StatusCode::SUCCESS;
 }
 
@@ -507,7 +528,16 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
     // (with the charge collection of the ATLAS EM end-cap, F41 conserto 29, the energy of the free-running hit is the one of the
     // ATLAS simulation, emecChargeEnergy; the hit collection keeps edep)
     if( m_freeRunningHits && isAtlasLAr() && edep > 0 )
-      freeRunningLAr( ctx, step, etaBin, phiBin, m_emecCalculator ? (float)emecChargeEnergy(step) : edep );
+    {
+      if( !m_emecCalculator ){
+        freeRunningLAr( ctx, step, etaBin, phiBin, edep );
+      }else{
+        double energy = 0;
+        const bool kept = emecChargeEnergy( step, energy );
+        emecDiscardCount( m_emecCompartment <= 2, edep, !kept );
+        if( kept ) freeRunningLAr( ctx, step, etaBin, phiBin, (float)energy );
+      }
+    }
   }else{
     MSG_FATAL( "Its not possible to retrieve the hit. Bin ("<< bin << ") not exist");
   }
@@ -927,13 +957,56 @@ float CaloHitMaker::birksEnergy( const G4Step *step ) const
 // - the energy of the hit: CalculateChargeCollection1 (GetCurrent1) of the energy after Birks between the two points.
 static constexpr bool kEmecShiftEndpointsIndependently = false;
 
-double CaloHitMaker::emecChargeEnergy( const G4Step *step ) const
+// Side B (decision of Luciano of 15/10/2026): the transform from the global frame to the frame of the wheel composed as in the ATLAS
+// simulation, level by level as G4NavigationHistory does it (G4NavigationLevelRep: InverseProduct of the transform of the level above and
+// G4AffineTransform(GetRotation(), GetTranslation()) of the placement; G4PVPlacement(G4Transform3D) keeps the inverse of the rotation),
+// with the placements of the geometry of the simulation of ATLAS-P2-RUN4-01-01-00 (GeoModel, Geo2G4):
+// - LAr::Endcap::Cryostat::MotherVolume of side B: LArPosition LARCRYO_EC_NEG (translation z = -6734.5 mm, no rotation; LArPosition-10)
+//   times GeoTrf::RotateY3D(180 deg) (LArDetectorFactory.cxx), the Eigen AngleAxis matrix [[c, 0, s], [0, 1, 0], [-s, 0, c]] with
+//   c = cos(pi) = -1 and s = sin(pi) = 1.2246e-16 of the double pi;
+// - EmecHecLAr and LAr::EMEC::Mother (LArPosition EMEC_NEG, zero): identity;
+// - the wheel: refSystemTransform, TranslateZ(ZPLANE of EMEC::Mother - 3639.5 mm) = TranslateZ(-3050.5 - 3639.5 = -6690 mm) (CryoPcons-21-
+//   HGTD), then TranslateZ(zWheelRefPoint + dWRPtoFrontFace = 3689.5 + 11 = 3700.5 mm) (EMECConstruction.cxx), one translation -2989.5 mm;
+// - the world and the CALO envelope of the ATLAS simulation: identity (no offset in G4GeometryToolConfig.py).
+// Valid for the geometry of --atlas-run4 (wheel front at |z| = 3745 mm); side A keeps |z| minus the front face.
+static G4AffineTransform emecTopTransformSideB()
+{
+  const double angle = 180.0 * CLHEP::deg;
+  const double c = std::cos( angle ), s = std::sin( angle );
+  // Eigen::AngleAxisd(angle, UnitY).toRotationMatrix(), element by element
+  const double cos1y = 1. - c;   // (1 - c) * axis.y()
+  const CLHEP::HepRep3x3 rep( 0. * 0. + c,         0. * 1. - s * 0.,   0. * 0. + s * 1.,
+                              0. * 1. + s * 0.,    cos1y * 1. + c,     cos1y * 0. - s * 0.,
+                              0. * 0. - s * 1.,    cos1y * 0. + s * 0., 0. * 0. + c );
+  const G4RotationMatrix placement( rep );
+  const G4RotationMatrix frot = placement.inverse();   // G4PVPlacement(G4Transform3D): NewPtrRotMatrix(getRotation().inverse())
+  G4AffineTransform world;                                         // the world and the CALO envelope
+  G4AffineTransform cryostat;
+  cryostat.InverseProduct( world, G4AffineTransform( &frot, G4ThreeVector( 0., 0., -6734.5 ) ) );
+  G4AffineTransform emecHecLAr, emecMother, wheel;
+  emecHecLAr.InverseProduct( cryostat, G4AffineTransform() );
+  emecMother.InverseProduct( emecHecLAr, G4AffineTransform() );
+  wheel.InverseProduct( emecMother, G4AffineTransform( G4ThreeVector( 0., 0., -6690. + 3700.5 ) ) );
+  return wheel;
+}
+
+void CaloHitMaker::emecDiscardCount( bool inner, double energyBefore, bool discarded ) const
+{
+  std::lock_guard<std::mutex> lock( s_emecDiscardMutex );
+  const int w = inner ? 1 : 0;
+  ++s_emecSteps[w]; s_emecEnergy[w] += energyBefore;
+  if( discarded ){ ++s_emecDiscardedSteps[w]; s_emecDiscardedEnergy[w] += energyBefore; }
+}
+
+bool CaloHitMaker::emecChargeEnergy( const G4Step *step, double &energy ) const
 {
   const LArG4::EC::EnergyCalculator *calc = m_emecCalculator;
   const LArWheelCalculator *lwc = calc->calculator();
-  const double side = ( m_zMin + m_zMax > 0 ) ? 1. : -1.;
+  const bool sideA = ( m_zMin + m_zMax > 0 );
   const double zFront = m_emecFocalShift + lwc->GetElecFocaltoWRP() + lwc->GetdWRPtoFrontFace();
-  auto toLocal = [&]( const G4ThreeVector &g ){ return G4ThreeVector( side * g.x(), g.y(), side * g.z() - zFront ); };
+  static const G4AffineTransform topB = emecTopTransformSideB();
+  auto toLocal = [&]( const G4ThreeVector &g ){
+    return sideA ? G4ThreeVector( g.x(), g.y(), g.z() - zFront ) : topB.TransformPoint( g ); };
   G4ThreeVector p1 = toLocal( step->GetPreStepPoint()->GetPosition() );
   G4ThreeVector p2 = toLocal( step->GetPostStepPoint()->GetPosition() );
   if( kEmecShiftEndpointsIndependently ){
@@ -952,16 +1025,18 @@ double CaloHitMaker::emecChargeEnergy( const G4Step *step ) const
     const G4double gap = calc->GapSize( midpoint );
     const G4double efield = 0.01 * calc->Voltage( midpoint ) / gap; // estimate Efield[KV/cm]
     E = calc->Birks( E, wholeStepLengthCm, efield );
-    return calc->ChargeCollection( E, p1, p2 );
+    energy = calc->ChargeCollection( E, p1, p2 );
+    return true;
   }catch( const std::exception &e ){
-    // HVHelper::GetEtaSection throws when the point is outside the eta range of the HV sectors of the wheel. PROVISIONAL (decision
-    // pending with Luciano, F41 conserto 29): the deposit is kept with the energy of the hit without the option (birksEnergy).
+    // HVHelper::GetEtaSection throws when the point is outside the eta range of the HV sectors of the wheel (steps at the conical edges
+    // of the planar slices of the wheels of Lorenzetti, beyond the cone of the ATLAS wheel). Decision of Luciano of 15/10/2026: the deposit
+    // is discarded (there is no liquid argon of the ATLAS wheel there, so no ATLAS hit).
     static std::atomic<long> nExceptions{0};
     const long n = ++nExceptions;
     if( n <= 10 || ( n & (n - 1) ) == 0 )
       MSG_WARNING( "EMEC charge collection: " << e.what() << " for the step at local (" << p1.x() << ", " << p1.y() << ", "
-                   << p1.z() << "); kept with the Birks energy of Lorenzetti (" << n << " so far)" );
-    return birksEnergy( step );
+                   << p1.z() << "); deposit discarded (" << n << " so far)" );
+    return false;
   }
 }
 

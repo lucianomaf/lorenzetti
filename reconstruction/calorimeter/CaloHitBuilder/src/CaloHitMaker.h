@@ -181,7 +181,8 @@ class CaloHitMaker : public Gaugi::Algorithm
     std::string m_emecChargeFieldMap;
     std::string m_emecChargeHVMap;
     const LArG4::EC::EnergyCalculator *m_emecCalculator = nullptr;   // shared by the makers of the same wheel and side
-    double emecChargeEnergy( const G4Step *step ) const;
+    bool emecChargeEnergy( const G4Step *step, double &energy ) const;
+    void emecDiscardCount( bool inner, double energyBefore, bool discarded ) const;
     double emecLArPhiShift( const CLHEP::Hep3Vector &p ) const;
 
     // ATLAS-like barrel EM and presampler cells (see embFindCell): mode (0 = off, the default; 1 = barrel; 2 = end-cap

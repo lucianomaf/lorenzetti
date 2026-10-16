@@ -1,7 +1,7 @@
 /*
   Copyright (C) 2002-2022 CERN for the benefit of the ATLAS collaboration
 */
-// Ported to Lorenzetti from Athena release 23.0.14 (DetectorDescription/GeoModel/GeoSpecialShapes/src) for --atlas-emec-charge-collection (F41 conserto 29); changes: include paths; GeoModel units from GeoSpecialShapes/GeoModelKernelUnits.h (same values). Compiled with -DNDEBUG -O2 as in the Athena release.
+// Ported to Lorenzetti from Athena release 23.0.14 (DetectorDescription/GeoModel/GeoSpecialShapes/src) for --atlas-emec-charge-collection (F41 conserto 29); changes: the outer wheel takes the coefficients computed by Athena 23.0.14, recorded (see outer_params); include paths; GeoModel units from GeoSpecialShapes/GeoModelKernelUnits.h (same values). Compiled with -DNDEBUG -O2 as in the Athena release.
 
 #include "GeoSpecialShapes/LArWheelCalculator.h"
 
@@ -239,8 +239,24 @@ namespace {
   }
 
   /// Calculate (and cache) outer wheel parameterization
-  const sincos_params& outer_params(LArWheelCalculator& lwc) {
-    static const sincos_params p = calc_params(lwc, 560.*mm, 2090.*mm);
+  // Lorenzetti port (F41 conserto 29, decision of Luciano of 15/10/2026): the outer wheel uses the coefficients that Athena 23.0.14
+  // itself computes with calc_params(lwc, 560.*mm, 2090.*mm), recorded below, instead of the fit at run time. The fit is a degree-5 least
+  // squares problem with a badly conditioned normal matrix: in the Lorenzetti container (ROOT 6.34, glibc 2.35) it gives coefficients
+  // different in their last bits from those of the release (ROOT 6.26/08, glibc 2.17; one pow differs by 1 ulp and the inversion of
+  // TMatrixDSym differs), and the energy of a step up to 2.7e-7. Source of the numbers: the EMECPosOuterWheelCalculator and
+  // EMECNegOuterWheelCalculator of Athena 23.0.14 (lxplus, centos7 container, asetup Athena,23.0.14), m_sin_parametrization and
+  // m_cos_parametrization printed with %a by the validation harness (geometry/scripts/emec_charge_validation); the same for the absorber
+  // and electrode calculators of both sides. The fit code above is kept as the reference (the inner wheel still uses it: there the
+  // container gives the same coefficients as the release).
+  sincos_params recorded_outer_params() {
+    sincos_params p;
+    p.sin = { -0x1.59038098cp-1, 0x1.a0e286d58p-9, -0x1.9414662dp-19, 0x1.a6bc6548p-30, -0x1.c1863bap-42, 0x1.78b029fcp-55 };
+    p.cos = { 0x1.15f19cd4ap+0, 0x1.29be47ap-14, -0x1.38aa45a6p-20, 0x1.3b1d56328p-30, -0x1.0adcd9728p-41, 0x1.51bacff88p-54 };
+    return p;
+  }
+
+  const sincos_params& outer_params(LArWheelCalculator& /*lwc*/) {
+    static const sincos_params p = recorded_outer_params();
     return p;
   }
 }

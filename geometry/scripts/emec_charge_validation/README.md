@@ -19,3 +19,9 @@ squares fit inverted with `TMatrixDSym::Invert`) differ in their last bits (one 
 `pow`; the ROOT 6.34 inversion differs from ROOT 6.26 even with the same matrix), and the energy of a step differs by up to 2.7e-7
 (relative; median 1e-9). With the coefficients of Athena imposed (`evaluate_port` with a 6th argument, diagnostic only) the
 differences drop to 3.4e-14.
+
+Decision of Luciano (15/10/2026): the outer wheel uses the coefficients computed by Athena 23.0.14, recorded in
+geometry/src/GeoSpecialShapes_sincos_poly.cxx (outer_params; the fit code is kept as the reference and still used for the inner wheel).
+With them the port is still identical bit by bit to Athena in the environment of the release, and in the Lorenzetti container the
+largest difference is 3.4e-14 (relative) in the energy of a step and 4.6e-13 mm in the coordinates rotated to the fan frame (sin/cos
+of glibc 2.35 in rotateZ).
