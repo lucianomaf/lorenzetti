@@ -446,7 +446,10 @@ def _presamplerCalorimeter(pv, sign, side_name, sampling, eta0, ncells, emb_mode
         raise RuntimeError(f"{key}: {len(sv.PhiBins) - 1} phi slices, expected 64")
     sv.EtaBins = edges; sv.EtaMin = edges[0]; sv.EtaMax = edges[-1]
     sv.Cells = cells
-    atlasLArPhiShift(sv, -sign * pi / (1024 if barrel else 768))
+    # no phi shift on the presamplers (F41 medida 30b/30c, 16/10/2026): in the ATLAS simulation (Athena 23.0.14, Sim_tf with 2 TeV
+    # muons) the barrel and end-cap presampler phi edges are at k pi/32 on both sides; the half-absorber shift of the readout
+    # geometry (conserto 19) holds for the accordion middle layers, not here
+    atlasLArPhiShift(sv, 0.0)
     return Calorimeter( sv, -21, 3, -2,
                         CollectionKey   = f"Collection_{key}_0" + side_name,
                         Detector        = Detector.TTEM,
