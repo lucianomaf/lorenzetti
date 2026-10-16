@@ -5,6 +5,10 @@
 #include "GaugiKernel/DataHandle.h"
 #include "GaugiKernel/AlgTool.h"
 #include "CaloHit/CaloHit.h"
+#include "CLHEP/Vector/ThreeVector.h"
+
+// the ported ATLAS charge collection of the EM end-cap (geometry/LArG4EC/EnergyCalculator.h; kept out of the dictionary)
+namespace LArG4 { namespace EC { class EnergyCalculator; } }
 
 
 
@@ -164,6 +168,21 @@ class CaloHitMaker : public Gaugi::Algorithm
     std::vector<float> m_emecWheelRMax;
     std::vector<float> m_emecWheelZMin;
     std::vector<float> m_emecWheelZMax;
+
+    // Charge collection of the ATLAS EM end-cap (F41 conserto 29, --atlas-emec-charge-collection): with EmecChargeCollection the
+    // energy of the free-running hits of this EMEC maker is the one of the ATLAS simulation (Athena 23.0.14, LArG4::EC::
+    // EnergyCalculator::Process_Default with EnergyCorrection = 8): Birks' law with the local field 0.01 HV / gap at the middle of
+    // the step and the current of the charge collection (CalculateChargeCollection1), computed by the ported ATLAS code
+    // (geometry/LArG4EC, geometry/GeoSpecialShapes) on the step brought to the frame of the ATLAS wheel and moved in phi into the
+    // liquid argon of the accordion (see emecChargeEnergy). The tables of the wheels (EmecChargeTables), the field map
+    // (EmecChargeFieldMap, ec.fieldzv03) and the HV map (EmecChargeHVMap, HVEMECMap_v02.dat) are files of geometry/data.
+    bool m_emecChargeCollection;
+    std::string m_emecChargeTables;
+    std::string m_emecChargeFieldMap;
+    std::string m_emecChargeHVMap;
+    const LArG4::EC::EnergyCalculator *m_emecCalculator = nullptr;   // shared by the makers of the same wheel and side
+    double emecChargeEnergy( const G4Step *step ) const;
+    double emecLArPhiShift( const CLHEP::Hep3Vector &p ) const;
 
     // ATLAS-like barrel EM and presampler cells (see embFindCell): mode (0 = off, the default; 1 = barrel; 2 = end-cap
     // presampler), sampling (0-3) and region (0 or 1) of the ATLAS identifier dictionary read by this maker.

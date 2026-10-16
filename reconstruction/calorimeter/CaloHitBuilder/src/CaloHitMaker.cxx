@@ -24,6 +24,16 @@
 #include "TH2Poly.h"
 #include "TGraph.h"
 #include <cstdlib>
+#include <map>
+#include <mutex>
+#include <tuple>
+#include <memory>
+#include <atomic>
+#include <stdexcept>
+
+// the ported ATLAS charge collection of the EM end-cap (F41 conserto 29)
+#include "LArG4EC/EnergyCalculator.h"
+#include "LArG4EC/EMECDataCSV.h"
 
 using namespace Gaugi;
 using namespace SG;
@@ -101,6 +111,11 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "EmecWheelRMax"            , m_emecWheelRMax                       );
   declareProperty( "EmecWheelZMin"            , m_emecWheelZMin                       );
   declareProperty( "EmecWheelZMax"            , m_emecWheelZMax                       );
+  // Charge collection of the ATLAS EM end-cap (F41 conserto 29; see emecChargeEnergy): off by default
+  declareProperty( "EmecChargeCollection"     , m_emecChargeCollection=false          );
+  declareProperty( "EmecChargeTables"         , m_emecChargeTables=""                 );
+  declareProperty( "EmecChargeFieldMap"       , m_emecChargeFieldMap=""               );
+  declareProperty( "EmecChargeHVMap"          , m_emecChargeHVMap=""                  );
   // ATLAS-like barrel EM and presamplers (geometry/python/v1/ECAL.py, --atlas-emb-cells): with EmbMode > 0 (1 = barrel,
   // 2 = end-cap presampler) the cell of a step inside the limits of the maker comes from its pseudorapidity, for the sampling
   // (0-3) and region (0, 1) of the ATLAS identifier dictionary read by this maker (see embFindCell); the cells are those of
@@ -197,6 +212,29 @@ StatusCode CaloHitMaker::initialize()
                                  m_emecWheelRMin.size() != m_emecWheelZMax.size() ||
                                  m_cellEta.size() != (unsigned)(m_emecMaxEta + 1) || m_nPhiBins % 2 ) ){
     MSG_FATAL( "EmecCompartment needs the tables of the ATLAS-like EM end-cap (geometry/python/v1/EMEC.py)." );
+  }
+
+  // Charge collection of the ATLAS EM end-cap (F41 conserto 29): the ported LArG4::EC::EnergyCalculator of the wheel and side of
+  // this maker, built once per wheel, side and files (as the four calculators EMEC{Pos,Neg}{Inner,Outer}WheelCalculator of the
+  // ATLAS simulation) and shared by the makers of the compartments of that wheel
+  if( m_emecChargeCollection ){
+    if( m_emecCompartment <= 0 || !m_freeRunningHits || !isAtlasLAr() ){
+      MSG_FATAL( "EmecChargeCollection needs an ATLAS-like EM end-cap maker (EmecCompartment) with the free-running hits." );
+    }
+    const bool inner = ( m_emecCompartment <= 2 );   // compartments 1 and 2: inner wheel (s_geometry of EnergyCalculator.cc)
+    const int zside = ( m_zMin + m_zMax > 0 ) ? 1 : -1;
+    static std::mutex mutex;
+    static std::map<std::tuple<bool, int, std::string, std::string, std::string>,
+                    std::unique_ptr<const LArG4::EC::EnergyCalculator>> calculators;
+    std::lock_guard<std::mutex> lock( mutex );
+    auto key = std::make_tuple( inner, zside, m_emecChargeTables, m_emecChargeFieldMap, m_emecChargeHVMap );
+    auto it = calculators.find( key );
+    if( it == calculators.end() ){
+      const EMECData data = readEMECDataCSV( m_emecChargeTables );
+      it = calculators.emplace( key, std::make_unique<const LArG4::EC::EnergyCalculator>( data,
+               inner ? LArG4::InnerAbsorberWheel : LArG4::OuterAbsorberWheel, zside, m_emecChargeFieldMap, m_emecChargeHVMap ) ).first;
+    }
+    m_emecCalculator = it->second.get();
   }
 
   if( m_embMode > 0 ){
@@ -466,8 +504,10 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
         freeRunningTile( ctx, step, etaBin, phiBin, edep, w0, w1, npmt );
     }
     // Free-running hits of the ATLAS-like LAr cells: the same deposit, with the ATLAS identifier and time
+    // (with the charge collection of the ATLAS EM end-cap, F41 conserto 29, the energy of the free-running hit is the one of the
+    // ATLAS simulation, emecChargeEnergy; the hit collection keeps edep)
     if( m_freeRunningHits && isAtlasLAr() && edep > 0 )
-      freeRunningLAr( ctx, step, etaBin, phiBin, edep );
+      freeRunningLAr( ctx, step, etaBin, phiBin, m_emecCalculator ? (float)emecChargeEnergy(step) : edep );
   }else{
     MSG_FATAL( "Its not possible to retrieve the hit. Bin ("<< bin << ") not exist");
   }
@@ -865,6 +905,138 @@ float CaloHitMaker::birksEnergy( const G4Step *step ) const
   }
 
   return (float)edep;
+}
+
+//!=====================================================================
+
+// Charge collection of the ATLAS EM end-cap (F41 conserto 29, --atlas-emec-charge-collection): the energy that the ATLAS simulation
+// records for a step in the liquid argon of an EMEC wheel (Athena 23.0.14, LArCalorimeter/LArG4/LArG4EC/src/EnergyCalculator.cc,
+// Process_Default with the default EnergyCorrection = 8), computed by the ported ATLAS code (geometry/LArG4EC, geometry/GeoSpecialShapes;
+// copies of the sources and the validation against Athena in the F41 notes of the group, c29_emec_energia/):
+// - frame: the pre- and post-step points are brought to the local frame of the ATLAS wheel (the frame of the liquid argon volume
+//   LAr::EMEC::{Pos,Neg}::{Inner,Outer}Wheel, where FindIdentifier_Default takes them with GetTopTransform): z from the front face
+//   of the wheel, |z| - (EmecFocalShift + dElecFocaltoWRP + dWRPtoFrontFace), the same front face as the cells (emecFindCell); on
+//   side B the end-cap is rotated by 180 degrees around y (LArDetectorFactory.cxx: RotateY3D(180 deg)), so x changes sign. In the
+//   geometry of the simulation of ATLAS-P2-RUN4-01-01-00 the wheels are at |z| = 3745 mm with no other rotation.
+// - liquid argon of the accordion: the EMEC of Lorenzetti is made of planar layers, so the point may be where ATLAS has an absorber
+//   or an electrode. The step is moved in phi, at the same r and z, into the liquid argon of the same fan period (option (b),
+//   decided by Luciano): emecLArPhiShift gives the shift for the middle of the step and the same shift moves both points (rigid
+//   shift, confirmed by Luciano on 15/10/2026); kEmecShiftEndpointsIndependently = true would move each point by its own shift.
+// - Birks' law with the local field 0.01 HV / gap at the middle of the step (GetGapSize and the HV of HVHelper, HVEMECMap_v02.dat),
+//   on the deposit times the weight of the track, with the step length (LArG4BirksLaw, k = 0.05832, LAr density 1.396 g/cm3);
+// - the energy of the hit: CalculateChargeCollection1 (GetCurrent1) of the energy after Birks between the two points.
+static constexpr bool kEmecShiftEndpointsIndependently = false;
+
+double CaloHitMaker::emecChargeEnergy( const G4Step *step ) const
+{
+  const LArG4::EC::EnergyCalculator *calc = m_emecCalculator;
+  const LArWheelCalculator *lwc = calc->calculator();
+  const double side = ( m_zMin + m_zMax > 0 ) ? 1. : -1.;
+  const double zFront = m_emecFocalShift + lwc->GetElecFocaltoWRP() + lwc->GetdWRPtoFrontFace();
+  auto toLocal = [&]( const G4ThreeVector &g ){ return G4ThreeVector( side * g.x(), g.y(), side * g.z() - zFront ); };
+  G4ThreeVector p1 = toLocal( step->GetPreStepPoint()->GetPosition() );
+  G4ThreeVector p2 = toLocal( step->GetPostStepPoint()->GetPosition() );
+  if( kEmecShiftEndpointsIndependently ){
+    p1.rotateZ( emecLArPhiShift( p1 ) );
+    p2.rotateZ( emecLArPhiShift( p2 ) );
+  }else{
+    const double dphi = emecLArPhiShift( ( p1 + p2 ) * 0.5 );
+    p1.rotateZ( dphi );
+    p2.rotateZ( dphi );
+  }
+  // Process_Default
+  G4double E = step->GetTotalEnergyDeposit() * ( step->GetTrack() ? step->GetTrack()->GetWeight() : 1. );
+  try{
+    const G4ThreeVector midpoint = ( p1 + p2 ) * 0.5;
+    const G4double wholeStepLengthCm = step->GetStepLength() / cm;
+    const G4double gap = calc->GapSize( midpoint );
+    const G4double efield = 0.01 * calc->Voltage( midpoint ) / gap; // estimate Efield[KV/cm]
+    E = calc->Birks( E, wholeStepLengthCm, efield );
+    return calc->ChargeCollection( E, p1, p2 );
+  }catch( const std::exception &e ){
+    // HVHelper::GetEtaSection throws when the point is outside the eta range of the HV sectors of the wheel. PROVISIONAL (decision
+    // pending with Luciano, F41 conserto 29): the deposit is kept with the energy of the hit without the option (birksEnergy).
+    static std::atomic<long> nExceptions{0};
+    const long n = ++nExceptions;
+    if( n <= 10 || ( n & (n - 1) ) == 0 )
+      MSG_WARNING( "EMEC charge collection: " << e.what() << " for the step at local (" << p1.x() << ", " << p1.y() << ", "
+                   << p1.z() << "); kept with the Birks energy of Lorenzetti (" << n << " so far)" );
+    return birksEnergy( step );
+  }
+}
+
+//!=====================================================================
+
+// Shift in phi (rad) that brings the point p (local frame of the ATLAS wheel) into the liquid argon of its fan period, at the same r
+// and z, preserving its fraction of the period (option (b) of the plan approved by Luciano; F41 conserto 29). At the (r, z) of the
+// point, with the ported LArWheelCalculator of the absorbers and of the electrodes of the wheel:
+// - the fan period is the phi interval between the neutral fibres of the two absorbers around the point (the nearest absorber, from
+//   DistanceToTheNearestFan, and the next one on the side of the point);
+// - the liquid argon of the period is made of two intervals: from the surface of the lower absorber (distance to its neutral fibre
+//   equal to its half thickness, GetFanHalfThickness) to the surface of the electrode (distance to the electrode neutral fibre equal
+//   to minus the electrode half thickness), and from the other surface of the electrode to the surface of the upper absorber; the
+//   distances are those of DistanceToTheNeutralFibre, the same that decide inside and outside in the ATLAS wheel;
+// - the fraction f of the point in the full period is mapped linearly onto the cumulated length of the two intervals.
+// Each boundary is found by bisection in phi down to the resolution of a double (no tolerance). If a boundary is not bracketed (it
+// should not happen) the point is not moved.
+double CaloHitMaker::emecLArPhiShift( const CLHEP::Hep3Vector &p ) const
+{
+  const LArG4::EC::EnergyCalculator *calc = m_emecCalculator;
+  const LArWheelCalculator *lwc = calc->calculator(), *elc = calc->electrodeCalculator();
+  const double r = p.perp(), z = p.z(), phi = p.phi();
+  const double step = lwc->GetFanStepOnPhi();
+  const int nFans = lwc->GetNumberOfFans();
+  auto at = [&]( double ph ){ return CLHEP::Hep3Vector( r * std::cos(ph), r * std::sin(ph), z ); };
+  // signed distance to the neutral fibre of the fan of the calculator c rotated by theta (fan number fan)
+  auto dist = [&]( const LArWheelCalculator *c, double theta, int fan, double ph ){
+    CLHEP::Hep3Vector q = at( ph ); q.rotateZ( -theta ); return c->DistanceToTheNeutralFibre( q, fan ); };
+  // bisection of f between lo and hi (opposite signs) down to the resolution of a double; NaN if not bracketed
+  auto root = []( auto f, double lo, double hi ){
+    double flo = f(lo), fhi = f(hi);
+    if( flo == 0 ) return lo;
+    if( fhi == 0 ) return hi;
+    if( ( flo < 0 ) == ( fhi < 0 ) ) return std::nan("");
+    for(;;){
+      const double m = 0.5 * ( lo + hi );
+      if( m <= lo || m >= hi ) return m;
+      const double fm = f(m);
+      if( fm == 0 ) return m;
+      if( ( fm < 0 ) == ( flo < 0 ) ){ lo = m; flo = fm; } else { hi = m; }
+    }
+  };
+  // the nearest absorber: its rotation and number; the period goes from the absorber below the point to the one above it
+  CLHEP::Hep3Vector pa = p; int fa = 0;
+  const double da = lwc->DistanceToTheNearestFan( pa, fa );
+  const double theta = phi - pa.phi();
+  const double thLo = ( da >= 0 ) ? theta : theta - step, thHi = thLo + step;
+  const int fanLo = ( da >= 0 ) ? fa : ( fa + nFans - 1 ) % nFans, fanHi = ( fanLo + 1 ) % nFans;
+  const double hA = lwc->GetFanHalfThickness(), hE = elc->GetFanHalfThickness();
+  const double phA0 = root( [&]( double x ){ return dist( lwc, thLo, fanLo, x ); }, phi - step, phi );
+  const double phA1 = root( [&]( double x ){ return dist( lwc, thHi, fanHi, x ); }, phi, phi + step );
+  // the electrode between the two absorbers
+  const double phMid = 0.5 * ( phA0 + phA1 );
+  CLHEP::Hep3Vector pe = at( phMid ); int fe = 0;
+  elc->DistanceToTheNearestFan( pe, fe );
+  const double thE = phMid - pe.phi();
+  auto dE = [&]( double x ){ return dist( elc, thE, fe, x ); };
+  const double phE = root( dE, phA0, phA1 );
+  const double s1 = root( [&]( double x ){ return dist( lwc, thLo, fanLo, x ) - hA; }, phA0, phE );
+  const double s2 = root( [&]( double x ){ return dE(x) + hE; }, phA0, phE );
+  const double s3 = root( [&]( double x ){ return dE(x) - hE; }, phE, phA1 );
+  const double s4 = root( [&]( double x ){ return dist( lwc, thHi, fanHi, x ) + hA; }, phE, phA1 );
+  const double l1 = s2 - s1, l2 = s4 - s3;
+  if( !( l1 > 0 && l2 > 0 && phA1 > phA0 ) ){
+    static std::atomic<long> nFailures{0};
+    const long n = ++nFailures;
+    if( n <= 10 || ( n & (n - 1) ) == 0 )
+      MSG_WARNING( "EMEC charge collection: no liquid argon found around the local point (" << p.x() << ", " << p.y() << ", "
+                   << p.z() << "); not moved (" << n << " so far)" );
+    return 0.;
+  }
+  const double f = ( phi - phA0 ) / ( phA1 - phA0 );
+  const double t = f * ( l1 + l2 );
+  const double phNew = ( t < l1 ) ? s1 + t : s3 + ( t - l1 );
+  return phNew - phi;
 }
 
 //!=====================================================================

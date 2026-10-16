@@ -190,6 +190,24 @@ def parse_args():
                         help="Write the free-running hits as the ATLAS HITS ntuple: the LAr energy and time compressed as the ATLAS "
                              "HITS (LArHitContainerCnv_p2) and filtered as FilterHit_tf (LArHitFilter, including its layer cuts in the "
                              "HEC and FCAL), without the extra tglobal branches. Needs --free-running-hits. Off by default.")
+    parser.add_argument('--atlas-emec-charge-collection', action='store_true', dest='atlas_emec_charge_collection', required=False,
+                        help="Energy of the free-running hits of the EMEC as in the ATLAS simulation (Athena 23.0.14, LArG4::EC::"
+                             "EnergyCalculator with EnergyCorrection = 8): Birks' law with the local field (HV / gap) and the current of "
+                             "the charge collection (CalculateChargeCollection1, field map ec.fieldzv03, HV map HVEMECMap_v02.dat), with the "
+                             "ported ATLAS code, on each step brought to the frame of the ATLAS wheel and moved in phi into the liquid argon "
+                             "of the accordion. Needs --free-running-hits; needed by --free-running-atlas-format. Off by default.")
+    parser.add_argument('--atlas-emec-tables', action='store', dest='atlas_emec_tables', required=False, type=str,
+                        default=os.path.join(os.environ.get('LORENZETTI_GEOMETRY_DATA_DIR', ''), 'EmecTables-ATLAS-P2-RUN4-01-01-00.csv'),
+                        help="Tables of the EMEC wheels for --atlas-emec-charge-collection (geometry/scripts/emec_tables_from_geomdb.py); "
+                             "default: geometry/data/EmecTables-ATLAS-P2-RUN4-01-01-00.csv.")
+    parser.add_argument('--atlas-emec-field-map', action='store', dest='atlas_emec_field_map', required=False, type=str,
+                        default=os.path.join(os.environ.get('LORENZETTI_GEOMETRY_DATA_DIR', ''), 'ec.fieldzv03'),
+                        help="Field map of the EMEC charge collection (LArG4EC/ec.fieldzv03 of ATLASCALDATA, CVMFS); default: "
+                             "geometry/data/ec.fieldzv03.")
+    parser.add_argument('--atlas-emec-hv-map', action='store', dest='atlas_emec_hv_map', required=False, type=str,
+                        default=os.path.join(os.environ.get('LORENZETTI_GEOMETRY_DATA_DIR', ''), 'HVEMECMap_v02.dat'),
+                        help="HV map of the EMEC (LArG4EC/HVEMECMap_v02.dat of ATLASCALDATA, CVMFS); default: "
+                             "geometry/data/HVEMECMap_v02.dat.")
     parser.add_argument('--atlas-fcal-electrodes', action='store', dest='atlas_fcal_electrodes', required=False,
                         type=str, default=os.environ.get('LORENZETTI_FCAL_ELECTRODES',
                                   os.path.join(os.environ.get('LORENZETTI_GEOMETRY_DATA_DIR', ''), 'LArFCalElectrodes-06.csv')),
@@ -300,6 +318,10 @@ def main(logging_level: str,
          atlas_run4_geometry: str,
          atlas_field_map: str,
          free_running_atlas_format: bool,
+         atlas_emec_charge_collection: bool,
+         atlas_emec_tables: str,
+         atlas_emec_field_map: str,
+         atlas_emec_hv_map: str,
          tile_atlas_gap: bool,
          atlas_endcap_cryostat: bool,
          atlas_barrel_cryostat: bool,
@@ -417,6 +439,10 @@ def main(logging_level: str,
                                  FreeRunningBinning=free_running_binning,
                                  FreeRunningNtupleName=("FreeRunningTree" if free_running_keep_hits else "CollectionTree"),
                                  FreeRunningAtlasFormat=free_running_atlas_format,
+                                 EmecChargeCollection=atlas_emec_charge_collection,
+                                 EmecChargeTables=atlas_emec_tables,
+                                 EmecChargeFieldMap=atlas_emec_field_map,
+                                 EmecChargeHVMap=atlas_emec_hv_map,
                                  InputEventKey=recordable("Events")
                                  )
     
@@ -519,6 +545,13 @@ if __name__ == "__main__":
         # the ATLAS Run 4 geometry and field of the simulation (F41 conserto 27)
         if not args.atlas_run4:
             parser.error("--free-running-hits needs --atlas-run4 (the ATLAS Run 4 geometry and field of the simulation)")
+        # the charge collection of the ATLAS EM end-cap (F41 conserto 29)
+        if args.free_running_atlas_format and not args.atlas_emec_charge_collection:
+            parser.error("--free-running-atlas-format needs --atlas-emec-charge-collection (the EMEC energy of the ATLAS simulation)")
+        if args.atlas_emec_charge_collection:
+            for f in (args.atlas_emec_tables, args.atlas_emec_field_map, args.atlas_emec_hv_map):
+                if not os.path.isfile(f):
+                    parser.error("--atlas-emec-charge-collection: file '%s' not found" % f)
         if args.tile_dual_readout and args.tile_pmt_split != 'ushape':
             parser.error("--free-running-hits uses the U-shape sharing of the ATLAS simulation (--tile-pmt-split ushape)")
         args.active_energy_only = True
@@ -527,8 +560,9 @@ if __name__ == "__main__":
         args.tile_pmt_split = 'ushape'
         if args.neutron_time_cut is None:
             args.neutron_time_cut = 150.
-    elif args.free_running_no_binning or args.free_running_keep_hits or args.free_running_atlas_format:
-        parser.error("--free-running-no-binning, --free-running-keep-hits and --free-running-atlas-format need --free-running-hits")
+    elif args.free_running_no_binning or args.free_running_keep_hits or args.free_running_atlas_format or args.atlas_emec_charge_collection:
+        parser.error("--free-running-no-binning, --free-running-keep-hits, --free-running-atlas-format and "
+                     "--atlas-emec-charge-collection need --free-running-hits")
     print(f"output file: {args.output_file}")
     print(f"number of threads: {args.number_of_threads}")
 
@@ -558,6 +592,10 @@ if __name__ == "__main__":
              atlas_run4_geometry   = args.atlas_run4_geometry,
              atlas_field_map       = args.atlas_field_map,
              free_running_atlas_format = args.free_running_atlas_format,
+             atlas_emec_charge_collection = args.atlas_emec_charge_collection,
+             atlas_emec_tables     = args.atlas_emec_tables,
+             atlas_emec_field_map  = args.atlas_emec_field_map,
+             atlas_emec_hv_map     = args.atlas_emec_hv_map,
              tile_atlas_gap        = args.tile_atlas_gap,
              atlas_endcap_cryostat = args.atlas_endcap_cryostat,
              atlas_barrel_cryostat = args.atlas_barrel_cryostat,

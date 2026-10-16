@@ -23,6 +23,10 @@ class CaloHitMaker( Cpp ):
                 FreeRunningHits      : bool   = False,
                 FreeRunningListKey   : str    = "FreeRunningHits",
                 FreeRunningBinning   : bool   = True,
+                EmecChargeCollection : bool   = False,
+                EmecChargeTables     : str    = "",
+                EmecChargeFieldMap   : str    = "",
+                EmecChargeHVMap      : str    = "",
               ):
                     
     Cpp.__init__(self, ROOT.CaloHitMaker(name) )
@@ -78,6 +82,12 @@ class CaloHitMaker( Cpp ):
           self.setProperty( key                 , [int(x) for x in cells[key]]             )
         for key in ("EmecWheelRMin", "EmecWheelRMax", "EmecWheelZMin", "EmecWheelZMax"):
           self.setProperty( key                 , [float(x) for x in cells[key]]           )
+        # charge collection of the ATLAS EM end-cap (simu_trf.py --atlas-emec-charge-collection; F41 conserto 29)
+        if EmecChargeCollection:
+          self.setProperty( "EmecChargeCollection", True                                  )
+          self.setProperty( "EmecChargeTables"    , EmecChargeTables                      )
+          self.setProperty( "EmecChargeFieldMap"  , EmecChargeFieldMap                    )
+          self.setProperty( "EmecChargeHVMap"     , EmecChargeHVMap                       )
       # ATLAS-like barrel EM (geometry/python/v1/ECAL.py): sampling and region of the dictionary read by this maker
       # (see CaloHitMaker::embFindCell)
       if "EmbSampling" in cells:

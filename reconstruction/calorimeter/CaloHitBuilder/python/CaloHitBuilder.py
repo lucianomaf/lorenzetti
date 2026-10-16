@@ -26,6 +26,10 @@ class CaloHitBuilder(Logger):
                  FreeRunningBinning: bool = True,
                  FreeRunningNtupleName: str = "CollectionTree",
                  FreeRunningAtlasFormat: bool = False,
+                 EmecChargeCollection: bool = False,
+                 EmecChargeTables: str = "",
+                 EmecChargeFieldMap: str = "",
+                 EmecChargeHVMap: str = "",
                  InputEventKey: str = "Events",
                  ):
 
@@ -43,6 +47,11 @@ class CaloHitBuilder(Logger):
         self.FreeRunningBinning = FreeRunningBinning
         self.FreeRunningNtupleName = FreeRunningNtupleName
         self.FreeRunningAtlasFormat = FreeRunningAtlasFormat
+        # Charge collection of the ATLAS EM end-cap in the free-running hits of the EMEC (F41 conserto 29; CaloHitMaker::emecChargeEnergy)
+        self.EmecChargeCollection = EmecChargeCollection
+        self.EmecChargeTables = EmecChargeTables
+        self.EmecChargeFieldMap = EmecChargeFieldMap
+        self.EmecChargeHVMap = EmecChargeHVMap
         self.InputEventKey = InputEventKey
         self.OutputCollectionKeys = []
 
@@ -69,7 +78,11 @@ class CaloHitBuilder(Logger):
                                BirksLaw=self.BirksLaw,
                                TileDualReadout=self.TileDualReadout,
                                FreeRunningHits=self.FreeRunningHits,
-                               FreeRunningBinning=self.FreeRunningBinning
+                               FreeRunningBinning=self.FreeRunningBinning,
+                               EmecChargeCollection=self.EmecChargeCollection,
+                               EmecChargeTables=self.EmecChargeTables,
+                               EmecChargeFieldMap=self.EmecChargeFieldMap,
+                               EmecChargeHVMap=self.EmecChargeHVMap
                                )
 
             self.__recoAlgs.append(alg)
