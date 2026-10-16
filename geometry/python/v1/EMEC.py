@@ -526,7 +526,9 @@ def _getAtlasEmecCfg(left_side=False):
             raise RuntimeError(f"EMEC compartment {compartment}: {len(sv.PhiBins) - 1} phi slices, expected {max_phi + 1}")
         sv.EtaBins = edges; sv.EtaMin = edges[0]; sv.EtaMax = edges[-1]
         sv.Cells = cells
-        atlasLArPhiShift(sv, -sign * pi / 768)
+        # half-absorber shift of the wheel: pi/768 in the outer wheel (768 absorbers), pi/256 in the inner wheel (256 absorbers);
+        # measured in the ATLAS simulation (F41 medida 30d, 16/10/2026: inner EMEC1 about +-pi/256, outer EMEC2 +-pi/768)
+        atlasLArPhiShift(sv, -sign * pi / (768 if wheel == "outer" else 256))
         out[sampling].append( Calorimeter( sv, -21, 3, -2,
                               CollectionKey   = f"Collection_EMEC{sampling}_{segment}" + side_name,
                               Detector        = Detector.TTEM,

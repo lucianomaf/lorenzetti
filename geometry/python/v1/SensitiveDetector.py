@@ -79,7 +79,7 @@ def atlasLArPhiShift( sv, shift ):
     """
     Half-absorber shift of the phi edges of an ATLAS-like LAr sensitive detector (F41 conserto 19): the edges become
     -pi + k dphi + shift (k = 0 to N), as the cells of the ATLAS readout geometry (EMB and barrel presampler -pi/1024 on
-    side A and +pi/1024 on side C, EMEC -+pi/768, HEC and the barrel and end-cap presamplers 0); sv.PhiShift is read by CaloHitMaker. The
+    side A and +pi/1024 on side C, EMEC outer wheel -+pi/768 and inner wheel -+pi/256, HEC and the barrel and end-cap presamplers 0); sv.PhiShift is read by CaloHitMaker. The
     phi index of the ATLAS identifier is the slice from phi = 0, the same on both sides (as in the ATLAS HITS ntuple).
     """
     n = len(sv.PhiBins) - 1
