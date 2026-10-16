@@ -245,6 +245,13 @@ StatusCode CaloHitMaker::initialize()
                inner ? LArG4::InnerAbsorberWheel : LArG4::OuterAbsorberWheel, zside, m_emecChargeFieldMap, m_emecChargeHVMap ) ).first;
     }
     m_emecCalculator = it->second.get();
+    // the transform to the wheel frame (emecTopTransform) is that of the geometry of the simulation of ATLAS-P2-RUN4-01-01-00
+    const double zFront = m_emecFocalShift + m_emecCalculator->calculator()->GetElecFocaltoWRP() +
+                          m_emecCalculator->calculator()->GetdWRPtoFrontFace();
+    if( zFront != 3745. ){
+      MSG_FATAL( "EmecChargeCollection needs the EMEC wheels of the ATLAS simulation geometry (front face at |z| = 3745 mm, --atlas-run4); "
+                 "here " << zFront << " mm." );
+    }
   }
 
   if( m_embMode > 0 ){
@@ -957,20 +964,30 @@ float CaloHitMaker::birksEnergy( const G4Step *step ) const
 // - the energy of the hit: CalculateChargeCollection1 (GetCurrent1) of the energy after Birks between the two points.
 static constexpr bool kEmecShiftEndpointsIndependently = false;
 
-// Side B (decision of Luciano of 15/10/2026): the transform from the global frame to the frame of the wheel composed as in the ATLAS
-// simulation, level by level as G4NavigationHistory does it (G4NavigationLevelRep: InverseProduct of the transform of the level above and
-// G4AffineTransform(GetRotation(), GetTranslation()) of the placement; G4PVPlacement(G4Transform3D) keeps the inverse of the rotation),
-// with the placements of the geometry of the simulation of ATLAS-P2-RUN4-01-01-00 (GeoModel, Geo2G4):
-// - LAr::Endcap::Cryostat::MotherVolume of side B: LArPosition LARCRYO_EC_NEG (translation z = -6734.5 mm, no rotation; LArPosition-10)
-//   times GeoTrf::RotateY3D(180 deg) (LArDetectorFactory.cxx), the Eigen AngleAxis matrix [[c, 0, s], [0, 1, 0], [-s, 0, c]] with
-//   c = cos(pi) = -1 and s = sin(pi) = 1.2246e-16 of the double pi;
-// - EmecHecLAr and LAr::EMEC::Mother (LArPosition EMEC_NEG, zero): identity;
+// The transform from the global frame to the frame of the wheel composed as in the ATLAS simulation (decisions of Luciano of
+// 15/10/2026: side B, then side A by the rule of following the ATLAS source), level by level as G4NavigationHistory does it
+// (G4NavigationLevelRep: InverseProduct of the transform of the level above and G4AffineTransform(GetRotation(), GetTranslation()) of the
+// placement; G4PVPlacement(G4Transform3D) keeps the inverse of the rotation, none when it is the identity), with the placements of the
+// geometry of the simulation of ATLAS-P2-RUN4-01-01-00 (GeoModel, Geo2G4):
+// - LAr::Endcap::Cryostat::MotherVolume: side A, LArPosition LARCRYO_EC_POS (translation z = +6734.5 mm, no rotation; LArPosition-10);
+//   side B, LARCRYO_EC_NEG (z = -6734.5 mm) times GeoTrf::RotateY3D(180 deg) (LArDetectorFactory.cxx), the Eigen AngleAxis matrix
+//   [[c, 0, s], [0, 1, 0], [-s, 0, c]] with c = cos(pi) = -1 and s = sin(pi) = 1.2246e-16 of the double pi;
+// - EmecHecLAr and LAr::EMEC::Mother (LArPosition EMEC_POS and EMEC_NEG, zero): identity;
 // - the wheel: refSystemTransform, TranslateZ(ZPLANE of EMEC::Mother - 3639.5 mm) = TranslateZ(-3050.5 - 3639.5 = -6690 mm) (CryoPcons-21-
 //   HGTD), then TranslateZ(zWheelRefPoint + dWRPtoFrontFace = 3689.5 + 11 = 3700.5 mm) (EMECConstruction.cxx), one translation -2989.5 mm;
 // - the world and the CALO envelope of the ATLAS simulation: identity (no offset in G4GeometryToolConfig.py).
-// Valid for the geometry of --atlas-run4 (wheel front at |z| = 3745 mm); side A keeps |z| minus the front face.
-static G4AffineTransform emecTopTransformSideB()
+// Valid for the geometry of --atlas-run4 (wheel front at |z| = 3745 mm).
+static G4AffineTransform emecTopTransform( bool sideA )
 {
+  G4AffineTransform world;                                         // the world and the CALO envelope
+  if( sideA ){
+    G4AffineTransform cryostat, emecHecLAr, emecMother, wheel;
+    cryostat.InverseProduct( world, G4AffineTransform( G4ThreeVector( 0., 0., 6734.5 ) ) );
+    emecHecLAr.InverseProduct( cryostat, G4AffineTransform() );
+    emecMother.InverseProduct( emecHecLAr, G4AffineTransform() );
+    wheel.InverseProduct( emecMother, G4AffineTransform( G4ThreeVector( 0., 0., -6690. + 3700.5 ) ) );
+    return wheel;
+  }
   const double angle = 180.0 * CLHEP::deg;
   const double c = std::cos( angle ), s = std::sin( angle );
   // Eigen::AngleAxisd(angle, UnitY).toRotationMatrix(), element by element
@@ -980,7 +997,6 @@ static G4AffineTransform emecTopTransformSideB()
                               0. * 0. - s * 1.,    cos1y * 0. + s * 0., 0. * 0. + c );
   const G4RotationMatrix placement( rep );
   const G4RotationMatrix frot = placement.inverse();   // G4PVPlacement(G4Transform3D): NewPtrRotMatrix(getRotation().inverse())
-  G4AffineTransform world;                                         // the world and the CALO envelope
   G4AffineTransform cryostat;
   cryostat.InverseProduct( world, G4AffineTransform( &frot, G4ThreeVector( 0., 0., -6734.5 ) ) );
   G4AffineTransform emecHecLAr, emecMother, wheel;
@@ -1003,10 +1019,9 @@ bool CaloHitMaker::emecChargeEnergy( const G4Step *step, double &energy ) const
   const LArG4::EC::EnergyCalculator *calc = m_emecCalculator;
   const LArWheelCalculator *lwc = calc->calculator();
   const bool sideA = ( m_zMin + m_zMax > 0 );
-  const double zFront = m_emecFocalShift + lwc->GetElecFocaltoWRP() + lwc->GetdWRPtoFrontFace();
-  static const G4AffineTransform topB = emecTopTransformSideB();
-  auto toLocal = [&]( const G4ThreeVector &g ){
-    return sideA ? G4ThreeVector( g.x(), g.y(), g.z() - zFront ) : topB.TransformPoint( g ); };
+  static const G4AffineTransform topA = emecTopTransform( true ), topB = emecTopTransform( false );
+  const G4AffineTransform &top = sideA ? topA : topB;
+  auto toLocal = [&]( const G4ThreeVector &g ){ return top.TransformPoint( g ); };
   G4ThreeVector p1 = toLocal( step->GetPreStepPoint()->GetPosition() );
   G4ThreeVector p2 = toLocal( step->GetPostStepPoint()->GetPosition() );
   if( kEmecShiftEndpointsIndependently ){
