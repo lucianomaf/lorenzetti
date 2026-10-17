@@ -70,6 +70,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasRun4         : bool=False,
                 AtlasRun4Geometry : str="",
                 AtlasFieldMap     : str="",
+                AtlasForwardShielding : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -240,6 +241,12 @@ class DetectorConstruction_v1( Cpp ):
       if UseMagneticField:
         raise ValueError("AtlasRun4 has the field of ATLAS: UseMagneticField cannot be set.")
       self.setProperty( "AtlasFieldMap", fieldmap )
+    # The ATLAS material outside the calorimeters (F41 conserto 32), from the same dump: the whole MuonSys and the girders, fingers,
+    # saddles and end plates of the tile calorimeter. Needs AtlasRun4.
+    if AtlasForwardShielding:
+      if not AtlasRun4:
+        raise ValueError("AtlasForwardShielding needs AtlasRun4 (the GeoModel dump of the ATLAS geometry of the simulation).")
+      self.setProperty( "AtlasForwardShielding", True )
     
   
   # Geant4 settings of the ATLAS production (F41 conserto 24; Athena release 23.0.14, G4PhysicsRegionConfig.py and

@@ -186,6 +186,12 @@ def parse_args():
                         help="Field map of the ATLAS simulation for --atlas-run4 (bfieldmap_7730_20400_14m.root, from "
                              "/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/MagneticFieldMaps); default: the environment variable "
                              "LORENZETTI_FIELD_MAP.")
+    parser.add_argument('--atlas-forward-shielding', action='store_true', dest='atlas_forward_shielding', required=False,
+                        help="The ATLAS material outside the calorimeters, imported as passive material from the GeoModel dump of "
+                             "--atlas-run4: the whole MuonSys (end-cap and barrel toroids, forward shielding JD/JT/JF with its borated "
+                             "polyethylene, NSW, muon stations, calorimeter saddle) and the girders, fingers and extended-barrel saddles "
+                             "of the tile calorimeter; world of 30 m. Needs --atlas-run4; needed by --free-running-atlas-format. Simulation only. "
+                             "Off by default.")
     parser.add_argument('--free-running-atlas-format', action='store_true', dest='free_running_atlas_format', required=False,
                         help="Write the free-running hits as the ATLAS HITS ntuple: the LAr energy and time compressed as the ATLAS "
                              "HITS (LArHitContainerCnv_p2) and filtered as FilterHit_tf (LArHitFilter, including its layer cuts in the "
@@ -316,6 +322,7 @@ def main(logging_level: str,
          atlas_g4: bool,
          atlas_run4: bool,
          atlas_run4_geometry: str,
+         atlas_forward_shielding: bool,
          atlas_field_map: str,
          free_running_atlas_format: bool,
          atlas_emec_charge_collection: bool,
@@ -414,6 +421,7 @@ def main(logging_level: str,
                                                         AtlasBarrelCryostat=atlas_barrel_cryostat,
                                                         AtlasRun4=atlas_run4,
                                                         AtlasRun4Geometry=atlas_run4_geometry,
+                                                        AtlasForwardShielding=atlas_forward_shielding,
                                                         AtlasFieldMap=atlas_field_map),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
@@ -546,6 +554,9 @@ if __name__ == "__main__":
         if not args.atlas_run4:
             parser.error("--free-running-hits needs --atlas-run4 (the ATLAS Run 4 geometry and field of the simulation)")
         # the charge collection of the ATLAS EM end-cap (F41 conserto 29)
+        # the ATLAS material outside the calorimeters (F41 conserto 32)
+        if args.free_running_atlas_format and not args.atlas_forward_shielding:
+            parser.error("--free-running-atlas-format needs --atlas-forward-shielding (the ATLAS material outside the calorimeters)")
         if args.free_running_atlas_format and not args.atlas_emec_charge_collection:
             parser.error("--free-running-atlas-format needs --atlas-emec-charge-collection (the EMEC energy of the ATLAS simulation)")
         if args.atlas_emec_charge_collection:
@@ -563,6 +574,8 @@ if __name__ == "__main__":
     elif args.free_running_no_binning or args.free_running_keep_hits or args.free_running_atlas_format or args.atlas_emec_charge_collection:
         parser.error("--free-running-no-binning, --free-running-keep-hits, --free-running-atlas-format and "
                      "--atlas-emec-charge-collection need --free-running-hits")
+    if args.atlas_forward_shielding and not args.atlas_run4:
+        parser.error("--atlas-forward-shielding needs --atlas-run4")
     print(f"output file: {args.output_file}")
     print(f"number of threads: {args.number_of_threads}")
 
@@ -590,6 +603,7 @@ if __name__ == "__main__":
              atlas_g4              = args.atlas_g4,
              atlas_run4            = args.atlas_run4,
              atlas_run4_geometry   = args.atlas_run4_geometry,
+             atlas_forward_shielding = args.atlas_forward_shielding,
              atlas_field_map       = args.atlas_field_map,
              free_running_atlas_format = args.free_running_atlas_format,
              atlas_emec_charge_collection = args.atlas_emec_charge_collection,

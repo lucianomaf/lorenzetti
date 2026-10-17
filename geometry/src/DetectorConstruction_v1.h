@@ -131,6 +131,9 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
     // volumes that hold Lorenzetti volumes (deepest first) with their global transformation
     bool m_atlasRun4;
     std::string m_atlasRun4Geometry;
+    // the ATLAS material outside the calorimeters (--atlas-forward-shielding; F41 conserto 32): the MuonSys and the girders, fingers and
+    // extended-barrel saddles of the tile calorimeter, from the same dump
+    bool m_atlasForwardShielding;
     std::unique_ptr<AtlasGeoModelImport> m_atlasImport;
     std::vector<AtlasContainer> m_atlasContainers;
     std::map<G4LogicalVolume*, G4Transform3D> m_containerX;

@@ -141,6 +141,17 @@ std::vector<AtlasGeoModelImport::Container> AtlasGeoModelImport::placeUnwrapped(
     [&]( const PVConstLink &pv, const G4Transform3D &xGlobal, const G4Transform3D &xLocal, G4LogicalVolume *motherLV, int depth, int copy ){
       const GeoLogVol *glv = pv->getLogVol();
       const std::string lvName = glv->getName();
+      // an envelope of special::Ether (the transparent material of ATLAS) is not a volume: as the assemblies of GeoModel2G4, its children
+      // go to its mother with the composed transformation (F41 conserto 32: the containers of the MuonSys, ECT_Toroids and others)
+      if( glv->getMaterial()->getName() == "special::Ether" ){
+        for( unsigned int k = 0; k < pv->getNChildVols(); ++k ){
+          PVConstLink child = pv->getChildVol( k );
+          if( startsWithAny( child->getLogVol()->getName(), dropped ) ) continue;
+          const G4Transform3D xk = toG4( pv->getXToChildVol( k ) );
+          place( child, xGlobal * xk, xLocal * xk, motherLV, depth, copy * 1000 + (int)k );
+        }
+        return;
+      }
       if( m_impl->dropsBelow( pv, dropped ) ){
         G4LogicalVolume *lv = new G4LogicalVolume( m_impl->solids.Build( glv->getShape(), lvName ),
                                                    m_impl->materials.Build( glv->getMaterial() ), lvName );
@@ -177,6 +188,39 @@ std::vector<AtlasGeoModelImport::Container> AtlasGeoModelImport::placeUnwrapped(
 }
 
 
+int AtlasGeoModelImport::placeDescendants( G4LogicalVolume *mother, const std::set<std::string> &tops, const std::set<std::string> &names,
+                                           bool checkOverlaps )
+{
+  int n = 0;
+  std::map<const GeoVPhysVol*, G4LogicalVolume*> built;   // one Geant4 logical volume per GeoModel volume (shared placements)
+  std::function<void(const PVConstLink&, const GeoTrf::Transform3D&, const std::string&)> search =
+    [&]( const PVConstLink &pv, const GeoTrf::Transform3D &x, const std::string &top ){
+      for( unsigned int k = 0; k < pv->getNChildVols(); ++k ){
+        PVConstLink child = pv->getChildVol( k );
+        const std::string name = child->getLogVol()->getName();
+        const GeoTrf::Transform3D xc = x * pv->getXToChildVol( k );
+        if( !names.count( name ) ){ search( child, xc, top ); continue; }
+        G4LogicalVolume *&lv = built[ child.get() ];
+        if( !lv ){
+          ExtParameterisedVolumeBuilder builder( top );
+          lv = builder.Build( child );
+          std::set<G4LogicalVolume*> seen;
+          m_impl->collect( top, lv, seen );
+        }
+        new G4PVPlacement( toG4( xc ), lv, name, mother, false, n, checkOverlaps );
+        ++n;
+      }
+    };
+  const PVConstLink &world = m_impl->world;
+  for( unsigned int i = 0; i < world->getNChildVols(); ++i ){
+    PVConstLink top = world->getChildVol( i );
+    const std::string t = top->getLogVol()->getName();
+    if( tops.count( t ) ) search( top, world->getXToChildVol( i ), t );
+  }
+  return n;
+}
+
+
 std::vector<G4LogicalVolume*> AtlasGeoModelImport::logicalVolumes( const std::set<std::string> &names ) const
 {
   std::vector<G4LogicalVolume*> out;
@@ -198,6 +242,7 @@ AtlasGeoModelImport::AtlasGeoModelImport( const std::string & )
 AtlasGeoModelImport::~AtlasGeoModelImport() = default;
 bool AtlasGeoModelImport::available() { return false; }
 void AtlasGeoModelImport::placeWorldChildren( G4LogicalVolume *, const std::set<std::string> &, bool ) {}
+int AtlasGeoModelImport::placeDescendants( G4LogicalVolume *, const std::set<std::string> &, const std::set<std::string> &, bool ) { return 0; }
 G4LogicalVolume* AtlasGeoModelImport::placeWorldChildrenInEnvelope( G4LogicalVolume *, const std::string &, const std::set<std::string> &,
                                                                     bool ) { return nullptr; }
 std::vector<AtlasGeoModelImport::Container> AtlasGeoModelImport::placeUnwrapped( G4LogicalVolume *, const std::string &,

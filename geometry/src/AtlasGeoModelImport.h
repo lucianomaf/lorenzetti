@@ -50,6 +50,12 @@ class AtlasGeoModelImport
     std::vector<Container> placeUnwrapped( G4LogicalVolume *mother, const std::string &name, const std::vector<std::string> &dropped,
                                            bool checkOverlaps );
 
+    // The descendants of the world children named in `tops` whose logical volume name is in `names`, whole, placed in mother with their
+    // global transformation; the search does not go below a volume it places (F41 conserto 32: the girders, fingers and saddles
+    // of the ATLAS tile calorimeter, which Lorenzetti does not build). Returns the number of placements.
+    int placeDescendants( G4LogicalVolume *mother, const std::set<std::string> &tops, const std::set<std::string> &names,
+                          bool checkOverlaps );
+
     // Logical volumes converted so far whose name (with the prefix of their subdetector) is in `names`: for the regions of ATLAS
     std::vector<G4LogicalVolume*> logicalVolumes( const std::set<std::string> &names ) const;
 

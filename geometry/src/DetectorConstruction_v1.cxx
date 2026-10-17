@@ -90,6 +90,10 @@ DetectorConstruction_v1::DetectorConstruction_v1(std::string name)
   // end-cap cryostats of the LAr imported from the GeoModel dump AtlasRun4Geometry; world of air up to |z| = 21 m
   declareProperty( "AtlasRun4"                  , m_atlasRun4=false           );
   declareProperty( "AtlasRun4Geometry"          , m_atlasRun4Geometry=""      );
+  // the ATLAS material outside the calorimeters, imported from the same dump (--atlas-forward-shielding; F41 conserto 32): the whole
+  // MuonSys (toroids, forward shielding JD/JT/JF, NSW, muon stations, calorimeter saddle) and the parts of the tile calorimeter that
+  // Lorenzetti does not build (the girder of each module, the fingers, the saddles of the extended barrels); world of air of 30 m
+  declareProperty( "AtlasForwardShielding"      , m_atlasForwardShielding=false );
   // the field map of the ATLAS simulation for --atlas-run4 (bfieldmap_7730_20400_14m.root, the GlobalMap of /GLOBAL/BField/Maps)
   declareProperty( "AtlasFieldMap"              , m_atlasFieldMap=""          );
   declareProperty( "DeadMaterialVolumes"        , m_deadMaterialVolumes       );
@@ -183,8 +187,8 @@ G4VPhysicalVolume* DetectorConstruction_v1::Construct()
   //
   G4VSolid* worldS = new G4Tubs( "World",     // its name
                                  0,           // R min
-                                 6*m,         // R max
-                                 m_atlasRun4 ? 21*m : 10*m,  // Z max (the forward beam pipe of ATLAS reaches |z| = 20.94 m)
+                                 m_atlasForwardShielding ? 30*m : 6*m,         // R max (the MuonSys of ATLAS, --atlas-forward-shielding; JNSH reaches beyond 26 m)
+                                 m_atlasForwardShielding ? 30*m : ( m_atlasRun4 ? 21*m : 10*m ),  // Z max (the forward beam pipe of ATLAS reaches |z| = 20.94 m)
                                  0*deg,       // phi_min
                                  (!m_cutOnPhi)?(360*deg):(235*deg)      // phi_max
                                  );
@@ -997,6 +1001,21 @@ void DetectorConstruction_v1::BuildAtlasRun4( G4LogicalVolume *worldLV )
   for (auto &c : m_atlasImport->placeUnwrapped( worldLV, "LAr::Endcap::Cryostat::MotherVolume", dropped, m_checkOverlaps )){
     m_atlasContainers.push_back( AtlasContainer{ c.lv, c.x, c.depth, c.name } );
     m_containerX[c.lv] = c.x;
+  }
+  // the ATLAS material outside the calorimeters (--atlas-forward-shielding; F41 conserto 32): in the material maps of the group the
+  // Lorenzetti world had, behind the FCal (|z| >= 6.3 m), 23% of the mass of the ATLAS simulation (no end-cap toroid, no forward shielding
+  // with its borated polyethylene) and, around the tile calorimeter, no girder (r = 3830-4240 mm), fingers or saddles
+  if (m_atlasForwardShielding){
+    // the children of MuonSys placed in the world without its envelope (its own material is the air of the world; the envelope would
+    // contain Lorenzetti volumes of the LAr dead material, LAr::DM::Ped)
+    m_atlasImport->placeUnwrapped( worldLV, "MuonSys", {}, m_checkOverlaps );
+    // not imported: the barrel end plates (EndPlate1/2, inside the TILE::TileCal1-3 envelopes of Lorenzetti) and the barrel saddles
+    // (SaddlePos/Neg, where DM::ITC::Services2 of conserto 11 stands)
+    const int nb = m_atlasImport->placeDescendants( worldLV, {"TileCentralBarrel"}, {"FingerPos", "FingerNeg", "GirderMother"},
+                                                    m_checkOverlaps );
+    const int ne = m_atlasImport->placeDescendants( worldLV, {"TileEndcapPos", "TileEndcapNeg"},
+                     {"EFinger", "ESaddlePos", "GirderMother"}, m_checkOverlaps );
+    MSG_INFO( "AtlasForwardShielding: MuonSys imported; tile calorimeter parts placed: " << nb << " (barrel), " << ne << " (end-caps)" );
   }
   std::stable_sort( m_atlasContainers.begin(), m_atlasContainers.end(),
                     []( const AtlasContainer &a, const AtlasContainer &b ){ return a.depth > b.depth; } );
