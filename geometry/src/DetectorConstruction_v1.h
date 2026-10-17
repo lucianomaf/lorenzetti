@@ -134,6 +134,9 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
     // the ATLAS material outside the calorimeters (--atlas-forward-shielding; F41 conserto 32): the MuonSys and the girders, fingers and
     // extended-barrel saddles of the tile calorimeter, from the same dump
     bool m_atlasForwardShielding;
+    // the field of the ATLAS simulation as in the production (--atlas-full-field; F41 conserto 33): the map in the whole world and only the
+    // muons in the field inside the barrel EM calorimeter (MuonFieldOnlyInCalo)
+    bool m_atlasFullField;
     std::unique_ptr<AtlasGeoModelImport> m_atlasImport;
     std::vector<AtlasContainer> m_atlasContainers;
     std::map<G4LogicalVolume*, G4Transform3D> m_containerX;

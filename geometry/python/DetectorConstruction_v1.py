@@ -71,6 +71,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasRun4Geometry : str="",
                 AtlasFieldMap     : str="",
                 AtlasForwardShielding : bool=False,
+                AtlasFullField    : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -247,6 +248,12 @@ class DetectorConstruction_v1( Cpp ):
       if not AtlasRun4:
         raise ValueError("AtlasForwardShielding needs AtlasRun4 (the GeoModel dump of the ATLAS geometry of the simulation).")
       self.setProperty( "AtlasForwardShielding", True )
+    # The field of the ATLAS simulation as in the production (F41 conserto 33): the map in the whole world and only the muons in the field
+    # inside the barrel EM calorimeter. Needs AtlasForwardShielding (outside the calorimeters there is the ATLAS material).
+    if AtlasFullField:
+      if not AtlasForwardShielding:
+        raise ValueError("AtlasFullField needs AtlasForwardShielding (the ATLAS material outside the calorimeters).")
+      self.setProperty( "AtlasFullField", True )
     
   
   # Geant4 settings of the ATLAS production (F41 conserto 24; Athena release 23.0.14, G4PhysicsRegionConfig.py and

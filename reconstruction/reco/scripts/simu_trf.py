@@ -192,6 +192,11 @@ def parse_args():
                              "polyethylene, NSW, muon stations, calorimeter saddle) and the girders, fingers and extended-barrel saddles "
                              "of the tile calorimeter; world of 30 m. Needs --atlas-run4; needed by --free-running-atlas-format. Simulation only. "
                              "Off by default.")
+    parser.add_argument('--atlas-full-field', action='store_true', dest='atlas_full_field', required=False,
+                        help="The field of the ATLAS simulation as in the production: the map in the whole world (not only in the cylinder "
+                             "of the calorimeters) and, as MuonFieldOnlyInCalo of ATLAS, only the muons in the field inside the barrel EM "
+                             "calorimeter (the SwitchingFieldManager of Athena, 1500 < r < 1900 mm, |z| < 2000 mm). Needs "
+                             "--atlas-forward-shielding; needed by --free-running-atlas-format. Simulation only. Off by default.")
     parser.add_argument('--free-running-atlas-format', action='store_true', dest='free_running_atlas_format', required=False,
                         help="Write the free-running hits as the ATLAS HITS ntuple: the LAr energy and time compressed as the ATLAS "
                              "HITS (LArHitContainerCnv_p2) and filtered as FilterHit_tf (LArHitFilter, including its layer cuts in the "
@@ -323,6 +328,7 @@ def main(logging_level: str,
          atlas_run4: bool,
          atlas_run4_geometry: str,
          atlas_forward_shielding: bool,
+         atlas_full_field: bool,
          atlas_field_map: str,
          free_running_atlas_format: bool,
          atlas_emec_charge_collection: bool,
@@ -422,6 +428,7 @@ def main(logging_level: str,
                                                         AtlasRun4=atlas_run4,
                                                         AtlasRun4Geometry=atlas_run4_geometry,
                                                         AtlasForwardShielding=atlas_forward_shielding,
+                                                        AtlasFullField=atlas_full_field,
                                                         AtlasFieldMap=atlas_field_map),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
@@ -555,6 +562,9 @@ if __name__ == "__main__":
             parser.error("--free-running-hits needs --atlas-run4 (the ATLAS Run 4 geometry and field of the simulation)")
         # the charge collection of the ATLAS EM end-cap (F41 conserto 29)
         # the ATLAS material outside the calorimeters (F41 conserto 32)
+        # the field of the ATLAS simulation as in the production (F41 conserto 33)
+        if args.free_running_atlas_format and not args.atlas_full_field:
+            parser.error("--free-running-atlas-format needs --atlas-full-field (the field of the ATLAS simulation as in the production)")
         if args.free_running_atlas_format and not args.atlas_forward_shielding:
             parser.error("--free-running-atlas-format needs --atlas-forward-shielding (the ATLAS material outside the calorimeters)")
         if args.free_running_atlas_format and not args.atlas_emec_charge_collection:
@@ -576,6 +586,8 @@ if __name__ == "__main__":
                      "--atlas-emec-charge-collection need --free-running-hits")
     if args.atlas_forward_shielding and not args.atlas_run4:
         parser.error("--atlas-forward-shielding needs --atlas-run4")
+    if args.atlas_full_field and not args.atlas_forward_shielding:
+        parser.error("--atlas-full-field needs --atlas-forward-shielding")
     print(f"output file: {args.output_file}")
     print(f"number of threads: {args.number_of_threads}")
 
@@ -604,6 +616,7 @@ if __name__ == "__main__":
              atlas_run4            = args.atlas_run4,
              atlas_run4_geometry   = args.atlas_run4_geometry,
              atlas_forward_shielding = args.atlas_forward_shielding,
+             atlas_full_field      = args.atlas_full_field,
              atlas_field_map       = args.atlas_field_map,
              free_running_atlas_format = args.free_running_atlas_format,
              atlas_emec_charge_collection = args.atlas_emec_charge_collection,

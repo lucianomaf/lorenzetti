@@ -15,6 +15,8 @@
 #include "AtlasGeoModelImport.h"
 #include "AtlasMagneticField.h"
 #include "TightMuonSteppingFieldManager.h"
+#include "SwitchingFieldManager.h"
+#include "G4LogicalVolumeStore.hh"
 #include "SimpleFastKiller.h"
 #include "G4AtlasRK4.h"
 #include "G4IntegrationDriver.hh"
@@ -94,6 +96,10 @@ DetectorConstruction_v1::DetectorConstruction_v1(std::string name)
   // MuonSys (toroids, forward shielding JD/JT/JF, NSW, muon stations, calorimeter saddle) and the parts of the tile calorimeter that
   // Lorenzetti does not build (the girder of each module, the fingers, the saddles of the extended barrels); world of air of 30 m
   declareProperty( "AtlasForwardShielding"      , m_atlasForwardShielding=false );
+  // the field of the ATLAS simulation as in the production (--atlas-full-field; F41 conserto 33; needs AtlasForwardShielding): the map in
+  // the whole world (not only in the cylinder of the calorimeters) and the SwitchingFieldManager of ATLAS (MuonsOnlyInCaloFieldManager,
+  // MuonFieldOnlyInCalo = True in the reference HITS) on the barrel EM calorimeter: only the muons see the field in its shell
+  declareProperty( "AtlasFullField"             , m_atlasFullField=false      );
   // the field map of the ATLAS simulation for --atlas-run4 (bfieldmap_7730_20400_14m.root, the GlobalMap of /GLOBAL/BField/Maps)
   declareProperty( "AtlasFieldMap"              , m_atlasFieldMap=""          );
   declareProperty( "DeadMaterialVolumes"        , m_deadMaterialVolumes       );
@@ -1132,8 +1138,12 @@ void DetectorConstruction_v1::ConstructAtlasField()
   }
   auto *atlasField = new AtlasMagneticField( map.get(), 1., 1. );
   G4AutoDelete::Register( atlasField );
-  auto *field = new AtlasCaloBoundedField( atlasField, 3860.*mm, 6780.5*mm );
-  G4AutoDelete::Register( field );
+  // the map only in the cylinder of the calorimeters (conserto 27), or in the whole world as in ATLAS (--atlas-full-field, conserto 33)
+  G4MagneticField *field = atlasField;
+  if (!m_atlasFullField){
+    field = new AtlasCaloBoundedField( atlasField, 3860.*mm, 6780.5*mm );
+    G4AutoDelete::Register( field );
+  }
   const G4double minStep = 1e-2*mm;
   auto driverFor = [&]( G4MagneticField *f ) -> G4VIntegrationDriver* {
     auto *eq = new G4Mag_UsualEqRhs( f );
@@ -1163,5 +1173,29 @@ void DetectorConstruction_v1::ConstructAtlasField()
     fm->GetChordFinder()->SetIntegrationDriver( driverFor( field ) );
     lv->SetFieldManager( fm, true );
     MSG_INFO( "AtlasRun4: field manager of " << lv->GetName() );
+  }
+
+  // MuonsOnlyInCaloFieldManager of ATLAS (G4FieldConfig.py, MuonsOnlyInCaloFieldManagerToolCfg, on the physical volume LArBarrel; here on
+  // the volumes of the barrel EM calorimeter LAr::EMB1, LAr::EMB2, LAr::EMB3 and their daughters): the SwitchingFieldManager, with the
+  // parameters of the ATLAS tool in the same order (its MaximumEpsilonStep of 9e-7 is below its MinimumEpsilonStep of 1e-6: Geant4 11.2
+  // sets both to 9e-7, warning Geometry003; what the Geant4 10.6 of ATLAS does with it is not checked)
+  if (m_atlasFullField){
+    int n = 0;
+    for (auto *lv : *G4LogicalVolumeStore::GetInstance()){
+      const std::string name = lv->GetName();
+      if (name != "LAr::EMB1" && name != "LAr::EMB2" && name != "LAr::EMB3") continue;
+      auto *fm = new SwitchingFieldManager( field );
+      fm->CreateChordFinder( field );
+      fm->SetDeltaOneStep( 0.000001*mm );
+      fm->SetDeltaIntersection( 0.00000002*mm );
+      fm->SetMinimumEpsilonStep( 0.000001 );
+      fm->SetMaximumEpsilonStep( 0.0000009 );
+      fm->CreateChordFinder( field );
+      fm->GetChordFinder()->SetIntegrationDriver( driverFor( field ) );
+      lv->SetFieldManager( fm, true );
+      ++n;
+    }
+    if (!n){ MSG_FATAL( "AtlasFullField: no volume LAr::EMB1-3 for the field of the muons only. Abort!" ); }
+    MSG_INFO( "AtlasFullField: field map in the whole world; SwitchingFieldManager (muons only) on " << n << " volumes of the barrel EM" );
   }
 }
