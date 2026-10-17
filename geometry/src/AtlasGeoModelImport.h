@@ -52,7 +52,8 @@ class AtlasGeoModelImport
 
     // The descendants of the world children named in `tops` whose logical volume name is in `names`, whole, placed in mother with their
     // global transformation; the search does not go below a volume it places (F41 conserto 32: the girders, fingers and saddles
-    // of the ATLAS tile calorimeter, which Lorenzetti does not build). Returns the number of placements.
+    // of the ATLAS tile calorimeter, which Lorenzetti does not build). A name ending in '*' is a prefix, "!name" leaves a volume out and ">name" searches below it without placing it (conserto 34). Returns
+    // the number of placements.
     int placeDescendants( G4LogicalVolume *mother, const std::set<std::string> &tops, const std::set<std::string> &names,
                           bool checkOverlaps );
 

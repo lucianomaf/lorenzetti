@@ -137,6 +137,8 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
     // the field of the ATLAS simulation as in the production (--atlas-full-field; F41 conserto 33): the map in the whole world and only the
     // muons in the field inside the barrel EM calorimeter (MuonFieldOnlyInCalo)
     bool m_atlasFullField;
+    // the dead material of ATLAS in the gap between the barrel and the extended barrel (--atlas-barrel-gap-services; F41 conserto 34)
+    bool m_atlasBarrelGapServices;
     std::unique_ptr<AtlasGeoModelImport> m_atlasImport;
     std::vector<AtlasContainer> m_atlasContainers;
     std::map<G4LogicalVolume*, G4Transform3D> m_containerX;

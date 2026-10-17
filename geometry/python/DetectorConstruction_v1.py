@@ -72,6 +72,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasFieldMap     : str="",
                 AtlasForwardShielding : bool=False,
                 AtlasFullField    : bool=False,
+                AtlasBarrelGapServices : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -254,6 +255,13 @@ class DetectorConstruction_v1( Cpp ):
       if not AtlasForwardShielding:
         raise ValueError("AtlasFullField needs AtlasForwardShielding (the ATLAS material outside the calorimeters).")
       self.setProperty( "AtlasFullField", True )
+    # The dead material of ATLAS in the gap between the barrel and the extended barrel (F41 conserto 34), imported from the same dump instead
+    # of the services of conserto 11 (DM::ITC::Services, boxes with 5% of aluminium). Needs AtlasForwardShielding.
+    if AtlasBarrelGapServices:
+      if not AtlasForwardShielding:
+        raise ValueError("AtlasBarrelGapServices needs AtlasForwardShielding.")
+      self.volumes = [ v for v in self.volumes if not v.Name.startswith( 'DM::ITC::Services' ) ]
+      self.setProperty( "AtlasBarrelGapServices", True )
     
   
   # Geant4 settings of the ATLAS production (F41 conserto 24; Athena release 23.0.14, G4PhysicsRegionConfig.py and

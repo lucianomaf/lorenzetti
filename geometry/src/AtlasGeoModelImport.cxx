@@ -193,13 +193,30 @@ int AtlasGeoModelImport::placeDescendants( G4LogicalVolume *mother, const std::s
 {
   int n = 0;
   std::map<const GeoVPhysVol*, G4LogicalVolume*> built;   // one Geant4 logical volume per GeoModel volume (shared placements)
+  // a pattern ending in '*' is a prefix; "!name" leaves the volume out (not placed, not searched below); ">name" searches below it without
+  // placing it (its own material is the air of the world)
+  auto has = [&]( const std::string &name, char mark ){
+    for( const auto &p : names ){
+      if( p.empty() || p[0] != mark ) continue;
+      const std::string q = p.substr( 1 );
+      if( q == name || ( !q.empty() && q.back() == '*' && name.compare( 0, q.size() - 1, q, 0, q.size() - 1 ) == 0 ) ) return true;
+    }
+    return false;
+  };
+  auto matches = [&]( const std::string &name ){
+    if( names.count( name ) ) return true;
+    for( const auto &p : names )
+      if( !p.empty() && p[0] != '!' && p[0] != '>' && p.back() == '*' && name.compare( 0, p.size() - 1, p, 0, p.size() - 1 ) == 0 ) return true;
+    return false;
+  };
   std::function<void(const PVConstLink&, const GeoTrf::Transform3D&, const std::string&)> search =
     [&]( const PVConstLink &pv, const GeoTrf::Transform3D &x, const std::string &top ){
       for( unsigned int k = 0; k < pv->getNChildVols(); ++k ){
         PVConstLink child = pv->getChildVol( k );
         const std::string name = child->getLogVol()->getName();
         const GeoTrf::Transform3D xc = x * pv->getXToChildVol( k );
-        if( !names.count( name ) ){ search( child, xc, top ); continue; }
+        if( has( name, '!' ) ) continue;
+        if( has( name, '>' ) || !matches( name ) ){ search( child, xc, top ); continue; }
         G4LogicalVolume *&lv = built[ child.get() ];
         if( !lv ){
           ExtParameterisedVolumeBuilder builder( top );

@@ -100,6 +100,10 @@ DetectorConstruction_v1::DetectorConstruction_v1(std::string name)
   // the whole world (not only in the cylinder of the calorimeters) and the SwitchingFieldManager of ATLAS (MuonsOnlyInCaloFieldManager,
   // MuonFieldOnlyInCalo = True in the reference HITS) on the barrel EM calorimeter: only the muons see the field in its shell
   declareProperty( "AtlasFullField"             , m_atlasFullField=false      );
+  // the dead material of ATLAS in the gap between the barrel and the extended barrel, from the same dump (--atlas-barrel-gap-services;
+  // F41 conserto 34; needs AtlasForwardShielding): the LAr::DM::* children of LAr::Barrel::Cryostat::MotherVolume, the signal feedthroughs
+  // and their cables, and the saddles of the tile barrel, instead of the services of conserto 11 (DM::ITC::Services, 5% of aluminium)
+  declareProperty( "AtlasBarrelGapServices"     , m_atlasBarrelGapServices=false );
   // the field map of the ATLAS simulation for --atlas-run4 (bfieldmap_7730_20400_14m.root, the GlobalMap of /GLOBAL/BField/Maps)
   declareProperty( "AtlasFieldMap"              , m_atlasFieldMap=""          );
   declareProperty( "DeadMaterialVolumes"        , m_deadMaterialVolumes       );
@@ -1022,6 +1026,21 @@ void DetectorConstruction_v1::BuildAtlasRun4( G4LogicalVolume *worldLV )
     const int ne = m_atlasImport->placeDescendants( worldLV, {"TileEndcapPos", "TileEndcapNeg"},
                      {"EFinger", "ESaddlePos", "GirderMother"}, m_checkOverlaps );
     MSG_INFO( "AtlasForwardShielding: MuonSys imported; tile calorimeter parts placed: " << nb << " (barrel), " << ne << " (end-caps)" );
+  }
+  // the dead material of ATLAS in the gap between the barrel and the extended barrel (--atlas-barrel-gap-services; F41 conserto 34): the
+  // walls of the barrel cryostat stay those of conserto 14b; the signal feedthroughs without their envelope of air (it crosses the
+  // cylinders DM::BarrelCryostat::Cylinder2 and Cylinder7 of conserto 14b, which have no holes for them); not imported: the parts of the
+  // feedthroughs that cross those cylinders and the sector and bridge envelopes of the LAr services (LAr::DM::SectorEnvelopes*,
+  // LAr::DM::BridgeEnvelopes: in ATLAS they run
+  // between the modules of the gap and crack scintillators, which conserto 21 builds as full cylinders)
+  if (m_atlasBarrelGapServices){
+    const int nl = m_atlasImport->placeDescendants( worldLV, {"LAr::Barrel::Cryostat::MotherVolume"},
+                     {"LAr::DM::*", "!LAr::DM::SectorEnvelopes*", ">LAr::Barrel::SignalFT::Envelope", "LAr::Barrel::SignalFT::*",
+                      "!LAr::Barrel::SignalFT::Pigtail", "!LAr::Barrel::SignalFT::Bellow", "!LAr::Barrel::SignalFT::ColdBox3",
+                      "!LAr::Barrel::SignalFT::VacuumCables", "!LAr::DM::BridgeEnvelopes",
+                      "LAr::Barrel::FTCables"}, m_checkOverlaps );
+    const int ns = m_atlasImport->placeDescendants( worldLV, {"TileCentralBarrel"}, {"SaddlePos", "SaddleNeg"}, m_checkOverlaps );
+    MSG_INFO( "AtlasBarrelGapServices: " << nl << " placements of the barrel LAr dead material and feedthroughs, " << ns << " tile saddles" );
   }
   std::stable_sort( m_atlasContainers.begin(), m_atlasContainers.end(),
                     []( const AtlasContainer &a, const AtlasContainer &b ){ return a.depth > b.depth; } );
