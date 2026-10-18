@@ -83,6 +83,8 @@ class CaloHitMaker : public Gaugi::Algorithm
     float m_rMax; 
     float m_zMin;
     float m_zMax;
+    // the region tested at the midpoint of the step (F41 conserto 36)
+    bool m_stepMidpointRegion;
     float m_noiseStd;
     // Keep only the energy deposited in the active medium (liquid argon, scintillator)
     bool m_activeEnergyOnly;

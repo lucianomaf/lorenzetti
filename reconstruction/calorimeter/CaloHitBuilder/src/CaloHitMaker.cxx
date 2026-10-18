@@ -78,6 +78,9 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "RMax"                     , m_rMax                                );
   declareProperty( "ZMin"                     , m_zMin                                );
   declareProperty( "ZMax"                     , m_zMax                                );
+  // the region (r, z) of the maker tested at the midpoint of the step instead of its pre-step point (F41 conserto 36): the pre-step point of
+  // the first step of a particle entering through the low face sits on the face and was refused by the strict lower bound
+  declareProperty( "StepMidpointRegion"       , m_stepMidpointRegion=false            );
   declareProperty( "Sampling"                 , m_sampling                            );
   declareProperty( "Segment"                  , m_segment                             );
   declareProperty( "Detector"                 , m_detector                            );
@@ -463,10 +466,13 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
 
   // In plan xy (the ATLAS-like barrel EM with SampSeg takes the whole accordion: its sampling comes from embSampSeg)
   const bool sampSeg = m_embSampSeg && m_embMode == 1 && m_embSampling > 0;
-  if( !sampSeg && !(radius > m_rMin && radius <= m_rMax) )
+  // the region test at the pre-step point, or at the midpoint of the step (StepMidpointRegion, F41 conserto 36)
+  const G4ThreeVector rpos = m_stepMidpointRegion ? 0.5*( pos + step->GetPostStepPoint()->GetPosition() ) : pos;
+  const float rradius = m_stepMidpointRegion ? (float)rpos.perp() : radius;
+  if( !sampSeg && !(rradius > m_rMin && rradius <= m_rMax) )
     return StatusCode::SUCCESS;
 
-  if( !(pos.z() > m_zMin && pos.z() <= m_zMax))
+  if( !(rpos.z() > m_zMin && rpos.z() <= m_zMax))
     return StatusCode::SUCCESS;
 
   int etaBin, phiBin;

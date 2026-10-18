@@ -20,6 +20,7 @@ class CaloHitBuilder(Logger):
                  HistogramPath: str = "Expert",
                  OutputLevel: int = LoggingLevel.toC('INFO'),
                  ActiveEnergyOnly: bool = False,
+                 StepMidpointRegion: bool = False,
                  BirksLaw: bool = False,
                  TileDualReadout: int = 0,
                  FreeRunningHits: bool = False,
@@ -39,6 +40,7 @@ class CaloHitBuilder(Logger):
         self.OutputLevel = OutputLevel
         self.OutputHitsKey = OutputHitsKey
         self.ActiveEnergyOnly = ActiveEnergyOnly
+        self.StepMidpointRegion = StepMidpointRegion
         self.BirksLaw = BirksLaw
         self.TileDualReadout = TileDualReadout
         # Free-running hits: the tile deposits also go, per PMT, to a list written in the layout of the ATLAS HITS ntuple
@@ -74,7 +76,7 @@ class CaloHitBuilder(Logger):
                                OutputLevel=self.OutputLevel,
                                # Use True when debug with only one thread
                                DetailedHistograms=False,
-                               ActiveEnergyOnly=self.ActiveEnergyOnly,
+                               ActiveEnergyOnly=self.ActiveEnergyOnly, StepMidpointRegion=self.StepMidpointRegion,
                                BirksLaw=self.BirksLaw,
                                TileDualReadout=self.TileDualReadout,
                                FreeRunningHits=self.FreeRunningHits,
@@ -97,7 +99,7 @@ class CaloHitBuilder(Logger):
                                                      OutputCollectionKey="Collection_" + fm.name(),
                                                      HistogramPath=self.HistogramPath + '/' + fm.name(),
                                                      OutputLevel=self.OutputLevel,
-                                                     ActiveEnergyOnly=self.ActiveEnergyOnly,
+                                                     ActiveEnergyOnly=self.ActiveEnergyOnly, StepMidpointRegion=self.StepMidpointRegion,
                                                      BirksLaw=self.BirksLaw,
                                                      FreeRunningHits=self.FreeRunningHits,
                                                      FreeRunningBinning=self.FreeRunningBinning) )

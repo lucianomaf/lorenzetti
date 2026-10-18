@@ -18,6 +18,7 @@ class CaloHitMaker( Cpp ):
                 HistogramPath        : str    = "/CaloHitMaker",
                 SamplingNoiseStd     : float  = 0,
                 ActiveEnergyOnly     : bool   = False,
+                StepMidpointRegion   : bool   = False,
                 BirksLaw             : bool   = False,
                 TileDualReadout      : int    = 0,
                 FreeRunningHits      : bool   = False,
@@ -47,6 +48,7 @@ class CaloHitMaker( Cpp ):
     self.setProperty( "SamplingNoiseStd"        , SamplingNoiseStd            )
     # Keep only the energy deposited in the active medium (liquid argon, scintillator)
     self.setProperty( "ActiveEnergyOnly"        , ActiveEnergyOnly            )
+    self.setProperty( "StepMidpointRegion"      , StepMidpointRegion          )
     # Apply Birks' law in the scintillator and in the liquid argon (ATLAS constants)
     self.setProperty( "BirksLaw"                , BirksLaw                    )
     # Dual readout of the tile cells (two PMTs per cell): 0 = off, 1 = ATLAS U-shape, 2 = linear sharing

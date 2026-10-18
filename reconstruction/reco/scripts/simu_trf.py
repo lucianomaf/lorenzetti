@@ -209,6 +209,11 @@ def parse_args():
                              "positions of --tile-atlas-gap), with their cells; with --atlas-barrel-gap-services the sector and bridge "
                              "envelopes of the LAr services are then imported too. Needs --atlas-run4 and --tile-atlas-gap; needed by "
                              "--free-running-atlas-format. Simulation only. Off by default.")
+    parser.add_argument('--step-midpoint-region', action='store_true', dest='step_midpoint_region', required=False,
+                        help="Test the region (r, z) of each hit maker at the midpoint of the step instead of its pre-step point: the "
+                             "first step of a particle entering a volume through its low face starts on the face and was refused by the "
+                             "strict lower bound (half of the energy of the end-cap presampler on side A). Needed by "
+                             "--free-running-atlas-format. Off by default.")
     parser.add_argument('--free-running-atlas-format', action='store_true', dest='free_running_atlas_format', required=False,
                         help="Write the free-running hits as the ATLAS HITS ntuple: the LAr energy and time compressed as the ATLAS "
                              "HITS (LArHitContainerCnv_p2) and filtered as FilterHit_tf (LArHitFilter, including its layer cuts in the "
@@ -343,6 +348,7 @@ def main(logging_level: str,
          atlas_full_field: bool,
          atlas_barrel_gap_services: bool,
          tile_atlas_run4: bool,
+         step_midpoint_region: bool,
          atlas_field_map: str,
          free_running_atlas_format: bool,
          atlas_emec_charge_collection: bool,
@@ -464,6 +470,7 @@ def main(logging_level: str,
                                  OutputLevel=outputLevel,
                                  OutputHitsKey=recordable("Hits"),
                                  ActiveEnergyOnly=active_energy_only,
+                                 StepMidpointRegion=step_midpoint_region,
                                  BirksLaw=birks_law,
                                  TileDualReadout=tile_dual_readout,
                                  FreeRunningHits=free_running_hits,
@@ -581,6 +588,9 @@ if __name__ == "__main__":
         # the field of the ATLAS simulation as in the production (F41 conserto 33)
         # the dead material of ATLAS in the gap between the barrel and the extended barrel (F41 conserto 34)
         # the tile extended barrel, ITC, gap and crack at the positions of the ATLAS simulation of Run 4 (F41 conserto 35)
+        # the region of the hit makers at the midpoint of the step (F41 conserto 36)
+        if args.free_running_atlas_format and not args.step_midpoint_region:
+            parser.error("--free-running-atlas-format needs --step-midpoint-region (the region test at the midpoint of the step)")
         if args.free_running_atlas_format and not args.tile_atlas_run4:
             parser.error("--free-running-atlas-format needs --tile-atlas-run4 (the tile end-cap parts at the ATLAS simulation positions)")
         if args.free_running_atlas_format and not args.atlas_barrel_gap_services:
@@ -645,6 +655,7 @@ if __name__ == "__main__":
              atlas_full_field      = args.atlas_full_field,
              atlas_barrel_gap_services = args.atlas_barrel_gap_services,
              tile_atlas_run4       = args.tile_atlas_run4,
+             step_midpoint_region  = args.step_midpoint_region,
              atlas_field_map       = args.atlas_field_map,
              free_running_atlas_format = args.free_running_atlas_format,
              atlas_emec_charge_collection = args.atlas_emec_charge_collection,
