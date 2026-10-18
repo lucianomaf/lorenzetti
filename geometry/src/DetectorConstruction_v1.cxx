@@ -104,6 +104,10 @@ DetectorConstruction_v1::DetectorConstruction_v1(std::string name)
   // F41 conserto 34; needs AtlasForwardShielding): the LAr::DM::* children of LAr::Barrel::Cryostat::MotherVolume, the signal feedthroughs
   // and their cables, and the saddles of the tile barrel, instead of the services of conserto 11 (DM::ITC::Services, 5% of aluminium)
   declareProperty( "AtlasBarrelGapServices"     , m_atlasBarrelGapServices=false );
+  // the tile extended barrel, ITC, gap and crack at the positions of the ATLAS simulation of Run 4 (--tile-atlas-run4; F41 conserto 35;
+  // the volumes and cells are moved in python, AtlasRun4.py): with it the sector and bridge envelopes of the LAr services no longer cross
+  // the gap and crack scintillators and are imported by AtlasBarrelGapServices
+  declareProperty( "TileAtlasRun4"              , m_tileAtlasRun4=false       );
   // the field map of the ATLAS simulation for --atlas-run4 (bfieldmap_7730_20400_14m.root, the GlobalMap of /GLOBAL/BField/Maps)
   declareProperty( "AtlasFieldMap"              , m_atlasFieldMap=""          );
   declareProperty( "DeadMaterialVolumes"        , m_deadMaterialVolumes       );
@@ -1034,11 +1038,12 @@ void DetectorConstruction_v1::BuildAtlasRun4( G4LogicalVolume *worldLV )
   // LAr::DM::BridgeEnvelopes: in ATLAS they run
   // between the modules of the gap and crack scintillators, which conserto 21 builds as full cylinders)
   if (m_atlasBarrelGapServices){
-    const int nl = m_atlasImport->placeDescendants( worldLV, {"LAr::Barrel::Cryostat::MotherVolume"},
-                     {"LAr::DM::*", "!LAr::DM::SectorEnvelopes*", ">LAr::Barrel::SignalFT::Envelope", "LAr::Barrel::SignalFT::*",
-                      "!LAr::Barrel::SignalFT::Pigtail", "!LAr::Barrel::SignalFT::Bellow", "!LAr::Barrel::SignalFT::ColdBox3",
-                      "!LAr::Barrel::SignalFT::VacuumCables", "!LAr::DM::BridgeEnvelopes",
-                      "LAr::Barrel::FTCables"}, m_checkOverlaps );
+    std::set<std::string> gap = {"LAr::DM::*", ">LAr::Barrel::SignalFT::Envelope", "LAr::Barrel::SignalFT::*",
+                                 "!LAr::Barrel::SignalFT::Pigtail", "!LAr::Barrel::SignalFT::Bellow", "!LAr::Barrel::SignalFT::ColdBox3",
+                                 "!LAr::Barrel::SignalFT::VacuumCables", "LAr::Barrel::FTCables"};
+    // the sector and bridge envelopes only with the tile gap and crack at the positions of the ATLAS simulation (conserto 35)
+    if (!m_tileAtlasRun4){ gap.insert( "!LAr::DM::SectorEnvelopes*" ); gap.insert( "!LAr::DM::BridgeEnvelopes" ); }
+    const int nl = m_atlasImport->placeDescendants( worldLV, {"LAr::Barrel::Cryostat::MotherVolume"}, gap, m_checkOverlaps );
     const int ns = m_atlasImport->placeDescendants( worldLV, {"TileCentralBarrel"}, {"SaddlePos", "SaddleNeg"}, m_checkOverlaps );
     MSG_INFO( "AtlasBarrelGapServices: " << nl << " placements of the barrel LAr dead material and feedthroughs, " << ns << " tile saddles" );
   }

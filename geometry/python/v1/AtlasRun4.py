@@ -11,7 +11,7 @@ local coordinates (LArG4EC PresamplerGeometry.cc: local z plus the nominal front
 FCal: the module frame).
 """
 
-__all__ = ["ATLAS_ENDCAP_SIM_SHIFT", "shiftLArEndcap"]
+__all__ = ["ATLAS_ENDCAP_SIM_SHIFT", "shiftLArEndcap", "TILE_ENDCAP_SIM_SHIFT", "shiftTileEndcap"]
 
 import math
 from GaugiKernel.constants import mm
@@ -87,3 +87,41 @@ def shiftLArEndcap( volumes, samplings, fcal_modules ):
         fm.Z += dz; fm.ZMin += dz; fm.ZMax += dz
         fm.CopyEta = [ math.asinh( fm.Z / r ) for r in rs ]
         done.add( id(fm) )
+
+
+# The extended barrel, the ITC, the gap and the crack of the tile calorimeter in the ATLAS simulation of Run 4 (F41 conserto 35,
+# --tile-atlas-run4): the dump of ATLAS-P2-RUN4-01-01-00 (simulation mode) places them, with respect to the nominal positions of the
+# ATLAS-like options (the ZOFFSET of TILB, conserto 21), 40 mm further on side A and 30 mm further on side C (the installed shift of
+# TileGlobals): measured with scans of 0.5 mm along z (the crack scintillator 3493-3499.5 against 3533-3539.5 mm, the gap scintillator
+# 3506-3518.5 against 3546-3558.5 mm, the front plate of the extended barrel 3520-3534.5 against 3560-3574.5 mm on side A; the C10 and the
+# end of the extended barrel 39.5 mm further on side C, including the phase of the tiles in the period, which is not changed here); the
+# envelopes of the dump: Crack 3536 / -3526 mm, Gap 3552 / -3542 mm, ITC 3405 / -3395 mm, EBarrel 4854 / -4844 mm.
+TILE_ENDCAP_SIM_SHIFT = { +1: 40.0*mm, -1: 30.0*mm }
+_TILE_ENDCAP_PREFIXES = ( 'TILE::TileCalExt', 'TILE::ITC', 'TILE::Gap', 'DM::TileGap' )
+
+
+def shiftTileEndcap( volumes, samplings ):
+    """
+    Moves the volumes of the extended barrel, ITC, gap and crack of the tile calorimeter away from the interaction point by
+    TILE_ENDCAP_SIM_SHIFT, with the (r, z) boxes of their cells and the centre and eta of each cell (metadata of the hits).
+    """
+    def dz( z ): return TILE_ENDCAP_SIM_SHIFT[+1] if z > 0 else -TILE_ENDCAP_SIM_SHIFT[-1]
+    def isTileEndcap( name ): return name.startswith( _TILE_ENDCAP_PREFIXES )
+    done = set()
+    for pv in volumes:
+        if isTileEndcap( pv.Name ) and id(pv) not in done:
+            _shiftVolume( pv, dz( pv.Z ) ); done.add( id(pv) )
+    cells_done = set()
+    for s in samplings:
+        pv = s.volume()
+        if not isTileEndcap( pv.Name ): continue
+        if id(pv) not in done:
+            _shiftVolume( pv, dz( pv.Z ) ); done.add( id(pv) )
+        cells = getattr( s.sensitive(), 'Cells', None )
+        if not cells or id(cells) in cells_done: continue
+        cells_done.add( id(cells) )
+        d = dz( pv.Z )
+        for k in ( 'BoxZMin', 'BoxZMax', 'ZCentre' ):
+            if k in cells: cells[k] = [ z + d for z in cells[k] ]
+        if 'ZCentre' in cells and 'RCentre' in cells and 'Eta' in cells:
+            cells['Eta'] = [ round( math.asinh( z / r ), 5 ) for z, r in zip( cells['ZCentre'], cells['RCentre'] ) ]

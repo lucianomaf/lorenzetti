@@ -73,6 +73,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasForwardShielding : bool=False,
                 AtlasFullField    : bool=False,
                 AtlasBarrelGapServices : bool=False,
+                TileAtlasRun4     : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -262,6 +263,14 @@ class DetectorConstruction_v1( Cpp ):
         raise ValueError("AtlasBarrelGapServices needs AtlasForwardShielding.")
       self.volumes = [ v for v in self.volumes if not v.Name.startswith( 'DM::ITC::Services' ) ]
       self.setProperty( "AtlasBarrelGapServices", True )
+    # The extended barrel, ITC, gap and crack of the tile calorimeter where the ATLAS simulation of Run 4 places them (F41 conserto 35,
+    # geometry/python/v1/AtlasRun4.py), with their cells. Needs AtlasRun4 and TileAtlasGap.
+    if TileAtlasRun4:
+      if not (AtlasRun4 and TileAtlasGap):
+        raise ValueError("TileAtlasRun4 needs AtlasRun4 and TileAtlasGap.")
+      from geometry.v1.AtlasRun4 import shiftTileEndcap
+      shiftTileEndcap( self.volumes, self.samplings )
+      self.setProperty( "TileAtlasRun4", True )
     
   
   # Geant4 settings of the ATLAS production (F41 conserto 24; Athena release 23.0.14, G4PhysicsRegionConfig.py and

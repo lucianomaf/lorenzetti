@@ -139,6 +139,8 @@ class DetectorConstruction_v1 : public G4VUserDetectorConstruction, public MsgSe
     bool m_atlasFullField;
     // the dead material of ATLAS in the gap between the barrel and the extended barrel (--atlas-barrel-gap-services; F41 conserto 34)
     bool m_atlasBarrelGapServices;
+    // the extended barrel, ITC, gap and crack of the tile calorimeter at the positions of the ATLAS simulation of Run 4 (F41 conserto 35)
+    bool m_tileAtlasRun4;
     std::unique_ptr<AtlasGeoModelImport> m_atlasImport;
     std::vector<AtlasContainer> m_atlasContainers;
     std::map<G4LogicalVolume*, G4Transform3D> m_containerX;

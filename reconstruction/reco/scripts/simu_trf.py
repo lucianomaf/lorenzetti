@@ -203,6 +203,12 @@ def parse_args():
                              "LAr::DM::* volumes of the barrel cryostat (sector envelopes, bridges, base and sector plates, pedestals, front-end "
                              "boards, crates), the signal feedthroughs and their cables, and the saddles of the tile barrel. Needs "
                              "--atlas-forward-shielding; needed by --free-running-atlas-format. Simulation only. Off by default.")
+    parser.add_argument('--tile-atlas-run4', action='store_true', dest='tile_atlas_run4', required=False,
+                        help="The extended barrel, ITC, gap and crack of the tile calorimeter at the positions of the ATLAS simulation of "
+                             "Run 4 (the GeoModel dump of --atlas-run4: 40 mm further on side A and 30 mm on side C than the nominal "
+                             "positions of --tile-atlas-gap), with their cells; with --atlas-barrel-gap-services the sector and bridge "
+                             "envelopes of the LAr services are then imported too. Needs --atlas-run4 and --tile-atlas-gap; needed by "
+                             "--free-running-atlas-format. Simulation only. Off by default.")
     parser.add_argument('--free-running-atlas-format', action='store_true', dest='free_running_atlas_format', required=False,
                         help="Write the free-running hits as the ATLAS HITS ntuple: the LAr energy and time compressed as the ATLAS "
                              "HITS (LArHitContainerCnv_p2) and filtered as FilterHit_tf (LArHitFilter, including its layer cuts in the "
@@ -336,6 +342,7 @@ def main(logging_level: str,
          atlas_forward_shielding: bool,
          atlas_full_field: bool,
          atlas_barrel_gap_services: bool,
+         tile_atlas_run4: bool,
          atlas_field_map: str,
          free_running_atlas_format: bool,
          atlas_emec_charge_collection: bool,
@@ -437,6 +444,7 @@ def main(logging_level: str,
                                                         AtlasForwardShielding=atlas_forward_shielding,
                                                         AtlasFullField=atlas_full_field,
                                                         AtlasBarrelGapServices=atlas_barrel_gap_services,
+                                                        TileAtlasRun4=tile_atlas_run4,
                                                         AtlasFieldMap=atlas_field_map),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
@@ -572,6 +580,9 @@ if __name__ == "__main__":
         # the ATLAS material outside the calorimeters (F41 conserto 32)
         # the field of the ATLAS simulation as in the production (F41 conserto 33)
         # the dead material of ATLAS in the gap between the barrel and the extended barrel (F41 conserto 34)
+        # the tile extended barrel, ITC, gap and crack at the positions of the ATLAS simulation of Run 4 (F41 conserto 35)
+        if args.free_running_atlas_format and not args.tile_atlas_run4:
+            parser.error("--free-running-atlas-format needs --tile-atlas-run4 (the tile end-cap parts at the ATLAS simulation positions)")
         if args.free_running_atlas_format and not args.atlas_barrel_gap_services:
             parser.error("--free-running-atlas-format needs --atlas-barrel-gap-services (the ATLAS dead material of the barrel gap)")
         if args.free_running_atlas_format and not args.atlas_full_field:
@@ -601,6 +612,8 @@ if __name__ == "__main__":
         parser.error("--atlas-full-field needs --atlas-forward-shielding")
     if args.atlas_barrel_gap_services and not args.atlas_forward_shielding:
         parser.error("--atlas-barrel-gap-services needs --atlas-forward-shielding")
+    if args.tile_atlas_run4 and not (args.atlas_run4 and args.tile_atlas_gap):
+        parser.error("--tile-atlas-run4 needs --atlas-run4 and --tile-atlas-gap")
     print(f"output file: {args.output_file}")
     print(f"number of threads: {args.number_of_threads}")
 
@@ -631,6 +644,7 @@ if __name__ == "__main__":
              atlas_forward_shielding = args.atlas_forward_shielding,
              atlas_full_field      = args.atlas_full_field,
              atlas_barrel_gap_services = args.atlas_barrel_gap_services,
+             tile_atlas_run4       = args.tile_atlas_run4,
              atlas_field_map       = args.atlas_field_map,
              free_running_atlas_format = args.free_running_atlas_format,
              atlas_emec_charge_collection = args.atlas_emec_charge_collection,
