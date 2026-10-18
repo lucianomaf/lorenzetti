@@ -214,6 +214,10 @@ def parse_args():
                              "first step of a particle entering a volume through its low face starts on the face and was refused by the "
                              "strict lower bound (half of the energy of the end-cap presampler on side A). Needed by "
                              "--free-running-atlas-format. Off by default.")
+    parser.add_argument('--atlas-emec-argon-fraction', action='store_true', dest='atlas_emec_argon_fraction', required=False,
+                        help="The gap of each radial band of the ATLAS-like EMEC from the volume fraction of liquid argon of the ATLAS "
+                             "accordion (LArWheelCalculator of Athena), instead of the gap linear in r of --atlas-emec. Needs --atlas-emec; "
+                             "needed by --free-running-atlas-format. Off by default.")
     parser.add_argument('--free-running-atlas-format', action='store_true', dest='free_running_atlas_format', required=False,
                         help="Write the free-running hits as the ATLAS HITS ntuple: the LAr energy and time compressed as the ATLAS "
                              "HITS (LArHitContainerCnv_p2) and filtered as FilterHit_tf (LArHitFilter, including its layer cuts in the "
@@ -349,6 +353,7 @@ def main(logging_level: str,
          atlas_barrel_gap_services: bool,
          tile_atlas_run4: bool,
          step_midpoint_region: bool,
+         atlas_emec_argon_fraction: bool,
          atlas_field_map: str,
          free_running_atlas_format: bool,
          atlas_emec_charge_collection: bool,
@@ -451,6 +456,7 @@ def main(logging_level: str,
                                                         AtlasFullField=atlas_full_field,
                                                         AtlasBarrelGapServices=atlas_barrel_gap_services,
                                                         TileAtlasRun4=tile_atlas_run4,
+                                                        AtlasEmecArgonFraction=atlas_emec_argon_fraction,
                                                         AtlasFieldMap=atlas_field_map),
                                NumberOfThreads=number_of_threads,
                                OutputFile=output_file,
@@ -589,6 +595,9 @@ if __name__ == "__main__":
         # the dead material of ATLAS in the gap between the barrel and the extended barrel (F41 conserto 34)
         # the tile extended barrel, ITC, gap and crack at the positions of the ATLAS simulation of Run 4 (F41 conserto 35)
         # the region of the hit makers at the midpoint of the step (F41 conserto 36)
+        # the argon fraction of the ATLAS accordion in the EMEC (F41 conserto 37)
+        if args.free_running_atlas_format and not args.atlas_emec_argon_fraction:
+            parser.error("--free-running-atlas-format needs --atlas-emec-argon-fraction (the argon fraction of the ATLAS EMEC)")
         if args.free_running_atlas_format and not args.step_midpoint_region:
             parser.error("--free-running-atlas-format needs --step-midpoint-region (the region test at the midpoint of the step)")
         if args.free_running_atlas_format and not args.tile_atlas_run4:
@@ -622,6 +631,8 @@ if __name__ == "__main__":
         parser.error("--atlas-full-field needs --atlas-forward-shielding")
     if args.atlas_barrel_gap_services and not args.atlas_forward_shielding:
         parser.error("--atlas-barrel-gap-services needs --atlas-forward-shielding")
+    if args.atlas_emec_argon_fraction and not args.atlas_emec:
+        parser.error("--atlas-emec-argon-fraction needs --atlas-emec")
     if args.tile_atlas_run4 and not (args.atlas_run4 and args.tile_atlas_gap):
         parser.error("--tile-atlas-run4 needs --atlas-run4 and --tile-atlas-gap")
     print(f"output file: {args.output_file}")
@@ -656,6 +667,7 @@ if __name__ == "__main__":
              atlas_barrel_gap_services = args.atlas_barrel_gap_services,
              tile_atlas_run4       = args.tile_atlas_run4,
              step_midpoint_region  = args.step_midpoint_region,
+             atlas_emec_argon_fraction = args.atlas_emec_argon_fraction,
              atlas_field_map       = args.atlas_field_map,
              free_running_atlas_format = args.free_running_atlas_format,
              atlas_emec_charge_collection = args.atlas_emec_charge_collection,

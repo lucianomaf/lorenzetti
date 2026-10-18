@@ -346,8 +346,27 @@ def atlasEmecConeRadius(eta, z):
     return (z - EMEC_ATLAS_FOCAL_SHIFT) / math.sinh(eta)
 
 
+# Volume fraction of liquid argon of the ATLAS accordion per radial band of 100 mm (key: lower edge of the band, mm), averaged over the
+# depth inside the wheel (outer 1.375 < |eta| < 2.5, inner 2.5 < |eta| < 3.2): the LArWheelCalculator of Athena 23.0.14 (ported in
+# geometry/GeoSpecialShapes, F41 conserto 29), phi scanned over one period of the wheel at each (r, z) on a grid of 10 mm (F41 c36,
+# c36_emec_frac.cxx, tables EmecTables-ATLAS-P2-RUN4-01-01-00). Used with EMEC_ATLAS_ARGON_FRACTION (conserto 37).
+EMEC_ATLAS_ARGON_FRACTION_TABLE = {
+    "outer": {600: 0.4692, 700: 0.5050, 800: 0.5437, 900: 0.5735, 1000: 0.5980, 1100: 0.6180, 1200: 0.6352, 1300: 0.6502,
+              1400: 0.6628, 1500: 0.6738, 1600: 0.6832, 1700: 0.6914, 1800: 0.6986, 1900: 0.7054, 2000: 0.7102},
+    "inner": {300: 0.5521, 400: 0.5974, 500: 0.6331, 600: 0.6530} }
+# Set by DetectorConstruction_v1 before the EMEC is built (--atlas-emec-argon-fraction): the gap of each band from the table above
+EMEC_ATLAS_ARGON_FRACTION = False
+
+
 def atlasEmecGap(wheel, r):
-    """Liquid-argon gap g (mm) on each side of the electrode at radius r, linear in r (see above)."""
+    """Liquid-argon gap g (mm) on each side of the electrode at radius r: linear in r (see above), or, with EMEC_ATLAS_ARGON_FRACTION,
+    the equivalent gap that gives the volume fraction of argon of the ATLAS accordion in the band of r (2g / (t_abs + 2g) = f)."""
+    if EMEC_ATLAS_ARGON_FRACTION:
+        table = EMEC_ATLAS_ARGON_FRACTION_TABLE[wheel]
+        key = int(math.floor(r / EMEC_ATLAS_BAND) * EMEC_ATLAS_BAND)
+        key = min(max(key, min(table)), max(table))
+        f = table[key]
+        return 0.5 * f / (1. - f) * atlasEmecAbsorberThickness(wheel)
     zmid = EMEC_ATLAS_Z_FRONT + EMEC_ATLAS_THICKNESS / 2
     if wheel == "outer":
         r0, r1 = atlasEmecConeRadius(EMEC_ATLAS_ETA_MID, zmid), EMEC_ATLAS_R_OUTER

@@ -74,6 +74,7 @@ class DetectorConstruction_v1( Cpp ):
                 AtlasFullField    : bool=False,
                 AtlasBarrelGapServices : bool=False,
                 TileAtlasRun4     : bool=False,
+                AtlasEmecArgonFraction : bool=False,
               ):
 
     Cpp.__init__(self, ROOT.DetectorConstruction_v1(name) )
@@ -81,6 +82,10 @@ class DetectorConstruction_v1( Cpp ):
     # (geometry/python/v1/EMEC.py; F41 conserto 27)
     import geometry.v1.EMEC as _emec
     _emec.EMEC_ATLAS_CRACK_EDGES_INSIDE = bool(AtlasRun4)
+    # The argon fraction of the ATLAS accordion in the bands of the ATLAS-like EMEC (geometry/python/v1/EMEC.py; F41 conserto 37)
+    if AtlasEmecArgonFraction and not AtlasEmec:
+      raise ValueError("AtlasEmecArgonFraction needs AtlasEmec.")
+    _emec.EMEC_ATLAS_ARGON_FRACTION = bool(AtlasEmecArgonFraction)
 
     self.setProperty( "UseMagneticField", UseMagneticField  )
     # 2 T field only inside the ATLAS central solenoid volume (R < 1.23 m, |z| < 2.9 m);
