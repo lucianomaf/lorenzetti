@@ -79,7 +79,8 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "ZMin"                     , m_zMin                                );
   declareProperty( "ZMax"                     , m_zMax                                );
   // the region (r, z) of the maker tested at the midpoint of the step instead of its pre-step point (F41 conserto 36): the pre-step point of
-  // the first step of a particle entering through the low face sits on the face and was refused by the strict lower bound
+  // the first step of a particle entering through the low face sits on the face and was refused by the strict lower bound; with the
+  // cells of (r, z) boxes, the box of the step is looked up at the same midpoint (F41 conserto 38)
   declareProperty( "StepMidpointRegion"       , m_stepMidpointRegion=false            );
   declareProperty( "Sampling"                 , m_sampling                            );
   declareProperty( "Segment"                  , m_segment                             );
@@ -499,13 +500,19 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
     if(phiBin < 0)
       return StatusCode::SUCCESS;
   }else{
-    // Row of the cell: the eta bin of the grid, or the cell of the (r, z) boxes
-    etaBin = useCells() ? findCell(cellRadius(radius, phi), pos.z()) : find(m_etaBins, eta);
+    // Row of the cell: the eta bin of the grid, or the cell of the (r, z) boxes. With StepMidpointRegion the boxes are looked up at
+    // the same point as the region test, the midpoint of the step (F41 conserto 38): a step that crosses a thin volume whose box is
+    // the volume itself (the gap and crack scintillators E1-E4, 6 to 12 mm, crossed by a muon in one step) starts on the face of the
+    // box, and its pre-step point was refused by the strict lower bound of findCell.
+    const bool boxMidpoint = useCells() && m_stepMidpointRegion;
+    const float cellPhi = boxMidpoint ? (float)rpos.phi() : phi;
+    etaBin = useCells() ? findCell(cellRadius(boxMidpoint ? rradius : radius, cellPhi), boxMidpoint ? (float)rpos.z() : (float)pos.z())
+                        : find(m_etaBins, eta);
 
     if(etaBin < 0)
       return StatusCode::SUCCESS;
 
-    phiBin = findPhi(phi);
+    phiBin = findPhi(cellPhi);
 
     if(phiBin < 0)
       return StatusCode::SUCCESS;

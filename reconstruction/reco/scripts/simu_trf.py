@@ -212,7 +212,9 @@ def parse_args():
     parser.add_argument('--step-midpoint-region', action='store_true', dest='step_midpoint_region', required=False,
                         help="Test the region (r, z) of each hit maker at the midpoint of the step instead of its pre-step point: the "
                              "first step of a particle entering a volume through its low face starts on the face and was refused by the "
-                             "strict lower bound (half of the energy of the end-cap presampler on side A). Needed by "
+                             "strict lower bound (half of the energy of the end-cap presampler on side A). The cells of (r, z) boxes "
+                             "(the ATLAS-like Tile, gap, ITC and HEC) are looked up at the same midpoint: a muon crosses a gap or crack "
+                             "scintillator (E1-E4) in one step starting on its face, and up to 70%% of them were lost. Needed by "
                              "--free-running-atlas-format. Off by default.")
     parser.add_argument('--atlas-emec-argon-fraction', action='store_true', dest='atlas_emec_argon_fraction', required=False,
                         help="The gap of each radial band of the ATLAS-like EMEC from the volume fraction of liquid argon of the ATLAS "
