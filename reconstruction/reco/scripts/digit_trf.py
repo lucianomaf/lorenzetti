@@ -57,7 +57,33 @@ def parse_args():
     parser.add_argument('--detector', action='store',
                         dest='detector', required=False,
                         type=str, default='v1', choices=['v1', 'v2'],
-                        help="The detector construction: v1, the original geometry, or v2, the ATLAS geometry.")
+                        help="The detector construction: v1, the original geometry, or v2, the ATLAS geometry; the options of the "
+                             "ATLAS geometry need v2.")
+    parser.add_argument('--tile-atlas-geometry', action='store_true',
+                        dest='tile_atlas_geometry', required=False,
+                        help="Use the ATLAS-like tile calorimeter geometry (see simu_trf.py). It must match "
+                             "the option used in the simulation, since the tile cells depend on it.")
+    parser.add_argument('--atlas-emb', action='store_true',
+                        dest='atlas_emb', required=False,
+                        help="Barrel EM calorimeter with the ATLAS absorber composition (see simu_trf.py). It must "
+                             "match the option used in the simulation, since the barrel cells depend on it.")
+    parser.add_argument('--atlas-emb-cells', action='store_true',
+                        dest='atlas_emb_cells', required=False,
+                        help="Barrel EM with the ATLAS length and cells (see simu_trf.py; needs --atlas-emb). It must "
+                             "match the option used in the simulation, since the barrel cells depend on it.")
+    parser.add_argument('--atlas-hec', action='store_true',
+                        dest='atlas_hec', required=False,
+                        help="HEC as in ATLAS (see simu_trf.py). It must match the option used in the simulation, "
+                             "since the HEC samplings and cells depend on it.")
+    parser.add_argument('--atlas-emec', action='store_true',
+                        dest='atlas_emec', required=False,
+                        help="EM end-cap as in ATLAS (see simu_trf.py). It must match the option used in the simulation, "
+                             "since the EMEC cells depend on it.")
+    parser.add_argument('--tile-atlas-cells', action='store_true',
+                        dest='tile_atlas_cells', required=False,
+                        help="Hits simulated with --tile-atlas-cells (ATLAS tile cells). Not supported yet: the "
+                             "digitization only knows the eta x phi grid, so the job stops with an error.")
+
    
     parser = merge_args(parser)
 
@@ -71,6 +97,11 @@ def main(events : List[int],
          pre_init: str,
          pre_exec: str,
          post_exec: str,
+         tile_atlas_geometry: bool = False,
+         atlas_emb: bool = False,
+         atlas_emb_cells: bool = False,
+         atlas_hec: bool = False,
+         atlas_emec: bool = False,
          detector: str = 'v1',
         ):
     """
@@ -88,7 +119,11 @@ def main(events : List[int],
         pre_init (str): Hook for pre-initialization code.
         pre_exec (str): Hook for pre-execution code.
         post_exec (str): Hook for post-execution code.
-        detector (str): 'v1' or 'v2', the detector construction of the cells.
+        tile_atlas_geometry (bool): Use the ATLAS-like tile calorimeter geometry.
+        atlas_emb (bool): Barrel EM calorimeter with the ATLAS absorber composition.
+        atlas_emb_cells (bool): Barrel EM with the ATLAS length (|z| < 3165 mm) and cells (needs atlas_emb).
+        atlas_hec (bool): HEC as in ATLAS (four samplings, nominal geometry and cells of ATLAS).
+        atlas_emec (bool): EM end-cap as in ATLAS (two wheels, nominal geometry, composition and cells of ATLAS).
     """
 
     if isinstance(input_file, Path):
@@ -116,7 +151,10 @@ def main(events : List[int],
 
     # digitalization!    
     calorimeter = CaloCellBuilder("CaloCellBuilder", 
-                                  {"v1": DetectorConstruction_v1, "v2": DetectorConstruction_v2}[detector]("ATLAS"),
+                                  (DetectorConstruction_v2("ATLAS", TileAtlasGeometry=tile_atlas_geometry, AtlasEmb=atlas_emb,
+                                                          AtlasEmbCells=atlas_emb_cells,
+                                                          AtlasHec=atlas_hec, AtlasEmec=atlas_emec)
+                                   if detector == 'v2' else DetectorConstruction_v1("ATLAS")),
                                   HistogramPath="Expert/Cells",
                                   OutputLevel=outputLevel,
                                   InputHitsKey=recordable("Hits"),
@@ -149,6 +187,13 @@ if __name__ == "__main__":
         parser.print_help()
         sys.exit(1)
     args = parser.parse_args()
+    if args.tile_atlas_cells:
+        parser.error("--tile-atlas-cells: the digitization of the ATLAS tile cells is not supported yet "
+                     "(the cells exist only in the hit file). Do not digitize these hits with the default cells.")
+    if args.detector == 'v1':
+        v2_only = [o for o in ['tile_atlas_geometry', 'atlas_emb', 'atlas_emb_cells', 'atlas_hec', 'atlas_emec'] if getattr(args, o)]
+        if v2_only:
+            parser.error('--' + v2_only[0].replace('_', '-') + ' is an option of the ATLAS geometry: it needs --detector v2')
     args = update_args(args)
     pool  = create_parallel_job(args)
     pool( main, 
@@ -156,5 +201,10 @@ if __name__ == "__main__":
          pre_init         = args.pre_init,
          pre_exec         = args.pre_exec,
          post_exec        = args.post_exec,
+         tile_atlas_geometry = args.tile_atlas_geometry,
+         atlas_emb        = args.atlas_emb,
+         atlas_emb_cells  = args.atlas_emb_cells,
+         atlas_hec        = args.atlas_hec,
+         atlas_emec       = args.atlas_emec,
          detector         = args.detector,
          )

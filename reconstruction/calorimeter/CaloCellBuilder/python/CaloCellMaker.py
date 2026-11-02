@@ -31,6 +31,12 @@ class CaloCellMaker( Cpp ):
     self.setProperty( "Sampling"                , sampling.Sampling           )
     self.setProperty( "Segment"                 , sampling.sensitive().Segment)
     self.setProperty( "Detector"                , sampling.Detector           )
+    # Cells given by a table (ATLAS-like HEC, geometry/python/v1/HEC.py): the eta and delta eta of each cell, in the
+    # order of the hits. Only set when present (setProperty cannot convert an empty list); without them, the grid.
+    cells = getattr( sampling.sensitive(), "Cells", None )
+    if cells:
+      self.setProperty( "CellEta"               , [float(x) for x in cells["Eta"]]      )
+      self.setProperty( "CellDeltaEta"          , [float(x) for x in cells["DeltaEta"]] )
     self.setProperty( "BunchIdStart"            , sampling.BunchIdStart       )
     self.setProperty( "BunchIdEnd"              , sampling.BunchIdEnd         )
     self.setProperty( "BunchDuration"           , 25                          )

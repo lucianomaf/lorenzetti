@@ -90,6 +90,10 @@ class CaloCellMaker : public Gaugi::Algorithm
     float m_zMin;
     float m_zMax; 
     float m_z;
+    // Cells given by a table instead of the eta x phi grid (the (r, z) boxes of the simulation, ATLAS-like HEC):
+    // eta of the centre and delta eta of each cell, in the order of the hits (CaloHitMaker). Empty by default.
+    std::vector<float> m_cellEta;
+    std::vector<float> m_cellDeltaEta;
     
 
     bool m_detailedHistograms;

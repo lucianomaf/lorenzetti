@@ -5,6 +5,7 @@ from GaugiKernel import Logger, LoggingLevel
 from GaugiKernel.macros import MSG_INFO
 from CaloHitBuilder import CaloHitMaker
 from CaloHitBuilder import CaloHitMerge
+from CaloHitBuilder import CaloFreeRunningHitWriter
 from G4Kernel import ComponentAccumulator
 
 
@@ -18,6 +19,18 @@ class CaloHitBuilder(Logger):
                  OutputHitsKey: str,
                  HistogramPath: str = "Expert",
                  OutputLevel: int = LoggingLevel.toC('INFO'),
+                 ActiveEnergyOnly: bool = False,
+                 BirksLaw: bool = False,
+                 TileDualReadout: int = 0,
+                 FreeRunningHits: bool = False,
+                 FreeRunningBinning: bool = True,
+                 FreeRunningNtupleName: str = "CollectionTree",
+                 FreeRunningAtlasFormat: bool = False,
+                 EmecChargeCollection: bool = False,
+                 EmecChargeTables: str = "",
+                 EmecChargeFieldMap: str = "",
+                 EmecChargeHVMap: str = "",
+                 InputEventKey: str = "Events",
                  ):
 
         Logger.__init__(self, name)
@@ -25,6 +38,21 @@ class CaloHitBuilder(Logger):
         self.HistogramPath = HistogramPath
         self.OutputLevel = OutputLevel
         self.OutputHitsKey = OutputHitsKey
+        self.ActiveEnergyOnly = ActiveEnergyOnly
+        self.BirksLaw = BirksLaw
+        self.TileDualReadout = TileDualReadout
+        # Free-running hits: the tile deposits also go, per PMT, to a list written in the layout of the ATLAS HITS ntuple
+        # (CaloFreeRunningHitWriter, tree FreeRunningNtupleName); see CaloHitMaker::freeRunningTile.
+        self.FreeRunningHits = FreeRunningHits
+        self.FreeRunningBinning = FreeRunningBinning
+        self.FreeRunningNtupleName = FreeRunningNtupleName
+        self.FreeRunningAtlasFormat = FreeRunningAtlasFormat
+        # Charge collection of the ATLAS EM end-cap in the free-running hits of the EMEC (F41 conserto 29; CaloHitMaker::emecChargeEnergy)
+        self.EmecChargeCollection = EmecChargeCollection
+        self.EmecChargeTables = EmecChargeTables
+        self.EmecChargeFieldMap = EmecChargeFieldMap
+        self.EmecChargeHVMap = EmecChargeHVMap
+        self.InputEventKey = InputEventKey
         self.OutputCollectionKeys = []
 
     def configure(self):
@@ -45,11 +73,34 @@ class CaloHitBuilder(Logger):
                                HistogramPath=histogramPath,
                                OutputLevel=self.OutputLevel,
                                # Use True when debug with only one thread
-                               DetailedHistograms=False
+                               DetailedHistograms=False,
+                               ActiveEnergyOnly=self.ActiveEnergyOnly,
+                               BirksLaw=self.BirksLaw,
+                               TileDualReadout=self.TileDualReadout,
+                               FreeRunningHits=self.FreeRunningHits,
+                               FreeRunningBinning=self.FreeRunningBinning,
+                               EmecChargeCollection=self.EmecChargeCollection,
+                               EmecChargeTables=self.EmecChargeTables,
+                               EmecChargeFieldMap=self.EmecChargeFieldMap,
+                               EmecChargeHVMap=self.EmecChargeHVMap
                                )
 
             self.__recoAlgs.append(alg)
             self.OutputCollectionKeys.append(samp.CollectionKey)
+
+        # ATLAS FCal with its electrodes (F41 conserto 22; geometry/python/v1/FCAL.py): one maker per module and side, only
+        # for the free-running hits (no hit collection, so not merged)
+        if self.FreeRunningHits:
+            for fm in getattr(self.__detector, 'fcal_modules', []):
+                MSG_INFO(self, "Create CaloHitMaker for %s (free-running hits only)", fm.Name)
+                self.__recoAlgs.append( CaloHitMaker("CaloHitMaker", fm,
+                                                     OutputCollectionKey="Collection_" + fm.name(),
+                                                     HistogramPath=self.HistogramPath + '/' + fm.name(),
+                                                     OutputLevel=self.OutputLevel,
+                                                     ActiveEnergyOnly=self.ActiveEnergyOnly,
+                                                     BirksLaw=self.BirksLaw,
+                                                     FreeRunningHits=self.FreeRunningHits,
+                                                     FreeRunningBinning=self.FreeRunningBinning) )
 
         MSG_INFO(
             self,
@@ -63,6 +114,14 @@ class CaloHitBuilder(Logger):
                                 OutputHitsKey=self.OutputHitsKey,
                                 OutputLevel=self.OutputLevel)
         self.__recoAlgs.append(mergeAlg)
+
+        if self.FreeRunningHits:
+            MSG_INFO(self, "Create CaloFreeRunningHitWriter (tree %s)", self.FreeRunningNtupleName)
+            self.__recoAlgs.append( CaloFreeRunningHitWriter("CaloFreeRunningHitWriter",
+                                                             InputEventKey=self.InputEventKey,
+                                                             NtupleName=self.FreeRunningNtupleName,
+                                                             AtlasFormat=self.FreeRunningAtlasFormat,
+                                                             OutputLevel=self.OutputLevel) )
 
     def merge(self, acc: ComponentAccumulator):
         """

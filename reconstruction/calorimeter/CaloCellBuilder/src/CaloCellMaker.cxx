@@ -49,6 +49,9 @@ CaloCellMaker::CaloCellMaker( std::string name ) :
   declareProperty( "ZMin"                     , m_zMin                                );
   declareProperty( "ZMax"                     , m_zMax                                );
   declareProperty( "Z"                        , m_z                                   );
+  // Cells given by a table (CellEta, CellDeltaEta) instead of the eta x phi grid; empty by default (the grid).
+  declareProperty( "CellEta"                  , m_cellEta                             );
+  declareProperty( "CellDeltaEta"             , m_cellDeltaEta                        );
   declareProperty( "Sampling"                 , m_sampling                            );
   declareProperty( "Segment"                  , m_segment                             );
   declareProperty( "Detector"                 , m_detector                            );
@@ -153,6 +156,28 @@ StatusCode CaloCellMaker::pre_execute( EventContext &ctx ) const
 
   float deltaEta = std::abs(m_etaBins[1] - m_etaBins[0]); //[-3,-2], [2,3]
   float deltaPhi = std::abs(m_phiBins[1] - m_phiBins[0]);
+
+  // Cells given by a table (the (r, z) boxes of the simulation): one cell per table entry and phi slice, with the same
+  // local hash as the hits of CaloHitMaker (bin = nPhi * cell + phiBin).
+  if( !m_cellEta.empty() ){
+    for ( unsigned cell = 0; cell < m_cellEta.size(); ++cell ){
+      for ( unsigned phiBin = 0; phiBin < m_nPhiBins; ++phiBin ){
+        float phiCenter = m_phiBins[phiBin] + deltaPhi / 2;
+        unsigned bin = m_nPhiBins * cell + phiBin;
+        auto *descriptor = new xAOD::CaloDetDescriptor( m_cellEta[cell], phiCenter, m_cellDeltaEta[cell], deltaPhi,
+                                                        hash(bin),
+                                                        m_z,
+                                                        (CaloSampling)m_sampling,
+                                                        (Detector)m_detector,
+                                                        m_bc_duration, m_bcid_start, m_bcid_end,
+                                                        false);
+        if ( !collection->insert( descriptor->hash(), descriptor ) ){
+          MSG_FATAL( "It is not possible to include cell hash ("<< descriptor->hash() << ") into the collection. hash already exist.");
+        }
+      }
+    }
+    return StatusCode::SUCCESS;
+  }
 
   //
   // Prepare all sensitive objects like a two dimensional histogram
@@ -391,6 +416,7 @@ class CaloSampling(EnumStringification):
     HEC1      = 14
     HEC2      = 15
     HEC3      = 16
+    HEC0      = 60   (ATLAS-like HEC, --atlas-hec)
 */
 unsigned long int CaloCellMaker::hash(unsigned bin) const
 {
