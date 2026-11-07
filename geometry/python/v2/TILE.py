@@ -113,6 +113,15 @@ def _cellEta(boxes):
     return math.asinh(zc/rc), math.asinh(zmax/rmean) - math.asinh(zmin/rmean)
 
 
+def _ticlDeltaEta(name):
+    """Delta eta of an ATLAS Tile cell in the TICL table (TICL-GEO-02 of the ATLAS geometry database): the ideal value that ATLAS
+    keeps for the cell (TileGeoSectionBuilder::fillDescriptor, TileDetDescrManager.cxx: "keep ideal deta for the cell")."""
+    n = name.rstrip('+-')
+    special = {'D4': 0.1, 'E3': 0.4, 'E4': 0.12}
+    if n in special: return special[n]
+    return 0.2 if n.startswith('D') else 0.1
+
+
 def _cellsFromRows(rows):
     """
     rows: list of (rmin, rmax, [(name, zmin, zmax), ...]); cells with the same name in different rows are one cell.
@@ -130,7 +139,7 @@ def _cellsFromRows(rows):
     table = dict(Names=[], Eta=[], DeltaEta=[], BoxRMin=[], BoxRMax=[], BoxZMin=[], BoxZMax=[], BoxCell=[],
                  AtlasSection=[], AtlasTower=[], AtlasSampling=[], RCentre=[], ZCentre=[])
     for i, name in enumerate(names):
-        eta, deta = _cellEta(boxes[name])
+        eta, _ = _cellEta(boxes[name]); deta = _ticlDeltaEta(name)
         table['Names'].append(name); table['Eta'].append(round(eta, 5)); table['DeltaEta'].append(round(deta, 5))
         # ATLAS identifier fields and area centroid in (r, z) of the cell (free-running hits)
         section, tower, sampling = atlasTileIdFields(name)
@@ -525,7 +534,7 @@ def _gapCell(name, sign, r, z, extra=None):
     za, zb = (z[0], z[1]) if sign > 0 else (-z[1], -z[0])
     tower, sampling = TILE_ATLAS_GAP_ID[name]
     rc, zc = 0.5*(r[0] + r[1]), 0.5*(za + zb)
-    eta = math.asinh(zc/rc); deta = abs(math.asinh(zb/rc) - math.asinh(za/rc))
+    eta = math.asinh(zc/rc); deta = _ticlDeltaEta(name)
     table = dict(Names=[name + ('+' if sign > 0 else '-')], Eta=[round(eta, 5)], DeltaEta=[round(deta, 5)],
                  BoxRMin=[r[0]], BoxRMax=[r[1]], BoxZMin=[za], BoxZMax=[zb], BoxCell=[0],
                  AtlasSection=[3], AtlasTower=[tower], AtlasSampling=[sampling], RCentre=[rc], ZCentre=[zc],
@@ -544,6 +553,9 @@ def getAtlasTileGapCfg(left_side=False):
     side_name = 'B' if left_side else 'A'
     out = []
     def calo(sv, key, sampling):
+        # eta edges of the cell itself, for the monitoring histograms (the default 0.1 grid leaves E1 with a single edge)
+        eta, deta = sv.Cells['Eta'][0], sv.Cells['DeltaEta'][0]
+        sv.EtaBins = [round(eta - deta/2, 5), round(eta + deta/2, 5)]; sv.EtaMin = sv.EtaBins[0]; sv.EtaMax = sv.EtaBins[-1]
         return Calorimeter( sv, -6, 4, -3, CollectionKey = key + "_" + side_name, Detector = Detector.TILE, Sampling = sampling,
                             Shaper = basepath + "/pulseTile.dat", Noise = 20*MeV, Samples = 7,
                             OFWeightsEnergy = [-0.3781, -0.3572, 0.1808, 0.8125, 0.2767, -0.2056, -0.3292],
