@@ -558,7 +558,11 @@ def getAtlasTileGapCfg(left_side=False):
     sv.Cells = _gapCell('D4', sign, d4['r'], d4['z'],
                         dict(UShapePart=0, UShapeLayer=1, SpecialModule=[14 if sign > 0 else 17], SpecialNPmt=[0],
                              ReplaceSection=2, ReplaceTower=d5['AtlasTower'][i5], ReplaceSampling=d5['AtlasSampling'][i5],
-                             ReplaceRCentre=d5['RCentre'][i5], ReplaceZCentre=d5['ZCentre'][i5]))
+                             ReplaceRCentre=d5['RCentre'][i5], ReplaceZCentre=d5['ZCentre'][i5],
+                             # the hit of D5 in the normal chain: the collection of TileExt3 on this side (segment 0) and the
+                             # hash of its D5 without the phi bin (CaloHitMaker::hash, bin = 64 cell + phi)
+                             ReplaceCollectionKey="Collection_TileExt3_" + side_name,
+                             ReplaceHashBase=int((CaloSampling.TileExt3 + 17*(1 if sign > 0 else 2))*10**7 + 64*i5)))
     out.append( calo(sv, "Collection_TileGapD4", CaloSampling.TileExt3) )
     # C10: 5 periods and a last thin period (rows 1 and 3); the maker volume is an envelope over both; ATLAS U-shape of the
     # long barrel, A layer (tile rows 1-3); one PMT in modules 39-42 and 55-58 (pmt 0 on side C, pmt 1 on side A)

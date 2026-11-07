@@ -66,6 +66,14 @@ def parse_args():
                         help="Apply Birks' law to the energy deposited in the plastic scintillator and in the "
                              "liquid argon, with the constants of the ATLAS simulation. Use it together with "
                              "--active-energy-only to follow the ATLAS hits. On by default with --detector v2 (--no-birks-law switches it off), off with v1.")
+    parser.add_argument('--atlas-hit-time', action=argparse.BooleanOptionalAction, default=None,
+                        dest='atlas_hit_time', required=False,
+                        help="Choose the bunch crossing of each deposit in the hits by the time of the ATLAS simulation: the "
+                             "global time minus the time of flight from the interaction point (liquid argon: minus |r|/c; tile "
+                             "cells of ATLAS: the time of TileGeoG4SDCalc with the TOF correction, each PMT with its own delay). "
+                             "Without it the global time of Geant4 is used, and the in-time energy of the end-cap, HEC and FCal "
+                             "(more than 12.5 ns from the interaction point) falls in bunch crossing +1. The free-running hits "
+                             "always use the ATLAS time. On by default with --detector v2 (--no-atlas-hit-time switches it off), off with v1.")
     parser.add_argument('--enable-solenoid-field', action=argparse.BooleanOptionalAction, default=None,
                         dest='enable_solenoid_field', required=False,
                         help="Enable a uniform 2 T axial field only inside the ATLAS central solenoid "
@@ -156,8 +164,8 @@ def parse_args():
                              "each module is a tube of absorber with one liquid argon gap per electrode (12260, 10200 and 8224 "
                              "per side) and the cable troughs, from the public ATLAS GeoModel geometry; the cell of a deposit is "
                              "the tile of its electrode, as in the ATLAS simulation. The electrodes come from the file given by "
-                             "--atlas-fcal-electrodes. The FCal cells go only to the free-running hits (LArHitFCAL). Needs "
-                             "--atlas-fcal and --free-running-hits. Simulation only. On by default with --detector v2 (--no-atlas-fcal-cells switches it off), off with v1.")
+                             "--atlas-fcal-electrodes. The FCal cells go to the hit collection (samplings FCAL1-FCAL3, "
+                             "one cell per ATLAS tile) and, with --free-running-hits, to LArHitFCAL. Needs --atlas-fcal. Simulation only. On by default with --detector v2 (--no-atlas-fcal-cells switches it off), off with v1.")
     parser.add_argument('--atlas-fcal-frozen-showers', action=argparse.BooleanOptionalAction, default=None,
                         dest='atlas_fcal_frozen_showers', required=False,
                         help="Frozen showers in the FCal of ATLAS, as the ATLAS simulation (FrozenShowersFCalOnly of the Athena "
@@ -366,6 +374,7 @@ def main(logging_level: str,
          tile_dual_readout: int,
          active_energy_only: bool,
          birks_law: bool,
+         atlas_hit_time: bool,
          save_all_hits : bool,
          free_running_hits : bool,
          free_running_binning : bool,
@@ -411,6 +420,7 @@ def main(logging_level: str,
         tile_dual_readout (int): Two PMTs per tile cell: 0 = off, 1 = ATLAS U-shape, 2 = linear (needs tile_atlas_cells).
         active_energy_only (bool): Keep only the energy deposited in the active medium.
         birks_law (bool): Apply Birks' law in the scintillator and in the liquid argon.
+        atlas_hit_time (bool): Bunch crossing of the hits from the time of the ATLAS simulation (time of flight taken out).
         save_all_hits (bool): If True, saves all hits regardless of Region of Interest (RoI).
         free_running_hits (bool): Write the tile hits in the layout of the ATLAS HITS ntuple instead of the HIT stream.
         free_running_binning (bool): Time bins of the ATLAS simulation for the free-running hits.
@@ -478,6 +488,7 @@ def main(logging_level: str,
                                  OutputHitsKey=recordable("Hits"),
                                  ActiveEnergyOnly=active_energy_only,
                                  BirksLaw=birks_law,
+                                 AtlasHitTime=atlas_hit_time,
                                  TileDualReadout=tile_dual_readout,
                                  FreeRunningHits=free_running_hits,
                                  FreeRunningBinning=free_running_binning,
@@ -549,7 +560,7 @@ if __name__ == "__main__":
     args = update_args_from_file(args)
     # defaults of the ATLAS options (F41, 05/11/2026): on with --detector v2, off with v1 (the geometry of the collaboration)
     atlas_options = ['enable_solenoid_field', 'tile_atlas_geometry', 'tile_atlas_cells', 'atlas_material_in_front', 'tile_atlas_itc', 'atlas_emb', 'atlas_emb_cells', 'atlas_hec', 'atlas_emec', 'atlas_fcal', 'atlas_fcal_cells', 'atlas_fcal_frozen_showers', 'atlas_g4', 'tile_atlas_gap', 'atlas_endcap_cryostat', 'atlas_barrel_cryostat', 'atlas_run4', 'atlas_forward_shielding', 'atlas_full_field', 'atlas_barrel_gap_services', 'tile_atlas_run4', 'atlas_emec_argon_fraction']
-    atlas_hit_options = ['active_energy_only', 'birks_law', 'tile_dual_readout']
+    atlas_hit_options = ['active_energy_only', 'birks_law', 'tile_dual_readout', 'atlas_hit_time']
     if args.detector == 'v1':
         v2_only = [o for o in atlas_options if getattr(args, o)]
         if v2_only:
@@ -583,8 +594,8 @@ if __name__ == "__main__":
                      "and --atlas-barrel-cryostat")
     if args.atlas_fcal_frozen_showers and not args.atlas_fcal_cells:
         parser.error("--atlas-fcal-frozen-showers needs --atlas-fcal-cells")
-    if args.atlas_fcal_cells and not (args.atlas_fcal and args.free_running_hits):
-        parser.error("--atlas-fcal-cells needs --atlas-fcal and --free-running-hits")
+    if args.atlas_fcal_cells and not args.atlas_fcal:
+        parser.error("--atlas-fcal-cells needs --atlas-fcal")
     if args.atlas_fcal_cells and not os.path.isfile(args.atlas_fcal_electrodes):
         parser.error("--atlas-fcal-cells needs the file of the FCal electrodes (--atlas-fcal-electrodes or "
                      "LORENZETTI_FCAL_ELECTRODES): '%s' not found" % args.atlas_fcal_electrodes)
@@ -700,6 +711,7 @@ if __name__ == "__main__":
                                       (1 if args.tile_pmt_split == 'ushape' else 2)),
              active_energy_only    = args.active_energy_only,
              birks_law             = args.birks_law,
+             atlas_hit_time        = args.atlas_hit_time,
              save_all_hits         = args.save_all_hits,
              free_running_hits     = args.free_running_hits,
              free_running_binning  = not args.free_running_no_binning,

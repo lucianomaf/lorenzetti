@@ -97,6 +97,9 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   // When true, Birks' law is applied to the energy of each step in the scintillator and in the
   // liquid argon, with the ATLAS simulation constants (see birksEnergy).
   declareProperty( "BirksLaw"                 , m_birksLaw=false                      );
+  // When true, the bunch crossing of each deposit in the hits comes from the time of the ATLAS simulation (the time of flight
+  // from the interaction point taken out; see hitTime) instead of the global time of the pre-step point.
+  declareProperty( "AtlasHitTime"             , m_atlasHitTime=false                  );
   // Cells as (r, z) boxes (ATLAS tile cells, set from geometry/python/v1/TILE.py). When CellEta is empty
   // (the default) the cells are the eta x phi grid given by EtaBins and PhiBins.
   declareProperty( "CellEta"                  , m_cellEta                             );
@@ -179,6 +182,8 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "ReplaceSampling"          , m_replaceSampling=0                   );
   declareProperty( "ReplaceRCentre"           , m_replaceRCentre=0                    );
   declareProperty( "ReplaceZCentre"           , m_replaceZCentre=0                    );
+  declareProperty( "ReplaceCollectionKey"     , m_replaceCollectionKey=""             );
+  declareProperty( "ReplaceHashBase"          , m_replaceHashBase=0                   );
   // ATLAS FCal with its electrodes (F41 conserto 22): module (1-3; 0 = off), side (+1, -1), logical volume of its gaps, and
   // the cell (dictionary eta and phi indices) and tile centre of each copy number
   declareProperty( "FCalModule"               , m_fcalModule=0                        );
@@ -188,6 +193,8 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "FCalCopyPhiIndex"         , m_fcalCopyPhiIndex                    );
   declareProperty( "FCalCopyEta"              , m_fcalCopyEta                         );
   declareProperty( "FCalCopyPhi"              , m_fcalCopyPhi                         );
+  declareProperty( "FCalCopyDeltaEta"         , m_fcalCopyDeltaEta                    );
+  declareProperty( "FCalCopyDeltaPhi"         , m_fcalCopyDeltaPhi                    );
   // grid indices and position (mm) of each electrode, for the cell of the spots of the frozen showers (F41 conserto 23)
   declareProperty( "FCalCopyI"                , m_fcalCopyI                           );
   declareProperty( "FCalCopyJ"                , m_fcalCopyJ                           );
@@ -270,10 +277,19 @@ StatusCode CaloHitMaker::initialize()
     }
   }
 
-  if( isFCal() && ( !m_freeRunningHits || m_fcalModule > 3 || m_fcalGapVolume.empty() || m_fcalCopyEtaIndex.empty() ||
+  if( isFCal() && ( m_fcalModule > 3 || m_fcalGapVolume.empty() || m_fcalCopyEtaIndex.empty() ||
                     m_fcalCopyPhiIndex.size() != m_fcalCopyEtaIndex.size() || m_fcalCopyEta.size() != m_fcalCopyEtaIndex.size() ||
-                    m_fcalCopyPhi.size() != m_fcalCopyEtaIndex.size() || useCells() ) ){
-    MSG_FATAL( "FCalModule needs the free-running hits and the cell of every electrode (geometry/python/v1/FCAL.py)." );
+                    m_fcalCopyPhi.size() != m_fcalCopyEtaIndex.size() || m_fcalCopyDeltaEta.size() != m_fcalCopyEtaIndex.size() ||
+                    m_fcalCopyDeltaPhi.size() != m_fcalCopyEtaIndex.size() || useCells() ) ){
+    MSG_FATAL( "FCalModule needs the cell, centre and width of every electrode (geometry/python/v2/FCAL.py)." );
+  }
+  // centre and width of each tile, for the hits of the normal chain (one hit per tile)
+  if( isFCal() ){
+    for( size_t k = 0; k < m_fcalCopyEtaIndex.size(); ++k ){
+      const auto tile = std::make_pair( m_fcalCopyEtaIndex[k], m_fcalCopyPhiIndex[k] );
+      m_fcalTileCentre.emplace( tile, std::make_pair( m_fcalCopyEta[k], m_fcalCopyPhi[k] ) );
+      m_fcalTileWidth.emplace( tile, std::make_pair( m_fcalCopyDeltaEta[k], m_fcalCopyDeltaPhi[k] ) );
+    }
   }
   // tube map of FCAL_ChannelMap::add_tube (F41 conserto 23)
   if( isFCal() && !m_fcalCopyI.empty() ){
@@ -347,13 +363,26 @@ StatusCode CaloHitMaker::pre_execute( EventContext &ctx ) const
     list.record( std::unique_ptr<CaloFreeRunningHitList>(new CaloFreeRunningHitList()) );
   }
 
-  // The ATLAS FCal makers feed only the free-running hits: no hit collection
-  if( isFCal() ) return StatusCode::SUCCESS;
-
   // Build the CaloHitCollection and attach into the EventContext
   // Create the hit collection into the event context
   SG::WriteHandle<xAOD::CaloHitCollection> collection( m_collectionKey, ctx );
   collection.record( std::unique_ptr<xAOD::CaloHitCollection>(new xAOD::CaloHitCollection()) );
+
+  // ATLAS FCal with its cells: one hit per tile of this module and side, bin = 16 eta + phi (eta 0-62, phi 0-15), with the centre
+  // of the tile (mean position of its electrodes) and its width
+  if( isFCal() ){
+    for( const auto &c : m_fcalTileCentre ){
+      const auto &w = m_fcalTileWidth.at( c.first );
+      const unsigned bin = 16 * c.first.first + c.first.second;
+      auto *hit = new xAOD::CaloHit( c.second.first, c.second.second, w.first, w.second, hash(bin),
+                                     (CaloSampling)m_sampling, (Detector)m_detector,
+                                     m_bc_duration, m_bcid_start, m_bcid_end );
+      if( !collection->insert( hit->hash(), hit) ){
+        MSG_FATAL( "It is not possible to include hit hash ("<< hit->hash() << ") into the collection. hash already exist.");
+      }
+    }
+    return StatusCode::SUCCESS;
+  }
 
   float deltaEta = std::abs(m_etaBins[1] - m_etaBins[0]);
   float deltaPhi = std::abs(m_phiBins[1] - m_phiBins[0]);
@@ -363,6 +392,8 @@ StatusCode CaloHitMaker::pre_execute( EventContext &ctx ) const
   if( useCells() ){
     for ( unsigned cell = 0; cell < m_cellEta.size(); ++cell ){
       for ( unsigned phiBin = 0; phiBin < m_nPhiBins; ++phiBin ){
+        // No hit for a cell absent in this module in ATLAS (D4 in EBA15 and EBC18): its deposits go to the replacement cell
+        if( !m_replaceCollectionKey.empty() && tileNPmt( cell, phiBin ) == 0 ) continue;
         float phiCenter = m_phiBins[phiBin] + deltaPhi / 2;
         unsigned bin = m_nPhiBins * cell + phiBin;
         auto *hit = new xAOD::CaloHit( m_cellEta[cell], phiCenter, m_cellDeltaEta[cell], deltaPhi, hash(bin),
@@ -432,7 +463,7 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
     return StatusCode::SUCCESS;
   }
 
-  // ATLAS FCal with its electrodes: the cell from the copy number of the gap, only to the free-running hits
+  // ATLAS FCal with its electrodes: the cell from the copy number of the gap, to the hit of its tile and the free-running hits
   if( isFCal() ){
     freeRunningFCal( ctx, step );
     return StatusCode::SUCCESS;
@@ -523,10 +554,26 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
 
   xAOD::CaloHit *hit=nullptr;
 
-  if(collection->retrieve(hash(bin), hit)){
+  // The cell is absent in this module in ATLAS (D4 in EBA15 and EBC18) and has no hit: the deposit goes to the hit of the
+  // replacement cell (D5 of the same module), as the free-running hits do (freeRunningTile)
+  const bool replacedCell = !m_replaceCollectionKey.empty() && tileNPmt( etaBin, phiBin ) == 0;
+
+  if( replacedCell || collection->retrieve(hash(bin), hit) ){
+    if( replacedCell ){
+      SG::ReadHandle<xAOD::CaloHitCollection> replaced( m_replaceCollectionKey, ctx );
+      xAOD::CaloHit *replacedHit = nullptr;
+      if( !replaced.isValid() || !replaced->retrieve( (unsigned long int)m_replaceHashBase + phiBin, replacedHit ) ){
+        MSG_FATAL( "No hit of the replacement cell in " << m_replaceCollectionKey << " for the phi bin " << phiBin );
+      }
+      hit = replacedHit;
+    }
     // hit->fill( step );
     const float edep = m_birksLaw ? birksEnergy(step) : (float)step->GetTotalEnergyDeposit();
-    if( m_birksLaw )
+    float tHit = 0, tPmt0 = 0, tPmt1 = 0;
+    if( m_atlasHitTime ){
+      hitTime( step, etaBin, phiBin, tHit, tPmt0, tPmt1 );
+      hit->fillAt( tHit, 1*m_noiseStd, edep );
+    }else if( m_birksLaw )
       hit->fill( step , 1*m_noiseStd, edep );
     else
       hit->fill( step , 1*m_noiseStd); // hit with tof selection sensible by 1*sigma of sampling noise.
@@ -540,7 +587,8 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
         tilePmtWeights( std::remainder( phi - hit->phi(), 2 * M_PI ), pos.z(), w0, w1, npmt == 0 );
       else if( npmt == 1 ){ w0 = 1; w1 = 0; }
       else                { w0 = 0; w1 = 1; }
-      hit->fillPmt( step, edep * w0, edep * w1 );
+      if( m_atlasHitTime ) hit->fillPmtAt( tPmt0, edep * w0, tPmt1, edep * w1 );
+      else                 hit->fillPmt( step, edep * w0, edep * w1 );
       // Free-running hits: the same deposit and PMT weights, with the ATLAS identifier and time
       if( m_freeRunningHits && edep > 0 )
         freeRunningTile( ctx, step, etaBin, phiBin, edep, w0, w1, npmt );
@@ -672,23 +720,9 @@ void CaloHitMaker::freeRunningTile( SG::EventContext &ctx, const G4Step *step, i
     return (long long)id;
   };
 
-  // time of the deposit (ns)
-  const G4ThreeVector post = step->GetPostStepPoint()->GetPosition();
-  const G4ThreeVector pre  = step->GetPreStepPoint()->GetPosition();
-  double tglobal = step->GetPostStepPoint()->GetGlobalTime() / ns;
-  double sinThCell = rCell / std::sqrt( rCell*rCell + zCell*zCell );
-  double cosThHit = post.cosTheta();
-  double t = tglobal + ( rCell * ( n - 2.0 / sinThCell ) + post.mag() * ( 1.0 - n * std::sqrt( 1.0 - cosThHit*cosThHit ) ) ) / cLight;
-  // PMT delays: light across the tile to each edge; local frame of the module from the pre-step position
-  double phiLocal = std::remainder( pre.phi() - moduleCentre, twoPi );
-  double rPre = pre.perp();
-  double xLocal = rPre * std::cos(phiLocal), yLocal = rPre * std::sin(phiLocal);
-  double halfWidth = xLocal * tanPi64;
-  double dyUp = halfWidth - yLocal;     // to the edge on the side of larger phi (PMT 1 reads there)
-  double dyDown = halfWidth + yLocal;
-  double dtUp   = n * ( dyUp   - rCell * tanPi64 ) / cLight;
-  double dtDown = n * ( dyDown - rCell * tanPi64 ) / cLight;
-  if( npmt == 1 || npmt == -1 ) dtUp = dtDown = 0.0;   // one PMT: no delay across the tile (Athena: only with two PMTs)
+  // time of the deposit (ns) and the delays of the two PMTs
+  double tglobal, t, dtUp, dtDown;
+  tileTime( step, cell, phiBin, npmt, tglobal, t, dtUp, dtDown );
   if( t + dtUp > timeCut || t + dtDown > timeCut ){
     t = lateHitTime; dtUp = dtDown = 0.0;
   }
@@ -697,6 +731,69 @@ void CaloHitMaker::freeRunningTile( SG::EventContext &ctx, const G4Step *step, i
   double eta = m_cellEta[cell];
   if( w1 * edep > 0 ) list->add( pmtId(1), w1 * edep, t + dtUp,   tglobal, eta, moduleCentre, sampling, side, module, tower, delta );
   if( w0 * edep > 0 ) list->add( pmtId(0), w0 * edep, t + dtDown, tglobal, eta, moduleCentre, sampling, side, module, tower, delta );
+}
+
+// ATLAS time of a deposit in a tile cell (moved from freeRunningTile; sources and formula there): tglobal the global time of the
+// post-step point, t = tglobal + [r_cell (n - 2 / sin(theta_cell)) + |x| (1 - n sin(theta_hit))] / c, and the delays of the
+// PMTs across the tile, dtUp (PMT 1) and dtDown (PMT 0), zero for a cell with one PMT. The time cut (TimeCut) is not applied here.
+void CaloHitMaker::tileTime( const G4Step *step, int cell, int phiBin, int npmt, double &tglobal, double &t, double &dtUp,
+                             double &dtDown ) const
+{
+  const double n = 1.59, tanPi64 = std::tan(M_PI / 64);
+  const double cLight = CLHEP::c_light;   // mm/ns
+  const double twoPi = 2 * M_PI, modWidth = twoPi / 64;
+  double phiCentre = 0.5 * ( m_phiBins[phiBin] + m_phiBins[phiBin+1] );
+  double phi0 = phiCentre < 0 ? phiCentre + twoPi : phiCentre;
+  int module = (int)std::floor( phi0 / modWidth ) % 64;
+  double moduleCentre = std::remainder( (module + 0.5) * modWidth, twoPi );
+  const bool replaced = ( npmt == 0 );
+  double rCell = replaced ? m_replaceRCentre : m_cellRCentre[cell];
+  double zCell = replaced ? m_replaceZCentre : m_cellZCentre[cell];
+  // time of the deposit (ns)
+  const G4ThreeVector post = step->GetPostStepPoint()->GetPosition();
+  const G4ThreeVector pre  = step->GetPreStepPoint()->GetPosition();
+  tglobal = step->GetPostStepPoint()->GetGlobalTime() / ns;
+  double sinThCell = rCell / std::sqrt( rCell*rCell + zCell*zCell );
+  double cosThHit = post.cosTheta();
+  t = tglobal + ( rCell * ( n - 2.0 / sinThCell ) + post.mag() * ( 1.0 - n * std::sqrt( 1.0 - cosThHit*cosThHit ) ) ) / cLight;
+  // PMT delays: light across the tile to each edge; local frame of the module from the pre-step position
+  double phiLocal = std::remainder( pre.phi() - moduleCentre, twoPi );
+  double rPre = pre.perp();
+  double xLocal = rPre * std::cos(phiLocal), yLocal = rPre * std::sin(phiLocal);
+  double halfWidth = xLocal * tanPi64;
+  double dyUp = halfWidth - yLocal;     // to the edge on the side of larger phi (PMT 1 reads there)
+  double dyDown = halfWidth + yLocal;
+  dtUp   = n * ( dyUp   - rCell * tanPi64 ) / cLight;
+  dtDown = n * ( dyDown - rCell * tanPi64 ) / cLight;
+  if( npmt == 1 || npmt == -1 ) dtUp = dtDown = 0.0;   // one PMT: no delay across the tile (Athena: only with two PMTs)
+}
+
+// ATLAS time of a deposit in the liquid argon, as the free-running hits (freeRunningLAr and freeRunningFCal; LArBarrelCalculator and
+// LArBarrelPresamplerCalculator: pre-step; EnergyCalculator, LArEndcapPresamplerCalculator, LArHECWheelCalculator,
+// LArFCALCalculatorBase: mean of pre- and post-step): the global time minus |r|/c of the same point, in ns. A maker without the
+// ATLAS LAr cells takes the mean of pre- and post-step.
+double CaloHitMaker::larHitTime( const G4Step *step ) const
+{
+  const G4StepPoint *preP = step->GetPreStepPoint(), *postP = step->GetPostStepPoint();
+  if( std::abs(m_atlasBarrelEc) == 1 && m_atlasLArPart == 1 )
+    return preP->GetGlobalTime() / ns - preP->GetPosition().mag() / CLHEP::c_light;
+  const double tglobal = 0.5 * ( preP->GetGlobalTime() + postP->GetGlobalTime() ) / ns;
+  return tglobal - ( 0.5 * ( preP->GetPosition() + postP->GetPosition() ) ).mag() / CLHEP::c_light;
+}
+
+// Time (ns) that chooses the bunch crossing of a deposit in the hit collection of the normal chain, with AtlasHitTime: the time of
+// the ATLAS simulation, so that a particle from the interaction point at the speed of light is in time (bunch crossing 0) in every
+// calorimeter. Tile cells of ATLAS (samplings TileCal1 to TileExt3 with the cell centres): tileTime, the cell without the PMT
+// delays for the hit, each PMT with its delay for edep_pmt0 and edep_pmt1. Elsewhere: larHitTime, the same for both PMTs.
+void CaloHitMaker::hitTime( const G4Step *step, int cell, int phiBin, float &t, float &t0, float &t1 ) const
+{
+  if( m_sampling >= 5 && m_sampling <= 10 && cell >= 0 && cell < (int)m_cellRCentre.size() ){
+    double tglobal, tc, dtUp, dtDown;
+    tileTime( step, cell, phiBin, tileNPmt( cell, phiBin ), tglobal, tc, dtUp, dtDown );
+    t = (float)tc; t0 = (float)( tc + dtDown ); t1 = (float)( tc + dtUp );
+    return;
+  }
+  t = t0 = t1 = (float)larHitTime( step );
 }
 
 //!=====================================================================
@@ -803,6 +900,10 @@ void CaloHitMaker::freeRunningFCal( SG::EventContext &ctx, const G4Step *step ) 
   }
   const float edep = m_birksLaw ? birksEnergy(step) : (float)step->GetTotalEnergyDeposit();
   if( edep <= 0 ) return;
+  // hit of the normal chain: the ATLAS time of the liquid argon (AtlasHitTime) or the global time of the pre-step point
+  fcalFillHit( ctx, m_fcalCopyEtaIndex[copy], m_fcalCopyPhiIndex[copy], edep,
+               m_atlasHitTime ? (float)larHitTime( step ) : (float)( preP->GetGlobalTime() / ns ) );
+  if( !m_freeRunningHits ) return;
 
   SG::ReadHandle<CaloFreeRunningHitList> list( m_freeRunningListKey, ctx );
   if( !list.isValid() ){
@@ -830,6 +931,21 @@ void CaloHitMaker::freeRunningFCal( SG::EventContext &ctx, const G4Step *step ) 
 }
 
 //!=====================================================================
+
+// The deposit of an FCal step or spot in the hit of its tile, in the bunch crossing of the global time of the pre-step point, as the
+// other hits of the normal chain (CaloHit::fill)
+void CaloHitMaker::fcalFillHit( SG::EventContext &ctx, int eta, int phi, float edep, float t ) const
+{
+  SG::ReadHandle<xAOD::CaloHitCollection> collection( m_collectionKey, ctx );
+  if( !collection.isValid() ){
+    MSG_FATAL("It's not possible to retrieve the CaloHitCollection using this key: " << m_collectionKey);
+  }
+  xAOD::CaloHit *hit = nullptr;
+  if( !collection->retrieve( hash( 16 * eta + phi ), hit ) ){
+    MSG_FATAL( "FCal module " << m_fcalModule << ": no hit for the tile (" << eta << ", " << phi << ")" );
+  }
+  hit->fillAt( t, 1*m_noiseStd, edep );
+}
 
 bool CaloHitMaker::isShowerSpot( const G4Step *step )
 {
@@ -888,6 +1004,12 @@ void CaloHitMaker::freeRunningFCalSpot( SG::EventContext &ctx, const G4Step *ste
   if( edep <= 0 ) return;
   int etaIndex, phiIndex;
   if( !fcalTileID( (float)pos.x(), (float)pos.y(), etaIndex, phiIndex ) ) return;   // float, as Athena passes it
+  // hit of the normal chain: the time of the spot is already the ATLAS time (AtlasHitTime); without it, the global time
+  // (|r|/c added back), the convention of the other deposits
+  const float tSpot = (float)( preP->GetGlobalTime() / ns );
+  fcalFillHit( ctx, etaIndex, phiIndex, (float)edep,
+               m_atlasHitTime ? tSpot : (float)( tSpot + pos.mag() / CLHEP::c_light ) );
+  if( !m_freeRunningHits ) return;
   SG::ReadHandle<CaloFreeRunningHitList> list( m_freeRunningListKey, ctx );
   if( !list.isValid() ){
     MSG_FATAL("It's not possible to retrieve the CaloFreeRunningHitList using this key: " << m_freeRunningListKey);
@@ -1557,6 +1679,7 @@ class CaloSampling(EnumStringification):
     HEC2      = 15
     HEC3      = 16
     HEC0      = 60   (ATLAS-like HEC, --atlas-hec)
+    FCAL1-3   = 61-63 (ATLAS FCal cells, --atlas-fcal-cells)
 */
 unsigned long int CaloHitMaker::hash(unsigned bin) const
 {

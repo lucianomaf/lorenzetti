@@ -52,6 +52,9 @@ CaloCellMaker::CaloCellMaker( std::string name ) :
   // Cells given by a table (CellEta, CellDeltaEta) instead of the eta x phi grid; empty by default (the grid).
   declareProperty( "CellEta"                  , m_cellEta                             );
   declareProperty( "CellDeltaEta"             , m_cellDeltaEta                        );
+  declareProperty( "CellBin"                  , m_cellBin                             );
+  declareProperty( "CellPhi"                  , m_cellPhi                             );
+  declareProperty( "CellDeltaPhi"             , m_cellDeltaPhi                        );
   declareProperty( "Sampling"                 , m_sampling                            );
   declareProperty( "Segment"                  , m_segment                             );
   declareProperty( "Detector"                 , m_detector                            );
@@ -156,6 +159,27 @@ StatusCode CaloCellMaker::pre_execute( EventContext &ctx ) const
 
   float deltaEta = std::abs(m_etaBins[1] - m_etaBins[0]); //[-3,-2], [2,3]
   float deltaPhi = std::abs(m_phiBins[1] - m_phiBins[0]);
+
+  // Cells given one by one (the ATLAS FCal): one cell per entry, with its own eta, phi and widths
+  if( !m_cellBin.empty() ){
+    const size_t n = m_cellBin.size();
+    if( m_cellEta.size() != n || m_cellPhi.size() != n || m_cellDeltaEta.size() != n || m_cellDeltaPhi.size() != n ){
+      MSG_FATAL( "CellBin needs CellEta, CellPhi, CellDeltaEta and CellDeltaPhi with one entry per cell." );
+    }
+    for( size_t k = 0; k < n; ++k ){
+      auto *descriptor = new xAOD::CaloDetDescriptor( m_cellEta[k], m_cellPhi[k], m_cellDeltaEta[k], m_cellDeltaPhi[k],
+                                                      hash( m_cellBin[k] ),
+                                                      m_z,
+                                                      (CaloSampling)m_sampling,
+                                                      (Detector)m_detector,
+                                                      m_bc_duration, m_bcid_start, m_bcid_end,
+                                                      false);
+      if ( !collection->insert( descriptor->hash(), descriptor ) ){
+        MSG_FATAL( "It is not possible to include cell hash ("<< descriptor->hash() << ") into the collection. hash already exist.");
+      }
+    }
+    return StatusCode::SUCCESS;
+  }
 
   // Cells given by a table (the (r, z) boxes of the simulation): one cell per table entry and phi slice, with the same
   // local hash as the hits of CaloHitMaker (bin = nPhi * cell + phiBin).
@@ -417,6 +441,7 @@ class CaloSampling(EnumStringification):
     HEC2      = 15
     HEC3      = 16
     HEC0      = 60   (ATLAS-like HEC, --atlas-hec)
+    FCAL1-3   = 61-63 (ATLAS FCal cells, --atlas-fcal-cells)
 */
 unsigned long int CaloCellMaker::hash(unsigned bin) const
 {

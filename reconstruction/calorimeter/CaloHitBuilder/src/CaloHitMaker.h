@@ -89,6 +89,12 @@ class CaloHitMaker : public Gaugi::Algorithm
     bool m_activeEnergyOnly;
     // Apply Birks' law to the energy of each step (scintillator and liquid argon), as in ATLAS
     bool m_birksLaw;
+    // Time of the ATLAS simulation for the bunch crossing of the hits (AtlasHitTime; see hitTime)
+    bool m_atlasHitTime;
+    // Time of the deposit for the bunch crossing of the normal hit (AtlasHitTime): the ATLAS time of the LAr (larHitTime) or of
+    // the tile cell (tileTime, without the PMT delays); t0 and t1 the times of the two PMTs (the same as t outside the tile)
+    void hitTime( const G4Step *step, int cell, int phiBin, float &t, float &t0, float &t1 ) const;
+    double larHitTime( const G4Step *step ) const;
     float birksEnergy( const G4Step *step ) const;
 
     /*! Sampling id for this reconstruction */
@@ -142,6 +148,10 @@ class CaloHitMaker : public Gaugi::Algorithm
     int m_replaceSampling;
     float m_replaceRCentre;
     float m_replaceZCentre;
+    // the hit of the replacement cell in the normal chain (the collection of its sampling and its hash without the phi bin):
+    // the deposits of the cell in the special modules (npmt = 0) go to that hit. Empty by default.
+    std::string m_replaceCollectionKey;
+    int m_replaceHashBase;
     int tileNPmt( int cell, int phiBin ) const;
     int findCell( float radius, float z ) const;
     // Radius used to find the (r, z) box of a step: r itself (CellRadiusModules = 0, the default) or, with N modules,
@@ -219,6 +229,10 @@ class CaloHitMaker : public Gaugi::Algorithm
     std::vector<float> m_cellZCentre;
     void freeRunningTile( SG::EventContext &ctx, const G4Step *step, int cell, int phiBin, float edep, float w0,
                           float w1, int npmt=2 ) const;
+    // ATLAS time of a deposit in a tile cell (TileGeoG4SDCalc::MakePmtEdepTime with DoTOFCorrection): the global time tglobal of
+    // the post-step point, the time t of the cell and the delays dtUp (PMT 1) and dtDown (PMT 0); see freeRunningTile
+    void tileTime( const G4Step *step, int cell, int phiBin, int npmt, double &tglobal, double &t, double &dtUp,
+                   double &dtDown ) const;
 
     // Free-running hits of the ATLAS-like LAr cells (F41 conserto 19; --atlas-emb-cells, --atlas-emec, --atlas-hec): the
     // fields of the ATLAS identifier of the cells of this maker (AtlasLArPart: 1 = LArEM, 2 = LArHEC, 0 = not set, the
@@ -243,7 +257,8 @@ class CaloHitMaker : public Gaugi::Algorithm
     // (1-3) the maker takes only the steps in the liquid argon gaps of its module (the logical volume FCalGapVolume), the cell
     // of a step is the tile of the copy number of its gap (FCalCopyEtaIndex, FCalCopyPhiIndex; the centre of the tile in
     // FCalCopyEta, FCalCopyPhi), as in the ATLAS simulation (LArFCALCalculatorBase), and the deposits go only to the
-    // free-running hits (LArHitFCAL): the maker records no hit collection. 0 (the default): off.
+    // hit collection (one hit per tile, bin = 16 eta + phi, centre FCalCopyEta/Phi and width FCalCopyDeltaEta/Phi) and, with the
+    // free-running hits, to LArHitFCAL. 0 (the default): off.
     int m_fcalModule;
     int m_fcalSide;
     std::string m_fcalGapVolume;
@@ -251,6 +266,11 @@ class CaloHitMaker : public Gaugi::Algorithm
     std::vector<int>   m_fcalCopyPhiIndex;
     std::vector<float> m_fcalCopyEta;
     std::vector<float> m_fcalCopyPhi;
+    std::vector<float> m_fcalCopyDeltaEta;
+    std::vector<float> m_fcalCopyDeltaPhi;
+    std::map<std::pair<int,int>, std::pair<float,float>> m_fcalTileWidth;
+    // the deposit of an FCal step or spot in the hit of its tile (hit collection of the normal chain)
+    void fcalFillHit( SG::EventContext &ctx, int eta, int phi, float edep, float t ) const;
     bool isFCal() const { return m_fcalModule > 0; }
     void freeRunningFCal( SG::EventContext &ctx, const G4Step *step ) const;
     // Frozen showers of the ATLAS FCal (F41 conserto 23): the grid indices (I, J) and position (mm) of each electrode, the tube map

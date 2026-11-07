@@ -94,8 +94,19 @@ void CaloHit::fill( const G4Step* step , float sampNoiseStd, float edep)
 {
   G4StepPoint* point = step->GetPreStepPoint();
   // Get the particle time
-  float t = (float)point->GetGlobalTime() / ns;
+  fillAt( (float)point->GetGlobalTime() / ns, sampNoiseStd, edep );
+}
 
+void CaloHit::fillPmtAt( float t0, float edep_pmt0, float t1, float edep_pmt1 )
+{
+  int samp = find(t0);
+  if ( samp != -1 ) m_edepPmt[0][m_bcid_start + samp] += (edep_pmt0/MeV);
+  samp = find(t1);
+  if ( samp != -1 ) m_edepPmt[1][m_bcid_start + samp] += (edep_pmt1/MeV);
+}
+
+void CaloHit::fillAt( float t, float sampNoiseStd, float edep )
+{
   // Get the bin index into the time vector
   int samp = find(t);
   if ( samp != -1 ){

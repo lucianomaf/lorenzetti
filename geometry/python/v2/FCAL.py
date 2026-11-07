@@ -24,7 +24,9 @@ SQLite copy of the ATLAS geometry database in CVMFS (/cvmfs/atlas.cern.ch/repo/s
 written by geometry/scripts/fcal_electrodes_from_geomdb.py, which also writes it for another geometry tag.
 """
 
-import csv, math
+import csv, math, os
+from CaloCell.CaloDefs import Detector, CaloSampling
+from GaugiKernel.constants import MeV
 from .AtlasFCal import ATLAS_FCAL_CELL_MODULES, ATLAS_FCAL_CELL_MATERIALS
 from .PhysicalVolume import ProductionCuts
 
@@ -56,9 +58,9 @@ def readAtlasFcalElectrodes( path ):
 
 class AtlasFcalModule:
     """
-    One module of the ATLAS FCal on one side: the volume built by DetectorConstruction_v1::AddFCalModule and the fields read by
-    its CaloHitMaker (FCalModule > 0), which feeds only the free-running hits (LArHitFCAL); the module has no cells in the
-    standard hit collection.
+    One module of the ATLAS FCal on one side: the volume built by DetectorConstruction_v2::AddFCalModule and the fields read by
+    its CaloHitMaker (FCalModule > 0), which records one hit per tile in the hit collection (sampling FCAL1-FCAL3) and, with the
+    free-running hits, feeds LArHitFCAL.
     """
     def __init__( self, m, side, electrodes ):
         self.Module   = m['module']
@@ -91,18 +93,66 @@ class AtlasFcalModule:
         self.CopyEta = [centre[(e[2], e[3])][0] for e in electrodes]
         self.CopyPhi = [centre[(e[2], e[3])][1] for e in electrodes]
         self.NCells  = len(centre)
+        self.Sampling = [CaloSampling.FCAL1, CaloSampling.FCAL2, CaloSampling.FCAL3][self.Module - 1]
+        self.Detector = Detector.FCALEM if self.Module == 1 else Detector.FCALHAD
+        self.CollectionKey = "Collection_" + self.name()
+
+    # Width of the tile of each copy number, for the hits of the normal chain: the range of eta and phi of the centres of the
+    # electrodes of the tile plus one step of the grid (spacing 7.5, 8.179 and 9.0 mm, FCAL_ChannelMap) seen at the centre of
+    # the tile; an approximation, since the tiles are not an eta x phi grid. Computed from the current Z (shifted in Run 4).
+    def _tileWidths( self ):
+        spacing = {1: 7.5, 2: 8.179, 3: 9.0}[self.Module]
+        tiles = {}
+        for x, y, ip, ie in zip( self.X, self.Y, self.CopyPhiIndex, self.CopyEtaIndex ):
+            tiles.setdefault( (ip, ie), [] ).append( (x, y) )
+        width = {}
+        for k, pts in tiles.items():
+            xc = sum(p[0] for p in pts) / len(pts); yc = sum(p[1] for p in pts) / len(pts)
+            rc = math.hypot(xc, yc); phic = math.atan2(yc, xc)
+            etas = [ math.asinh( self.Z / math.hypot(x, y) ) for x, y in pts ]
+            phis = [ math.remainder( math.atan2(y, x) - phic, 2 * math.pi ) for x, y in pts ]
+            deta_step = spacing * abs(self.Z) / ( rc * math.hypot(rc, self.Z) )
+            dphi_step = spacing / rc
+            width[k] = ( max(etas) - min(etas) + deta_step, max(phis) - min(phis) + dphi_step )
+        return [ width[(ip, ie)] for ip, ie in zip( self.CopyPhiIndex, self.CopyEtaIndex ) ]
+    # Cells of the digitization (CaloCellMaker): one per tile, with the local hash of the hits (bin = 16 eta + phi), the centre and
+    # the width of the tile
+    @property
+    def Tiles( self ):
+        out = {}
+        for ip, ie, eta, phi, w in zip( self.CopyPhiIndex, self.CopyEtaIndex, self.CopyEta, self.CopyPhi, self._tileWidths() ):
+            out.setdefault( 16 * ie + ip, ( eta, phi, w[0], w[1] ) )
+        bins = sorted( out )
+        return { "Bin": bins, "Eta": [out[b][0] for b in bins], "Phi": [out[b][1] for b in bins],
+                 "DeltaEta": [out[b][2] for b in bins], "DeltaPhi": [out[b][3] for b in bins] }
+    @property
+    def CopyDeltaEta( self ): return [ w[0] for w in self._tileWidths() ]
+    @property
+    def CopyDeltaPhi( self ): return [ w[1] for w in self._tileWidths() ]
 
     # interface of a sampling, for CaloHitMaker.py and CaloHitBuilder.py
     def volume( self ):    return self
     def sensitive( self ): return self
     def name( self ):      return self.Name.replace('::', '_')
-    # no CaloSampling: the FCal makers only feed the free-running hits
-    Sampling = -1
-    Detector = 0
     Segment = 0
     BunchIdStart = -21
     BunchIdEnd = 3
+    # The front end of the digitization: there is no public pulse of the ATLAS FCal, so the module takes the generic LAr pulse of
+    # Lorenzetti and the noise and optimal filter weights of HEC1 (geometry/python/v2/HEC.py), as HEC0 does. Not validated.
+    StartSamplingBC = -2
+    Samples = 5
+    DigitNoise = 250*MeV
+    OFWeightsEnergy = [-0.0000853580,    0.265132,    0.594162,     0.389505,     0.124353]
+    OFWeightsTime   = [-0.0000853580,   -12.870312690734863, -27.39136505126953, 8.075883865356445, 13.768877029418945]
+    @property
+    def Shaper( self ): return os.environ['LORENZETTI_GEOMETRY_DATA_DIR'] + "/pulseLar.dat"
+    # the simulation keeps no noise in the time of flight selection of the hits (CaloHitMaker SamplingNoiseStd)
     Noise = 0
+    # for CaloCellMaker.py: the z of the module
+    @property
+    def sv( self ): return self
+    @property
+    def pv( self ): return self
     BirksLArK = FCAL_BIRKS_K
     @property
     def EtaBins( self ):

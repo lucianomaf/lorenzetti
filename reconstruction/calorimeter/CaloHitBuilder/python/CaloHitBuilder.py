@@ -21,6 +21,7 @@ class CaloHitBuilder(Logger):
                  OutputLevel: int = LoggingLevel.toC('INFO'),
                  ActiveEnergyOnly: bool = False,
                  BirksLaw: bool = False,
+                 AtlasHitTime: bool = False,
                  TileDualReadout: int = 0,
                  FreeRunningHits: bool = False,
                  FreeRunningBinning: bool = True,
@@ -40,6 +41,8 @@ class CaloHitBuilder(Logger):
         self.OutputHitsKey = OutputHitsKey
         self.ActiveEnergyOnly = ActiveEnergyOnly
         self.BirksLaw = BirksLaw
+        # Bunch crossing of the hits from the time of the ATLAS simulation (CaloHitMaker::hitTime)
+        self.AtlasHitTime = AtlasHitTime
         self.TileDualReadout = TileDualReadout
         # Free-running hits: the tile deposits also go, per PMT, to a list written in the layout of the ATLAS HITS ntuple
         # (CaloFreeRunningHitWriter, tree FreeRunningNtupleName); see CaloHitMaker::freeRunningTile.
@@ -76,6 +79,7 @@ class CaloHitBuilder(Logger):
                                DetailedHistograms=False,
                                ActiveEnergyOnly=self.ActiveEnergyOnly,
                                BirksLaw=self.BirksLaw,
+                               AtlasHitTime=self.AtlasHitTime,
                                TileDualReadout=self.TileDualReadout,
                                FreeRunningHits=self.FreeRunningHits,
                                FreeRunningBinning=self.FreeRunningBinning,
@@ -88,19 +92,20 @@ class CaloHitBuilder(Logger):
             self.__recoAlgs.append(alg)
             self.OutputCollectionKeys.append(samp.CollectionKey)
 
-        # ATLAS FCal with its electrodes (F41 conserto 22; geometry/python/v1/FCAL.py): one maker per module and side, only
-        # for the free-running hits (no hit collection, so not merged)
-        if self.FreeRunningHits:
-            for fm in getattr(self.__detector, 'fcal_modules', []):
-                MSG_INFO(self, "Create CaloHitMaker for %s (free-running hits only)", fm.Name)
-                self.__recoAlgs.append( CaloHitMaker("CaloHitMaker", fm,
-                                                     OutputCollectionKey="Collection_" + fm.name(),
-                                                     HistogramPath=self.HistogramPath + '/' + fm.name(),
-                                                     OutputLevel=self.OutputLevel,
-                                                     ActiveEnergyOnly=self.ActiveEnergyOnly,
-                                                     BirksLaw=self.BirksLaw,
-                                                     FreeRunningHits=self.FreeRunningHits,
-                                                     FreeRunningBinning=self.FreeRunningBinning) )
+        # ATLAS FCal with its cells (F41 conserto 22; geometry/python/v2/FCAL.py): one maker per module and side, for the hit
+        # collection (one hit per tile, merged with the others) and, with FreeRunningHits, the free-running hits
+        for fm in getattr(self.__detector, 'fcal_modules', []):
+            MSG_INFO(self, "Create CaloHitMaker for %s and dump all hits into %s collection", fm.Name, fm.CollectionKey)
+            self.__recoAlgs.append( CaloHitMaker("CaloHitMaker", fm,
+                                                 OutputCollectionKey=fm.CollectionKey,
+                                                 HistogramPath=self.HistogramPath + '/' + fm.name(),
+                                                 OutputLevel=self.OutputLevel,
+                                                 ActiveEnergyOnly=self.ActiveEnergyOnly,
+                                                 BirksLaw=self.BirksLaw,
+                                                 AtlasHitTime=self.AtlasHitTime,
+                                                 FreeRunningHits=self.FreeRunningHits,
+                                                 FreeRunningBinning=self.FreeRunningBinning) )
+            self.OutputCollectionKeys.append(fm.CollectionKey)
 
         MSG_INFO(
             self,

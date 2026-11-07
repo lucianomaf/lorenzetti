@@ -47,6 +47,11 @@ namespace xAOD{
           each PMT, already weighted by the caller, in the bunch crossing of the step. Used only when the
           cell was created with setDualReadout(true). */
       void fillPmt( const G4Step *, float edep_pmt0, float edep_pmt1 );
+      /*! Same as fill( step, sampNoiseStd, edep ) and fillPmt, with the time (ns) that chooses the bunch crossing given by the
+          caller instead of the global time of the pre-step point (the ATLAS time, CaloHitMaker AtlasHitTime). fillPmtAt takes
+          the time of each PMT. */
+      void fillAt( float t, float sampNoiseStd, float edep );
+      void fillPmtAt( float t0, float edep_pmt0, float t1, float edep_pmt1 );
       /** Zeroize the pulse/sample vectors **/
       void clear();
 

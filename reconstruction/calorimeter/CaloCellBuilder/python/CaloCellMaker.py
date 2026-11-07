@@ -37,6 +37,14 @@ class CaloCellMaker( Cpp ):
     if cells:
       self.setProperty( "CellEta"               , [float(x) for x in cells["Eta"]]      )
       self.setProperty( "CellDeltaEta"          , [float(x) for x in cells["DeltaEta"]] )
+    # Cells given one by one (the ATLAS FCal, geometry/python/v2/FCAL.py): local hash, centre and widths of each cell
+    tiles = getattr( sampling, "Tiles", None )
+    if tiles:
+      self.setProperty( "CellBin"               , [int(x) for x in tiles["Bin"]]        )
+      self.setProperty( "CellEta"               , [float(x) for x in tiles["Eta"]]      )
+      self.setProperty( "CellPhi"               , [float(x) for x in tiles["Phi"]]      )
+      self.setProperty( "CellDeltaEta"          , [float(x) for x in tiles["DeltaEta"]] )
+      self.setProperty( "CellDeltaPhi"          , [float(x) for x in tiles["DeltaPhi"]] )
     self.setProperty( "BunchIdStart"            , sampling.BunchIdStart       )
     self.setProperty( "BunchIdEnd"              , sampling.BunchIdEnd         )
     self.setProperty( "BunchDuration"           , 25                          )
