@@ -9,7 +9,7 @@ class CaloFreeRunningHitWriter( Cpp ):
   """
   Writes the per-event free-running hit list as a flat ntuple with the layout of
   the ATLAS HITS ntuple (EventNumber, TileCalHit_*, LArHitEMB_*, LArHitEMEC_*,
-  LArHitHEC_*, LArHitFCAL_*). One entry per event; the tile hits per PMT (and time bin), the LAr containers empty.
+  LArHitHEC_*, LArHitFCAL_*). One entry per event: the tile hits per PMT and the LAr and FCal hits per cell (and per time bin).
   """
 
   def __init__( self, name,

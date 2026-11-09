@@ -158,10 +158,12 @@ CaloHitMaker::CaloHitMaker( std::string name ) :
   declareProperty( "CellAtlasSection"         , m_cellAtlasSection                    );
   declareProperty( "CellAtlasTower"           , m_cellAtlasTower                      );
   declareProperty( "CellAtlasSampling"        , m_cellAtlasSampling                   );
+  // (r, z) centre of each ATLAS tile cell, for the ATLAS time of its deposits (see tileTime)
   declareProperty( "CellRCentre"              , m_cellRCentre                         );
   declareProperty( "CellZCentre"              , m_cellZCentre                         );
-  // Free-running hits of the ATLAS-like LAr cells (F41 conserto 19): fields of the ATLAS identifier of this maker (see
-  // freeRunningLAr); AtlasLArPart = 0 (the default) means no LAr free-running hits from this maker.
+  // ATLAS-like LAr cells (F41 conserto 19): fields of the ATLAS identifier of the cells of this maker. Part (1 = LArEM, 2 = LArHEC;
+  // 0 = not set, the default) and barrel_ec (or pos_neg) choose the point of the step for the ATLAS time (see larHitTime); all of
+  // them give the identifier of the free-running hits (see freeRunningLAr).
   declareProperty( "AtlasLArPart"             , m_atlasLArPart=0                      );
   declareProperty( "AtlasBarrelEc"            , m_atlasBarrelEc=0                     );
   declareProperty( "AtlasLArSampling"         , m_atlasLArSampling=0                  );
@@ -459,13 +461,13 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
 {
   // Spots of the frozen showers of the ATLAS FCal (F41 conserto 23): only for the FCal makers
   if( isShowerSpot(step) ){
-    if( isFCal() && !m_fcalTubeMap.empty() ) freeRunningFCalSpot( ctx, step );
+    if( isFCal() && !m_fcalTubeMap.empty() ) fcalSpot( ctx, step );
     return StatusCode::SUCCESS;
   }
 
   // ATLAS FCal with its electrodes: the cell from the copy number of the gap, to the hit of its tile and the free-running hits
   if( isFCal() ){
-    freeRunningFCal( ctx, step );
+    fcalStep( ctx, step );
     return StatusCode::SUCCESS;
   }
 
@@ -555,7 +557,7 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
   xAOD::CaloHit *hit=nullptr;
 
   // The cell is absent in this module in ATLAS (D4 in EBA15 and EBC18) and has no hit: the deposit goes to the hit of the
-  // replacement cell (D5 of the same module), as the free-running hits do (freeRunningTile)
+  // replacement cell (D5 of the same module), as in the ATLAS simulation (the free-running hits too, freeRunningTile)
   const bool replacedCell = !m_replaceCollectionKey.empty() && tileNPmt( etaBin, phiBin ) == 0;
 
   if( replacedCell || collection->retrieve(hash(bin), hit) ){
@@ -629,7 +631,7 @@ StatusCode CaloHitMaker::execute( EventContext &ctx , const G4Step *step ) const
 // Convention (not checked against the orientation of the ATLAS local axes): the PMT 1 is the one on the side of
 // larger phi, on both sides of the detector.
 // Number of PMTs of a tile cell in the module of the phi bin (F41 conserto 21): CellNPmt of the cell (2 by default; 1 for
-// E1-E4, read by pmt 0), unless the module is in SpecialModule (modules 0-63 from phi = 0, as freeRunningTile), where it is
+// E1-E4, read by pmt 0), unless the module is in SpecialModule (modules 0-63 from phi = 0, as in TileDetDescr), where it is
 // SpecialNPmt: 1 = only pmt 0, -1 = only pmt 1, 0 = read as the replacement cell (Athena TileGeoG4LookupBuilder: special C10
 // with one PMT, D4 absent in EBA15 and EBC18).
 int CaloHitMaker::tileNPmt( int cell, int phiBin ) const
@@ -733,7 +735,7 @@ void CaloHitMaker::freeRunningTile( SG::EventContext &ctx, const G4Step *step, i
   if( w0 * edep > 0 ) list->add( pmtId(0), w0 * edep, t + dtDown, tglobal, eta, moduleCentre, sampling, side, module, tower, delta );
 }
 
-// ATLAS time of a deposit in a tile cell (moved from freeRunningTile; sources and formula there): tglobal the global time of the
+// ATLAS time of a deposit in a tile cell (sources and formula in the comment of freeRunningTile): tglobal the global time of the
 // post-step point, t = tglobal + [r_cell (n - 2 / sin(theta_cell)) + |x| (1 - n sin(theta_hit))] / c, and the delays of the
 // PMTs across the tile, dtUp (PMT 1) and dtDown (PMT 0), zero for a cell with one PMT. The time cut (TimeCut) is not applied here.
 void CaloHitMaker::tileTime( const G4Step *step, int cell, int phiBin, int npmt, double &tglobal, double &t, double &dtUp,
@@ -768,7 +770,7 @@ void CaloHitMaker::tileTime( const G4Step *step, int cell, int phiBin, int npmt,
   if( npmt == 1 || npmt == -1 ) dtUp = dtDown = 0.0;   // one PMT: no delay across the tile (Athena: only with two PMTs)
 }
 
-// ATLAS time of a deposit in the liquid argon, as the free-running hits (freeRunningLAr and freeRunningFCal; LArBarrelCalculator and
+// ATLAS time of a deposit in the liquid argon, as the ATLAS simulation (Athena, public, Apache 2.0; LArBarrelCalculator and
 // LArBarrelPresamplerCalculator: pre-step; EnergyCalculator, LArEndcapPresamplerCalculator, LArHECWheelCalculator,
 // LArFCALCalculatorBase: mean of pre- and post-step): the global time minus |r|/c of the same point, in ns. A maker without the
 // ATLAS LAr cells takes the mean of pre- and post-step.
@@ -871,21 +873,23 @@ void CaloHitMaker::freeRunningLAr( SG::EventContext &ctx, const G4Step *step, in
 
 //!=====================================================================
 
-// Free-running hits of the ATLAS FCal with its electrodes (F41 conserto 22), as the ATLAS simulation makes them (Athena,
-// LArCalorimeter/LArG4/LArG4FCAL/src/LArFCALCalculatorBase.cc; copies and report in the F41 notes of the group,
-// c22_fcal_celulas/):
+// A step in the ATLAS FCal with its electrodes (F41 conserto 22), as the ATLAS simulation takes it: the hit of its tile and, with the
+// free-running hits, LArHitFCAL (Athena, LArCalorimeter/LArG4/LArG4FCAL/src/LArFCALCalculatorBase.cc; copies and report in the F41
+// notes of the group, c22_fcal_celulas/):
 // - sensitive: only the liquid argon gaps of the module (LArG4SDToolConfig.py: LAr::FCAL::Module<m>::Gap); not the rods;
 // - cell: the tile of the copy number of the gap (FCAL_ChannelMap::getTubeByCopyNumber), from the table LArFCalElectrodes of
-//   the ATLAS geometry database (geometry/python/v1/FCAL.py);
+//   the ATLAS geometry database (geometry/python/v2/FCAL.py);
 // - identifier: channel_id(pos_neg, module, eta, phi) of LArFCAL_ID, pos_neg = +2 for the mid point of the step at z > 0 and -2
 //   otherwise; the 32-bit compact identifier in the upper half of the 64-bit integer, with the bit layout read from the ATLAS
 //   HITS ntuple (c22_bits_fcal_5k.py): LArCalorimeter 1 (3 bits) | part 5 (3) | pos_neg -2 -> 0, +2 -> 1 (1) | module - 1 (2) |
 //   eta (6) | phi (4) | 0 (13);
 // - energy: the deposit of the step with Birks' law (BirksLaw, BirksLArK = 0.0486 as LArG4FCALConfig.py, field 10 kV/cm); no
 //   high voltage scale (FCALHVEnable is false by default);
-// - time: mean of the pre- and post-step global times minus |r|/c of the mid point, in ns; time bins and sums as the other LAr
-//   (LArG4SimpleSD, TimeBinType Default; see freeRunningLAr); no time window.
-void CaloHitMaker::freeRunningFCal( SG::EventContext &ctx, const G4Step *step ) const
+// - time: in the hit of its tile (fcalFillHit), the ATLAS time of the liquid argon (larHitTime) with AtlasHitTime, the global time of
+//   the pre-step point without it; in the free-running hits, the mean of the pre- and post-step global times minus |r|/c of the mid
+//   point, in ns, with the time bins and sums of the other LAr (LArG4SimpleSD, TimeBinType Default; see freeRunningLAr) and no time
+//   window.
+void CaloHitMaker::fcalStep( SG::EventContext &ctx, const G4Step *step ) const
 {
   const G4StepPoint *preP = step->GetPreStepPoint(), *postP = step->GetPostStepPoint();
   const G4VPhysicalVolume *pv = preP->GetPhysicalVolume();
@@ -995,7 +999,7 @@ bool CaloHitMaker::fcalTileID( double x, double y, int &eta, int &phi ) const
 // electrodes of side C sit at the same x and y as those of side A, geometry/python/v1/FCAL.py), the energy of the spot as it comes
 // (no Birks, weight 1), the time of the spot (already the shower time plus the global time of the particle minus |r|/c). Spots
 // outside every module or outside every tile are dropped, as in Athena.
-void CaloHitMaker::freeRunningFCalSpot( SG::EventContext &ctx, const G4Step *step ) const
+void CaloHitMaker::fcalSpot( SG::EventContext &ctx, const G4Step *step ) const
 {
   const G4StepPoint *preP = step->GetPreStepPoint();
   const G4ThreeVector pos = preP->GetPosition();
@@ -1285,7 +1289,7 @@ StatusCode CaloHitMaker::post_execute( EventContext &/*ctx*/ ) const
 
 StatusCode CaloHitMaker::fillHistograms( EventContext &ctx ) const
 {
-  // the ATLAS FCal makers have no hit collection
+  // the FCal makers have one eta bin and one phi bin (FCAL.py), so the eta x phi monitoring histogram is not filled
   if( isFCal() ) return StatusCode::SUCCESS;
   auto store = ctx.getStoreGateSvc();
   SG::ReadHandle<xAOD::CaloHitCollection> collection( m_collectionKey, ctx );

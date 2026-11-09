@@ -293,7 +293,7 @@ StatusCode CaloFreeRunningHitWriter::serialize( EventContext &ctx ) const
       // LAr hit below the cut of FilterHit_tf (F41 conserto 25)
       continue;
     }else if( det == 4 ){
-      // FCAL hits (F41 conserto 22; CaloHitMaker::freeRunningFCal): the module, kept in the field sampling of the list
+      // FCAL hits (F41 conserto 22; CaloHitMaker::fcalStep): the module, kept in the field sampling of the list
       fcal.push( list->cellID()[i], m_atlasFormat ? atlasCompressEnergy( list->energy()[i] ) : list->energy()[i],
                  m_atlasFormat ? atlasCompressTime( hitTime[i] ) : hitTime[i], tglobal[i], list->eta()[i], list->phi()[i],
                  list->sampling()[i] );

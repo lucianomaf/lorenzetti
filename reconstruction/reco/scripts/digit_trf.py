@@ -86,8 +86,8 @@ def parse_args():
                              "since the EMEC cells depend on it. On by default with --detector v2 (--no-atlas-emec switches it off), off with v1.")
     parser.add_argument('--tile-atlas-cells', action=argparse.BooleanOptionalAction, default=None,
                         dest='tile_atlas_cells', required=False,
-                        help="Hits simulated with --tile-atlas-cells (ATLAS tile cells). Not supported yet: the "
-                             "digitization only knows the eta x phi grid, so the job stops with an error. On by default with --detector v2 (--no-tile-atlas-cells switches it off), off with v1.")
+                        help="Tile cells as in ATLAS (see simu_trf.py). It must match the option used in the simulation, "
+                             "since the tile cells depend on it. On by default with --detector v2 (--no-tile-atlas-cells switches it off), off with v1.")
 
     parser.add_argument('--enable-solenoid-field', action=argparse.BooleanOptionalAction, default=None,
                         dest='enable_solenoid_field', required=False,

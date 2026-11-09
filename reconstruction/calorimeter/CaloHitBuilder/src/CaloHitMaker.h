@@ -221,7 +221,8 @@ class CaloHitMaker : public Gaugi::Algorithm
     bool m_freeRunningHits;
     std::string m_freeRunningListKey;
     bool m_freeRunningBinning;
-    // ATLAS identifier fields and (r, z) centre of each cell (same order as m_cellEta; geometry/python/v1/TILE.py)
+    // ATLAS identifier fields (free-running hits) and (r, z) centre (tileTime) of each cell (same order as m_cellEta;
+    // geometry/python/v2/TILE.py)
     std::vector<int>   m_cellAtlasSection;
     std::vector<int>   m_cellAtlasTower;
     std::vector<int>   m_cellAtlasSampling;
@@ -234,10 +235,11 @@ class CaloHitMaker : public Gaugi::Algorithm
     void tileTime( const G4Step *step, int cell, int phiBin, int npmt, double &tglobal, double &t, double &dtUp,
                    double &dtDown ) const;
 
-    // Free-running hits of the ATLAS-like LAr cells (F41 conserto 19; --atlas-emb-cells, --atlas-emec, --atlas-hec): the
-    // fields of the ATLAS identifier of the cells of this maker (AtlasLArPart: 1 = LArEM, 2 = LArHEC, 0 = not set, the
-    // default; barrel_ec or pos_neg, sampling and region of the dictionary, and the dictionary eta index of each cell, same
-    // order as m_cellEta). See freeRunningLAr.
+    // ATLAS-like LAr cells (F41 conserto 19; --atlas-emb-cells, --atlas-emec, --atlas-hec): the fields of the ATLAS identifier of
+    // the cells of this maker (AtlasLArPart: 1 = LArEM, 2 = LArHEC, 0 = not set, the default; barrel_ec or pos_neg, sampling and
+    // region of the dictionary, and the dictionary eta index of each cell, same order as m_cellEta). Part and barrel_ec choose the
+    // point of the step for the ATLAS time (larHitTime: pre-step in the barrel, mean of pre- and post-step elsewhere); all of them
+    // give the identifier of the free-running hits (freeRunningLAr).
     int m_atlasLArPart;
     int m_atlasBarrelEc;
     int m_atlasLArSampling;
@@ -272,10 +274,10 @@ class CaloHitMaker : public Gaugi::Algorithm
     // the deposit of an FCal step or spot in the hit of its tile (hit collection of the normal chain)
     void fcalFillHit( SG::EventContext &ctx, int eta, int phi, float edep, float t ) const;
     bool isFCal() const { return m_fcalModule > 0; }
-    void freeRunningFCal( SG::EventContext &ctx, const G4Step *step ) const;
+    void fcalStep( SG::EventContext &ctx, const G4Step *step ) const;
     // Frozen showers of the ATLAS FCal (F41 conserto 23): the grid indices (I, J) and position (mm) of each electrode, the tube map
     // of FCAL_ChannelMap (key ((J + 200) << 16) + (I + 200) -> tile eta and phi indices, the first tube and its position) and the
-    // tile centre of each (eta, phi); a spot of a frozen shower is a G4Step without touchable (see freeRunningFCalSpot).
+    // tile centre of each (eta, phi); a spot of a frozen shower is a G4Step without touchable (see fcalSpot).
     std::vector<int>   m_fcalCopyI;
     std::vector<int>   m_fcalCopyJ;
     std::vector<float> m_fcalCopyX;
@@ -285,7 +287,7 @@ class CaloHitMaker : public Gaugi::Algorithm
     double m_fcalFirstTubeX, m_fcalFirstTubeY;
     std::map<std::pair<int,int>, std::pair<float,float>> m_fcalTileCentre;
     bool fcalTileID( double x, double y, int &eta, int &phi ) const;
-    void freeRunningFCalSpot( SG::EventContext &ctx, const G4Step *step ) const;
+    void fcalSpot( SG::EventContext &ctx, const G4Step *step ) const;
   public:
     /*! A step that is a spot of a frozen shower (no touchable). */
     static bool isShowerSpot( const G4Step *step );

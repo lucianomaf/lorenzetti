@@ -10,8 +10,8 @@
 /**
  * @class CaloFreeRunningHitList
  * @brief Per-event list of the tile hits in the layout of the ATLAS HITS ntuple (one entry per PMT and time bin, or per
- *        PMT and Geant4 step without binning), and of the ATLAS-like LAr cells (one entry per cell and time bin, see
- *        addLAr; F41 conserto 19), filled by CaloHitMaker when simu_trf.py runs with --free-running-hits and
+ *        PMT and Geant4 step without binning), and of the ATLAS-like LAr and FCal cells (one entry per cell and time bin,
+ *        see addLAr; F41 consertos 19 and 22), filled by CaloHitMaker when simu_trf.py runs with --free-running-hits and
  *        written by CaloFreeRunningHitWriter.
  *
  * With binning (bin width delta > 0), add() follows TileSimHit::add of the ATLAS simulation (Athena,

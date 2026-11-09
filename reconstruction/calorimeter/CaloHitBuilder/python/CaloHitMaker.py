@@ -54,9 +54,9 @@ class CaloHitMaker( Cpp ):
     self.setProperty( "AtlasHitTime"            , AtlasHitTime                )
     # Dual readout of the tile cells (two PMTs per cell): 0 = off, 1 = ATLAS U-shape, 2 = linear sharing
     self.setProperty( "TileDualReadout"         , TileDualReadout             )
-    # Free-running hits (simu_trf.py --free-running-hits): every deposit of the ATLAS tile cells also goes, per PMT, to a
-    # list written in the layout of the ATLAS HITS ntuple (CaloFreeRunningHitWriter); with FreeRunningBinning the deposits
-    # of a PMT are summed in the time bins of the ATLAS simulation (TileSimHit). Only the tile samplings with the ATLAS cells.
+    # Free-running hits (simu_trf.py --free-running-hits): every deposit of the ATLAS cells also goes to a list written in the
+    # layout of the ATLAS HITS ntuple (CaloFreeRunningHitWriter), per PMT in the tile and per cell in the LAr and the FCal; with
+    # FreeRunningBinning the deposits are summed in the time bins of the ATLAS simulation (TileSimHit, LArG4SimpleSD).
     self.setProperty( "FreeRunningHits"         , FreeRunningHits             )
     self.setProperty( "FreeRunningListKey"      , FreeRunningListKey          )
     self.setProperty( "FreeRunningBinning"      , FreeRunningBinning          )
@@ -110,7 +110,8 @@ class CaloHitMaker( Cpp ):
       if "RadiusModules" in cells:
         self.setProperty( "CellRadiusModules"   , int(cells["RadiusModules"])           )
       # ATLAS-like LAr cells (F41 conserto 19): fields of the ATLAS identifier of this maker and the dictionary eta index
-      # of each cell, for the free-running hits (CaloHitMaker::freeRunningLAr)
+      # of each cell; part and barrel_ec choose the point of the step for the ATLAS time (CaloHitMaker::larHitTime), and all of
+      # them give the identifier of the free-running hits (CaloHitMaker::freeRunningLAr)
       if "AtlasLArPart" in cells:
         self.setProperty( "AtlasLArPart"        , int(cells["AtlasLArPart"])              )
         self.setProperty( "AtlasBarrelEc"       , int(cells["AtlasBarrelEc"])             )
@@ -135,6 +136,7 @@ class CaloHitMaker( Cpp ):
       if "ReplaceCollectionKey" in cells:
         self.setProperty( "ReplaceCollectionKey", str(cells["ReplaceCollectionKey"])      )
         self.setProperty( "ReplaceHashBase"     , int(cells["ReplaceHashBase"])           )
+      # ATLAS identifier fields (free-running hits) and (r, z) centre (ATLAS time, CaloHitMaker::tileTime) of each ATLAS tile cell
       if "AtlasSection" in cells:
         self.setProperty( "CellAtlasSection"    , [int(x) for x in cells["AtlasSection"]]  )
         self.setProperty( "CellAtlasTower"      , [int(x) for x in cells["AtlasTower"]]    )
@@ -147,7 +149,7 @@ class CaloHitMaker( Cpp ):
     if phi_shift:
       self.setProperty( "PhiShift"              , float(phi_shift)            )
     # ATLAS FCal with its electrodes (F41 conserto 22; geometry/python/v1/FCAL.py): module, side, logical volume of the gaps
-    # and the cell and tile centre of each copy number (CaloHitMaker::freeRunningFCal)
+    # and the cell and tile centre of each copy number (CaloHitMaker::fcalStep)
     fcal_module = getattr( sampling, "Module", None )
     if fcal_module:
       self.setProperty( "FCalModule"            , int(fcal_module)                         )

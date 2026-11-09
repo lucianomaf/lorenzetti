@@ -78,8 +78,8 @@ def parse_args():
                         dest='enable_solenoid_field', required=False,
                         help="Enable a uniform 2 T axial field only inside the ATLAS central solenoid "
                              "(R < 1.23 m, |z| < 2.9 m), with no field in the calorimeters. "
-                             "Cannot be combined with --enable-magnetic-field. Generate the events with "
-                             "--pt-min-charged 0 --pt-min-neutral 0 to follow ATLAS. On by default with --detector v2 (--no-enable-solenoid-field switches it off), off with v1.")
+                             "Cannot be combined with --enable-magnetic-field. "
+                             "On by default with --detector v2 (--no-enable-solenoid-field switches it off), off with v1.")
     parser.add_argument('--tile-atlas-geometry', action=argparse.BooleanOptionalAction, default=None,
                         dest='tile_atlas_geometry', required=False,
                         help="Build the tile calorimeter as in ATLAS: scintillating tiles normal to the beam line, "
@@ -303,23 +303,25 @@ def parse_args():
                         help="Write the tile and LAr hits in the layout of the ATLAS HITS ntuple (tree CollectionTree: "
                              "EventNumber, TileCalHit_cellID/energy/time/eta/phi/sampling/side/module/tower and "
                              "LArHitEMB/EMEC/HEC_cellID/energy/time/eta/phi/region/sampling/barrel_ec (pos_neg in the HEC), "
-                             "plus the extra *_tglobal; the FCAL branches are written empty) instead of the standard HIT "
+                             "LArHitFCAL_cellID/energy/time/eta/phi/module, plus the extra *_tglobal) instead of the standard HIT "
                              "stream. Tile, as in the ATLAS simulation: one entry per PMT, with the ATLAS identifier (pmt_id, "
                              "64-bit), the visible energy (active medium and Birks' law, switched on by this option), the "
                              "time of TileGeoG4SDCalc (time of flight and fibre corrections, PMT delays, hits after "
                              "350.5 ns kept at 99995 ns) and its time bins (0.5 ns within +-75.25 ns, 5 ns outside). "
-                             "LAr, as in the ATLAS simulation (LArG4SimpleSD): one entry per cell and time bin (2.5 ns up to "
+                             "LAr and FCal, as in the ATLAS simulation (LArG4SimpleSD): one entry per cell and time bin (2.5 ns up to "
                              "10 ns, 5 ns up to 50 ns, 25 ns up to 100 ns, one bin above), with the ATLAS identifier "
                              "(channel_id), the energy in the liquid argon with Birks' law, the global time minus r/c and no "
                              "time window; no energy threshold and full precision (the FilterHit_tf cuts and compression of "
                              "the ATLAS ntuples are applied outside). "
-                             "Needs --tile-atlas-geometry, --tile-atlas-cells, --atlas-emb-cells, --atlas-hec and "
-                             "--atlas-emec; switches on --tile-dual-readout (U-shape). Off by default.")
+                             "Needs --tile-atlas-geometry, --tile-atlas-cells, --tile-atlas-gap, --atlas-emb-cells, --atlas-hec, "
+                             "--atlas-emec, --atlas-fcal-cells, --atlas-fcal-frozen-showers, --atlas-g4 and --atlas-run4 (all on by "
+                             "default with --detector v2); switches on --tile-dual-readout (U-shape). Off by default, also with "
+                             "--detector v2.")
     parser.add_argument('--neutron-time-cut', action='store', type=float, default=None,
                         dest='neutron_time_cut', required=False,
                         help="Kill every neutron this time (ns) after the start of the event, as the ATLAS simulation does "
                              "with 150 ns (Sim.NeutronTimeCut; arXiv:1005.4568, sec. 5.5). Without it, the default of "
-                             "Geant4 (10 us in FTFP_BERT). --free-running-hits sets 150 ns unless given here.")
+                             "Geant4 (10 us in FTFP_BERT). 150 ns by default with --detector v2 and with --free-running-hits.")
     parser.add_argument('--free-running-no-binning', action='store_true',
                         dest='free_running_no_binning', required=False,
                         help="With --free-running-hits: one entry per PMT and Geant4 step, without the time bins.")
@@ -412,7 +414,7 @@ def main(logging_level: str,
         atlas_hec (bool): HEC as in ATLAS (four samplings, nominal geometry and cells of ATLAS).
         atlas_emec (bool): EM end-cap as in ATLAS (two wheels, nominal geometry, composition and cells of ATLAS).
         atlas_fcal (bool): Forward calorimeter of ATLAS as passive material (three modules, no cells).
-        atlas_fcal_cells (bool): The FCal of ATLAS with its electrodes and cells (free-running hits only; needs atlas_fcal).
+        atlas_fcal_cells (bool): The FCal of ATLAS with its electrodes and cells (needs atlas_fcal).
         atlas_fcal_electrodes (str): CSV file of the electrodes of the ATLAS FCal (geometry/scripts/fcal_electrodes_from_geomdb.py).
         tile_atlas_gap (bool): Gap/crack scintillators E1-E4 and active ITC as in ATLAS, nominal extended barrel.
         atlas_endcap_cryostat (bool): Outer cylinders of the end-cap cryostats as in ATLAS.
@@ -422,7 +424,7 @@ def main(logging_level: str,
         birks_law (bool): Apply Birks' law in the scintillator and in the liquid argon.
         atlas_hit_time (bool): Bunch crossing of the hits from the time of the ATLAS simulation (time of flight taken out).
         save_all_hits (bool): If True, saves all hits regardless of Region of Interest (RoI).
-        free_running_hits (bool): Write the tile hits in the layout of the ATLAS HITS ntuple instead of the HIT stream.
+        free_running_hits (bool): Write the tile, LAr and FCal hits in the layout of the ATLAS HITS ntuple instead of the HIT stream.
         free_running_binning (bool): Time bins of the ATLAS simulation for the free-running hits.
         free_running_keep_hits (bool): Keep also the standard HIT stream (free-running hits in the tree FreeRunningTree).
         neutron_time_cut (float): Time (ns) after which neutrons are killed; 0 keeps the Geant4 default.

@@ -44,8 +44,9 @@ class CaloHitBuilder(Logger):
         # Bunch crossing of the hits from the time of the ATLAS simulation (CaloHitMaker::hitTime)
         self.AtlasHitTime = AtlasHitTime
         self.TileDualReadout = TileDualReadout
-        # Free-running hits: the tile deposits also go, per PMT, to a list written in the layout of the ATLAS HITS ntuple
-        # (CaloFreeRunningHitWriter, tree FreeRunningNtupleName); see CaloHitMaker::freeRunningTile.
+        # Free-running hits: the deposits of the ATLAS cells also go to a list (per PMT in the tile, per cell in the LAr and the FCal)
+        # written in the layout of the ATLAS HITS ntuple (CaloFreeRunningHitWriter, tree FreeRunningNtupleName); see
+        # CaloHitMaker::freeRunningTile, freeRunningLAr and fcalStep.
         self.FreeRunningHits = FreeRunningHits
         self.FreeRunningBinning = FreeRunningBinning
         self.FreeRunningNtupleName = FreeRunningNtupleName

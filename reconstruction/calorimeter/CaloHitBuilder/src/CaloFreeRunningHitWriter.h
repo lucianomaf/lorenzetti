@@ -12,14 +12,14 @@
  *        LArHitEMEC, LArHitHEC, LArHitFCAL), the vectors cellID, energy, time, tglobal,
  *        eta, phi and the container specific identification branches.
  *
- * One entry per event. The list holds the tile hits per PMT (and per time bin with the binning of the ATLAS
- * simulation), filled by CaloHitMaker; the LAr containers are written empty (the LAr cells of Lorenzetti are not the
- * ATLAS ones), so that the scripts that read the ATLAS ntuple find every branch.
+ * One entry per event. The list holds the tile hits per PMT and the LAr and FCal hits per cell (per time bin with the
+ * binning of the ATLAS simulation), filled by CaloHitMaker.
  *
  * Properties:
  * - InputListKey: StoreGate key of the CaloFreeRunningHitList.
  * - InputEventKey: StoreGate key of the EventInfo container (for EventNumber).
  * - NtupleName: name of the output tree (CollectionTree, as in the ATLAS ntuple).
+ * - AtlasFormat: the LAr energy and time compressed and filtered as in the ATLAS HITS ntuple (FilterHit_tf), without tglobal.
  */
 class CaloFreeRunningHitWriter : public Gaugi::Algorithm
 {
