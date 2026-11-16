@@ -56,6 +56,8 @@ namespace generator{
       float m_avg_mu;
       float m_tot_mu;
       std::vector<int>   *m_p_isMain    ;
+      std::vector<int>   *m_p_hard      ;
+      int m_ntried;
       std::vector<int>   *m_p_pdg_id    ; 
       std::vector<int>   *m_p_bc_id     ; 
       std::vector<int>   *m_p_seed_id   ; 

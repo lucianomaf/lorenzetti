@@ -21,6 +21,8 @@ class Pileup( Cpp ):
                 "PtMinNeutral",
                 "VertexSigmaZ",
                 "VertexSigmaT",
+                "HardFilter",
+                "TruthFile",
                 "OutputLevel",
                 ]
 
@@ -38,6 +40,8 @@ class Pileup( Cpp ):
                 PtMinNeutral   : float=0.05,
                 VertexSigmaZ   : float=56,
                 VertexSigmaT   : float=200,
+                HardFilter     : int=0,
+                TruthFile      : str="",
                 OutputLevel    : int=0
               ): 
     
@@ -62,6 +66,10 @@ class Pileup( Cpp ):
     # (Sigma_t is c times the time spread), so the time is converted here.
     self.setProperty( "Sigma_z"       , VertexSigmaZ   )
     self.setProperty( "Sigma_t"       , VertexSigmaT * 1e-12 * 299792458.0 * 1e3 )
+    # Selection of the ATLAS high-pT minimum bias sample (DSID 800831): 0 off, 1 mark, 2 keep only
+    self.setProperty( "HardFilter"    , HardFilter     )
+    # HepMC3 ROOT file with the full generator record (empty: not written)
+    self.setProperty( "TruthFile"     , TruthFile      )
 
 
   def gun(self):

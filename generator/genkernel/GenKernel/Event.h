@@ -32,6 +32,7 @@ namespace generator
     float tProd;
     float e;
     float eT;
+    int hard;   // HardFilter bits of the generated event (DSID 800831 selection); 0 when not hard or not evaluated
   };
 
   class Seed
@@ -117,12 +118,13 @@ namespace generator
                       float zProd,
                       float tProd,
                       float e,
-                      float eT)
+                      float eT,
+                      int hard=0)
     {
       m_etot += e;
       m_ettot += eT;
       m_particles.push_back(particle_t{isMain, bc_id, pdg_id, px, py, pz,
-                                       eta, phi, xProd, yProd, zProd, tProd, e, eT});
+                                       eta, phi, xProd, yProd, zProd, tProd, e, eT, hard});
     };
 
   private:
@@ -185,6 +187,10 @@ namespace generator
 
     void setTotmu(float totmu) { m_totmu = totmu; };
 
+    // Number of generator events produced to fill this event (more than the pileup count when a filter rejects events)
+    void setNtried(int n) { m_ntried = n; };
+    int ntried() const { return m_ntried; };
+
 
     /**
      * @brief Get the average mu/pileup
@@ -221,6 +227,7 @@ namespace generator
      */
     float m_avgmu;
     float m_totmu;
+    int m_ntried = 0;
     /**
      * @brief Event number
      *

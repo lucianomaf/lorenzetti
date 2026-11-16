@@ -2,6 +2,9 @@
 #include "Pileup.h"
 #include "G4Kernel/CaloPhiRange.h"
 #include "helper.h"
+#include "HardFilter.h"
+#include "HepMC3/WriterRootTree.h"
+#include "HepMC3/Attribute.h"
 
 
 using namespace SG;
@@ -27,6 +30,15 @@ Pileup::Pileup(const std::string name, IGenerator *gen):
   // particle, as ATLAS does, when the solenoid field is simulated.
   declareProperty( "PtMinCharged"   , m_ptMinCharged=0.7  );
   declareProperty( "PtMinNeutral"   , m_ptMinNeutral=0.05 );
+  // Selection of the ATLAS high-pT minimum bias sample (DSID 800831, see HardFilter.h).
+  // 0: off; 1: mark each event with the criteria it passes (branch p_hard of the EventTape), without
+  // changing the generated sequence; 2: keep only the events that pass, generating as many as needed
+  // (the number generated goes to the branch n_tried, which gives the filter efficiency).
+  declareProperty( "HardFilter"     , m_hardFilter=0      );
+  // HepMC3 ROOT file with the full generator record (all particles, status, parents and vertices) of
+  // each event written to the EventTape. The event carries the attributes lzt_event, lzt_bc_id,
+  // lzt_z_shift and lzt_t_shift (mm; the vertex smearing added to the EventTape particles) and lzt_hard.
+  declareProperty( "TruthFile"      , m_truthFile=""      );
 }
 
 Pileup::~Pileup()
@@ -41,6 +53,15 @@ StatusCode Pileup::initialize()
     MSG_FATAL("Its not possible to initialize the generator. Abort!");
   }
 
+  if ( !m_truthFile.empty() ){
+    m_truthWriter = std::make_shared<HepMC3::WriterRootTree>( m_truthFile );
+    if ( m_truthWriter->failed() ){
+      MSG_FATAL( "It is not possible to open the truth file " << m_truthFile );
+      return StatusCode::FAILURE;
+    }
+    MSG_INFO( "Writing the full generator record to " << m_truthFile );
+  }
+
   return StatusCode::SUCCESS;
 }
 
@@ -52,6 +73,7 @@ StatusCode Pileup::execute(  generator::Event &ctx )
 
   const int nWin = m_bc_id_end - m_bc_id_start + 1;
   float nPileUpMean(0);
+  int nTried(0);
 
   // Generate the new average for pileup from a gaussian distribution
   float evtPileupAvg(0);   // a mean, not a count: an int truncated 52.5 to 52 and 0.5 to 0
@@ -82,9 +104,30 @@ StatusCode Pileup::execute(  generator::Event &ctx )
         continue;
       }
 
+      // High-pT selection (DSID 800831). It uses no random numbers, so marking does not change the sequence.
+      ++nTried; ++m_nGenerated;
+      int hard = 0;
+      if ( m_hardFilter > 0 ){
+        hard = HardFilter::evaluate( evt );
+        if ( m_hardFilter == 2 && hard == 0 ){
+          --iPileup;
+          continue;
+        }
+      }
+      ++m_nKept;
+
 
       const auto mb_event_t = sample_t();
       const auto mb_event_z = sample_z();
+
+      if ( m_truthWriter ){
+        evt.add_attribute( "lzt_event"  , std::make_shared<HepMC3::IntAttribute>( ctx.eventNumber() ) );
+        evt.add_attribute( "lzt_bc_id"  , std::make_shared<HepMC3::IntAttribute>( bc_id ) );
+        evt.add_attribute( "lzt_z_shift", std::make_shared<HepMC3::DoubleAttribute>( mb_event_z ) );
+        evt.add_attribute( "lzt_t_shift", std::make_shared<HepMC3::DoubleAttribute>( mb_event_t ) );
+        evt.add_attribute( "lzt_hard"   , std::make_shared<HepMC3::IntAttribute>( hard ) );
+        m_truthWriter->write_event( evt );
+      }
 
       // Find final charged particles with |eta| < etaMax
       det_acc_filter.filter( evt );
@@ -112,7 +155,8 @@ StatusCode Pileup::execute(  generator::Event &ctx )
                        vtx->position().pz() + mb_event_z, 
                        vtx->position().t()  + mb_event_t, 
                        part->momentum().e(), 
-                       part->momentum().pt() ); 
+                       part->momentum().pt(),
+                       hard ); 
 
             //MSG_INFO( "Eta =" << part->momentum().eta() << " Phi = " << part->momentum().phi() 
             //          << " Pid = " << part->pid() );
@@ -126,6 +170,7 @@ StatusCode Pileup::execute(  generator::Event &ctx )
 
   // Fill window specific information
   ctx.setTotmu( nPileUpMean );
+  ctx.setNtried( nTried );
   ctx.setAvgmu( nPileUpMean / nWin);
   
   return StatusCode::SUCCESS;
@@ -135,6 +180,12 @@ StatusCode Pileup::execute(  generator::Event &ctx )
 StatusCode Pileup::finalize()
 {
   MSG_INFO( "Finalize the Pileup Event." );
+  if ( m_hardFilter > 0 )
+    MSG_INFO( "HardFilter: " << m_nKept << " events kept of " << m_nGenerated << " generated" );
+  if ( m_truthWriter ){
+    m_truthWriter->close();
+    m_truthWriter.reset();
+  }
   if(generator()->finalize().isFailure()){
     MSG_FATAL("Its not possible to finalize the generator. Abort!");
   }

@@ -79,6 +79,19 @@ def parse_args():
                         dest='sigma_t', required=False,
                         type=float, default=200,
                         help="Gaussian spread (RMS, in ps) of the collision time.")
+    parser.add_argument('--hard-filter', action='store',
+                        dest='hard_filter', required=False,
+                        type=str, default='none', choices=['none', 'mark', 'keep'],
+                        help="Selection of the ATLAS high-pT minimum bias sample (DSID 800831: truth jet "
+                             "R = 0.6 with pT > 35 GeV, or prompt photon pT > 8 GeV, or B hadron pT > 5 GeV with "
+                             "a lepton pT > 4 GeV). 'mark' flags each event (branch p_hard) without changing the "
+                             "generated sequence; 'keep' writes only the events that pass (branch n_tried counts "
+                             "the events generated).")
+    parser.add_argument('--truth', action='store_true',
+                        dest='truth', required=False,
+                        help="Also write the full generator record of each event (all particles, status, "
+                             "parents and vertices) to a HepMC3 ROOT file next to the output "
+                             "(X.EVT.root -> X.TRUTH.root).")
     
     return merge_args(parser)
 
@@ -97,9 +110,14 @@ def main(events: List[int],
          pt_min_charged: float,
          pt_min_neutral: float,
          sigma_z: float,
-         sigma_t: float):
+         sigma_t: float,
+         hard_filter: str,
+         truth: bool):
 
     outputLevel = LoggingLevel.toC(logging_level)
+
+    # one truth file per job (X.EVT.<job>.root -> X.EVT.<job>.TRUTH.root), joined after the jobs
+    truth_file = output_file[:-len('.root')] + '.TRUTH.root' if truth else ""
 
     tape = EventTape("EventTape", OutputFile=output_file,
                      RunNumber=run_number)
@@ -126,6 +144,8 @@ def main(events: List[int],
                     PtMinNeutral=pt_min_neutral,
                     VertexSigmaZ=sigma_z,
                     VertexSigmaT=sigma_t,
+                    HardFilter={'none': 0, 'mark': 1, 'keep': 2}[hard_filter],
+                    TruthFile=truth_file,
     )
     tape += pileup
     tape.run(events)
@@ -151,5 +171,19 @@ if __name__ == "__main__":
         pt_min_charged=args.pt_min_charged,
         pt_min_neutral=args.pt_min_neutral,
         sigma_z=args.sigma_z,
-        sigma_t=args.sigma_t
+        sigma_t=args.sigma_t,
+        hard_filter=args.hard_filter,
+        truth=args.truth
     )
+
+    if args.truth and not args.dry_run:
+        # join the truth files of the jobs into X.TRUTH.root (X.EVT.root -> X.TRUTH.root)
+        import glob, shutil, subprocess
+        base  = args.output_file[:-len('.root')]
+        final = (base[:-len('.EVT')] if base.endswith('.EVT') else base) + '.TRUTH.root'
+        parts = sorted( glob.glob(base + '.*.TRUTH.root'), key=lambda f: int(f.split('.')[-3]) )
+        if len(parts) == 1:
+            shutil.move(parts[0], final)
+        elif len(parts) > 1:
+            subprocess.run(['hadd', '-f', final] + parts, check=True)
+            for f in parts: os.remove(f)

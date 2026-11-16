@@ -3,6 +3,10 @@
 
 #include "GenKernel/IAlgorithm.h"
 #include "GenKernel/IGenerator.h"
+#include <memory>
+#include <string>
+
+namespace HepMC3 { class WriterRootTree; }
 
 namespace generator{
 
@@ -30,6 +34,11 @@ namespace generator{
       float m_delta_phi;
       float m_ptMinCharged;
       float m_ptMinNeutral;
+      int m_hardFilter;          // 0: off, 1: mark the hard events (DSID 800831 selection), 2: keep only hard events
+      std::string m_truthFile;   // HepMC3 ROOT file with the full generator record of every event written (empty: none)
+      std::shared_ptr<HepMC3::WriterRootTree> m_truthWriter; //!
+      long m_nGenerated = 0; //!
+      long m_nKept = 0; //!
 
   };
 }
