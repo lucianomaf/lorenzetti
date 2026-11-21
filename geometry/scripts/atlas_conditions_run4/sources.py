@@ -112,6 +112,10 @@ def resolve():
                     "tags": {p: f"LARElecCalibMC{p}-R4-00" for p in ("Noise", "Pedestal", "Ramp")}}
     # Tile sampling fraction: Athena 25.0.21 TileConditions/python/TileSamplingFractionConfig.py forces this tag for Run 4
     src["tile_sfr"] = {"folder": "/TILE/OFL02/CALIB/SFR", "schema": "COOLOFL_TILE/OFLP200", "tag": "TileOfl02CalibSfr-SIM-07", "run": MC_RUN}
+    # Tile sample noise of the simulation (pedestal and the double Gaussian of TileDigitsMaker), tag from the global tag
+    path = "/TILE/OFL02/NOISE/SAMPLE"
+    src["tile_noise"] = {"folder": path, "schema": "COOLOFL_TILE/OFLP200", "tag": tag_in_global("COOLOFL_TILE", "OFLP200", path, MC_GLOBAL),
+                         "run": MC_RUN}
     os.makedirs(WORK, exist_ok=True)
     json.dump(src, open(os.path.join(WORK, "sources.json"), "w"), indent=1)
     return src
