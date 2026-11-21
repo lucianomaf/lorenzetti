@@ -55,6 +55,19 @@ of Run 4, COOL `/TILE/OFL02/CALIB/SFR`, tag `TileOfl02CalibSfr-SIM-07` (the tag 
 with the drawer defaults and the channel to cell map of the open Athena code (`TileCalibUtils.cxx`, `TileCablingService.cxx`). The source keeps
 the Run 1 arrangement in 32 drawers; a few PMTs have values that come from that arrangement, and the median of a ring is not affected by them.
 
+## `tile_run4_scale_by_ring.csv` (41 rings)
+
+The energy scale and the photoelectron yield of the Tile simulation of Run 4, median per ring (section, sampling, tower). Athena 25.0.21
+turns the visible energy of a hit into counts as counts = energy x sampling fraction / (MeV per count) (`TileDigitsMaker.cxx`), the MeV
+per count being the chain of `TileEMScale::calibrateChannel` (`TileEMScale.cxx`): four slopes of the channel that divide the amplitude
+(`TileCalibDrawerFlt::getCalib`, version 1), from the simulation COOL folders `/TILE/OFL02/CALIB/CIS/FIT/LIN`, `/LAS/LIN`, `/CES` and
+`/EMS` (tags of `OFLCOND-MC21-SDR-RUN4-02`: `TileOfl02CalibCisFitLin-COM-00`, `TileOfl02CalibLasLin-COM-00`, `TileOfl02CalibCes-SIM-12`,
+`TileOfl02CalibEms-COM-00`; run 350000). The non-linear tables (`CIS/FIT/NLN`, `LAS/NLN`) have fewer than two points and are the identity.
+Result: 11.637 MeV per count in the A and BC cells (81.84 counts per pC and 1.05 pC per GeV), 9.698 in the D cells (cesium slope 1.2),
+others in the E cells; values of the present 10-bit electronics (`mev_per_count_legacy_*`). `photoelectrons_per_gev`: the second value of
+`/TILE/OFL02/CALIB/SFR` (`TileOfl02CalibSfr-SIM-07`), used by `TileHitVecToCntTool.cxx` for the photoelectron statistics (70 in most
+rings). Script: `geometry/scripts/atlas_conditions_run4/tile_scale.py`.
+
 ## `tile_run4_noise_by_ring.csv` (41 rings × 2 gains)
 
 The Tile noise per sample, converted to the counts of the Phase-II front-end (FENICS), per ring (section, sampling, tower; both sides, every

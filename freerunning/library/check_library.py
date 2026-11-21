@@ -4,7 +4,7 @@ Per channel: number of hits and sum of the energy over the events that enter the
 a jet or a photon), from the FRHITS, against the same in the pieces of per_channel/. The number of hits must be equal; the energy sums
 must agree within the float32 rounding of each hit (relative 1e-6 of the sum of |energy|). Also checks the number of events of each
 sample (support/samples.json), that the events of the pieces are inside the library and that every piece of the index exists.
-Usage: python3 check_library.py <input list of make_support.py events> <library folder>
+Usage: python3 check_library.py <input list of make_support.py events> <library folder> [folder or URL of the pieces, default <library>/per_channel]
 """
 import json
 import os
@@ -15,6 +15,7 @@ import ROOT
 
 PREFIX = {"tile": "TileCalHit", "emb": "LArHitEMB", "emec": "LArHitEMEC", "hec": "LArHitHEC", "fcal": "LArHitFCAL"}
 listing, lib = sys.argv[1], sys.argv[2]
+pieces = sys.argv[3] if len(sys.argv) > 3 else os.path.join(lib, "per_channel")
 rows = [ln.split(",") for ln in open(listing).read().splitlines() if ln and not ln.startswith("#")]
 
 ref = {d: {} for d in PREFIX}  # channel -> [hits, energy, |energy|]
@@ -52,8 +53,9 @@ index = json.load(open(os.path.join(lib, "support", "per_channel_index.json")))
 for d in PREFIX:
     got = {}
     for info in index[d]:
-        f = os.path.join(lib, "per_channel", info["file"])
-        if not os.path.exists(f):
+        f = f"{pieces}/{info['file']}"
+        tf = ROOT.TFile.Open(f)
+        if not tf or tf.IsZombie():
             bad.append(f"missing piece {info['file']}")
             continue
         chn = ROOT.RDataFrame("channels", f).AsNumpy(["channel", "start", "n"])

@@ -22,6 +22,7 @@ python3 sources.py                  # resolves every COOL tag and POOL file thro
 python3 lorenzetti_cells.py work/lorenzetti_lar_cells.csv <FRHITS files>
 python3 tile_sfr.py                 # -> work/tables/tile_run4_sampling_fraction_by_ring.csv
 python3 tile_noise.py               # -> work/tables/tile_run4_noise_by_ring.csv
+python3 tile_scale.py               # -> work/tables/tile_run4_scale_by_ring.csv
 python3 bunch_train.py ../../data/atlas_conditions_run4/hllhc_bunch_train_ip1.csv   # -> work/tables/hllhc_bunch_train_ip1.csv, and the check
 python3 make_lar_tables.py         # -> work/tables/lar_run4_{constants,noise_autocorr,pulses}_by_ring.csv
 python3 phase_by_ring.py '' <FRHITS files of the hard production>   # -> work/tables/{lar,tile}_phase_by_ring.csv
@@ -40,6 +41,7 @@ python3 phase_by_ring.py '' <FRHITS files of the hard production>   # -> work/ta
 | `tile.py` | the Tile blob format, default drawers and channel to cell map of the open Athena code |
 | `tile_sfr.py` | the Tile sampling fraction per ring |
 | `tile_noise.py` | the Tile noise per ring and gain, converted to the FENICS counts |
+| `tile_scale.py` | the Tile MeV per count and photoelectrons per GeV of the simulation, per ring |
 | `bunch_train.py` | the HL-LHC bunch pattern at IP1, from the public filling scheme |
 | `phase_by_ring.py` | the sampling phase per ring, from the free-running hits of Lorenzetti |
 | `make_lar_tables.py` | the three LAr tables per ring |
