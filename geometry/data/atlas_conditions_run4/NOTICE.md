@@ -38,13 +38,13 @@ bands, the mean of the vectors of the band. Beyond 4 samples the correlation is 
 
 ## `lar_run4_pulses_by_ring.csv`
 
-The LAr pulse per ring and gain (high and medium), 1 ns apart, peak 1 at t = 0, total area zero. Source: the physics waves of the Response
+The LAr pulse per ring and gain (high and medium), 0.5 ns apart, peak 1 at t = 0, total area zero. Source: the physics waves of the Response
 Transformation Method, one per channel, COOL `/LAR/ElecCalibOfl/PhysWaves/RTM`, tag `LARElecCalibOflPhysWavesRTM-RUN2-UPD3-00`, run 520451
 (data global tag `CONDBR2-BLKPA-2026-01`, cabling tag `LARIdentifierOnOffIdMap-RUN2-001`). These are the pulses of the **present** LAr
 electronics: no per-channel pulse of the Phase-II electronics is public. The FCal waves in that folder are 156 ns long; after them the pulse
 continues with straight lines through the 32 samples at 25 ns of the `LArPileupShape` of the channel (COOL
 `/LAR/ElecCalibOfl/LArPileupShape`, tag `LARElecCalibOflLArPileupShape-RUN2-2018`), placed and scaled by least squares on the measured wave.
-How the pulse of a ring is made: each wave normalised to its peak with the peak at t = 0, resampled to 1 ns, the mean over the cells, a
+How the pulse of a ring is made: each wave normalised to its peak with the peak at t = 0, resampled to 0.5 ns, the mean over the cells, a
 constant subtracted so that the area is zero, and the peak brought back to 1; left out are waves still above 5% of their peak at their last
 point and cells whose peak time is more than 10 ns from the median of the ring.
 

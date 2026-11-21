@@ -5,8 +5,8 @@ and CREST. Output: WORK/tables/lar_run4_constants_by_ring.csv, lar_run4_noise_au
 
 Rings: EMB, EMEC and HEC, one per (detector, wheel, sampling, region, eta index) of the cell identifier, with the nominal |eta| of the
 Lorenzetti cell (unique in each ring); FCal, bands of |eta| 0.1 wide per module. Constants: median over the cells of the ring, with the number
-of cells more than 5% away from it. Pulse: mean of the waves of the ring, each normalised to its peak with the peak at t = 0, on a 1 ns
-grid, leaving out waves still above 5% of their peak at their last point and cells whose peak time is more than 10 ns from the median of the
+of cells more than 5% away from it. Pulse: mean of the waves of the ring, each normalised to its peak with the peak at t = 0, on a 0.5 ns
+grid (STEP), leaving out waves still above 5% of their peak at their last point and cells whose peak time is more than 10 ns from the median of the
 ring; a constant is subtracted over the window so that the area is zero, and the peak is brought back to 1. Noise autocorrelation: the vector
 of the representative channel of the ring (FCal: the mean of the representatives of the band).
 Usage: python3 make_lar_tables.py
@@ -18,6 +18,8 @@ import sys
 import urllib.request
 
 import numpy as np
+
+STEP = 0.5   # ns, time step of the pulse tables
 import uproot
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -176,15 +178,15 @@ with open(os.path.join(OUT, "lar_run4_pulses_by_ring.csv"), "w", newline="\n") a
                 med = np.median([i[2] for i in info])
                 info = [i for i in info if abs(i[2] - med) <= 10.0]
             if not info:
-                o.write(f"{k[0]},{k[1]},{lim[k][0]:.5f},{lim[k][1]:.5f},{name},{len(xs)},0,nan,nan,0,1.0,0,\n")
+                o.write(f"{k[0]},{k[1]},{lim[k][0]:.5f},{lim[k][1]:.5f},{name},{len(xs)},0,nan,nan,0,{STEP},0,\n")
                 continue
             st = max(-i[2] for i in info)
             en = min(-i[2] + (len(i[1]) - 1) * i[0] for i in info)
-            grid = np.arange(np.ceil(st), np.floor(en) + 0.5, 1.0)
+            grid = np.arange(np.ceil(st / STEP) * STEP, np.floor(en / STEP) * STEP + STEP / 2, STEP)
             m = np.mean([np.interp(grid, -i[2] + np.arange(len(i[1])) * i[0], i[1]) for i in info], axis=0)
             m = m - m.sum() / len(m)
             m = m / m[np.argmin(np.abs(grid))]
             tp = np.array([i[2] for i in info])
             o.write(f"{k[0]},{k[1]},{lim[k][0]:.5f},{lim[k][1]:.5f},{name},{len(xs)},{len(info)},{tp.mean():.4f},{tp.std():.4f},"
-                    f"{grid[0]:.1f},1.0,{len(m)}," + " ".join(f"{y:.6g}" for y in m) + "\n")
+                    f"{grid[0]:.1f},{STEP},{len(m)}," + " ".join(f"{y:.6g}" for y in m) + "\n")
 print(f"pulses: done -> {OUT}")
