@@ -1,4 +1,4 @@
-section,sampling,tower,n_cells,sampling_fraction,sampling_fraction_n_off5pct
+section,sampling,tower,n_pmts,sampling_fraction,sampling_fraction_n_off5pct
 1,0,0,256,32.56,0
 1,0,1,256,32.56,0
 1,0,2,256,32.56,0
@@ -34,11 +34,9 @@ section,sampling,tower,n_cells,sampling_fraction,sampling_fraction_n_off5pct
 2,1,14,256,33.77,0
 2,2,10,256,33.61,0
 2,2,12,256,33.74,0
-3,1,9,240,33.57,16
-3,2,8,252,33.46,0
-3,3,10,112,106,0
+3,1,9,256,33.57,32
+3,2,8,256,33.46,0
+3,3,10,128,106,0
 3,3,11,128,86,0
 3,3,13,128,74,0
 3,3,15,128,61,0
-4,4,0,16,1,0
-4,4,1,16,106,0
