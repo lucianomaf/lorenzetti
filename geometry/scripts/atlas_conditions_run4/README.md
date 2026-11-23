@@ -10,8 +10,16 @@ CERN or ATLAS account. They are the proof that the tables are public; see `NOTIC
 - Internet access to GitHub (the public HL-LHC filling scheme), to the ATLAS Frontier server (`atlasfrontier-ai.cern.ch:8000`, the COOL conditions database, read-only) and to CREST
   (`crest.cern.ch`, the new ATLAS conditions service). Neither asks for authentication.
 - Python 3 with numpy and uproot (the Lorenzetti container has numpy; `pip install --target <dir> uproot awkward` adds uproot).
-- A few free-running hits files of a Lorenzetti minimum-bias production (`simu_trf.py --free-running-hits`), for the |eta| of the cells,
-  and of a production of hard events (jet or photon of high transverse momentum), for the sampling phase.
+- Free-running hits files (`simu_trf.py --free-running-hits`) of the minimum-bias productions of `freerunning/production/`, the blocks
+  listed in `inputs/` (one block per line, `block events seed`, the blocks file of that recipe, which makes them again event by event):
+  - `inputs/a3_inclusivo_v1_cells_blocks.txt`: 41 blocks of the inclusive production `a3_inclusivo_v1` (2050 events), for the cells and
+    their |eta| (`lorenzetti_cells.py`);
+  - `inputs/a3_hard_v1_phase_blocks.txt`: 200 blocks of the hard production `a3_hard_v1` (10 000 events with a jet or a photon of high
+    transverse momentum), for the sampling phase (`phase_by_ring.py`).
+
+  For instance, with the environment of `freerunning/production/README.md`:
+  `bash ../../../freerunning/production/run_local.sh inclusive a3_inclusivo_v1 inputs/a3_inclusivo_v1_cells_blocks.txt prod` and
+  `bash ../../../freerunning/production/run_local.sh hard a3_hard_v1 inputs/a3_hard_v1_phase_blocks.txt prod`.
 
 ## Steps
 
@@ -19,13 +27,13 @@ CERN or ATLAS account. They are the proof that the tables are public; see `NOTIC
 export LZT_COND_WORK=work          # results go here
 export CVMFS_ROOT=/cvmfs            # where CernVM-FS is mounted
 python3 sources.py                  # resolves every COOL tag and POOL file through Frontier -> work/sources.json
-python3 lorenzetti_cells.py work/lorenzetti_lar_cells.csv <FRHITS files>
+python3 lorenzetti_cells.py work/lorenzetti_lar_cells.csv prod/a3_inclusivo_v1/frhits/*.FRHITS.root
 python3 tile_sfr.py                 # -> work/tables/tile_run4_sampling_fraction_by_ring.csv
 python3 tile_noise.py               # -> work/tables/tile_run4_noise_by_ring.csv
 python3 tile_scale.py               # -> work/tables/tile_run4_scale_by_ring.csv
 python3 bunch_train.py ../../data/atlas_conditions_run4/hllhc_bunch_train_ip1.csv   # -> work/tables/hllhc_bunch_train_ip1.csv, and the check
 python3 make_lar_tables.py         # -> work/tables/lar_run4_{constants,noise_autocorr,pulses}_by_ring.csv
-python3 phase_by_ring.py '' <FRHITS files of the hard production>   # -> work/tables/{lar,tile}_phase_by_ring.csv
+python3 phase_by_ring.py '' prod/a3_hard_v1/frhits/*.FRHITS.root   # -> work/tables/{lar,tile}_phase_by_ring.csv
 ```
 
 `make_lar_tables.py` reads about 1.5 GB of RTM waves from CernVM-FS and runs in some tens of minutes.

@@ -67,7 +67,8 @@ A block of 50 inclusive events takes about an hour on 4 cores (70 to 86 s per ev
 ## In HTCondor (lxplus)
 
 The jobs bring the build as a package: a `.tgz` of the home folder where it was made, with the repository built, GeoModel and the
-geometry dump (`atlas_geometry/`), mounted at the same path in the job, because the build keeps absolute paths. The image goes as a `.sif`
+geometry dump (`atlas_geometry/`), mounted at the same path in the job, because the build keeps absolute paths. `condor/make_package.sh`
+makes it on the machine of the build, after checking the files the jobs need, and says how to copy it to EOS and check it there. The image goes as a `.sif`
 (`apptainer build lorenzetti.sif docker://lorenzetti/lorenzetti@sha256:800d38bf…`, in a job: the interactive nodes of lxplus cannot build
 it). Fill in the environment line of `condor/production.sub` and submit, from `condor/`:
 

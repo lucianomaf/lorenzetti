@@ -90,6 +90,16 @@ Technical Design Report, CERN-2020-010, Table A-3, p. 347), as published in the 
 (https://github.com/giadarol/FillingPatterns). That repository declares no license, so its file is not copied here; `bunch_train.py`
 downloads it and checks that it gives this table.
 
+## `lar_phase_by_ring.csv` (LAr rings) and `tile_phase_by_ring.csv` (41 rings)
+
+The sampling phase per ring: the time, after the time of flight, at which the energy of hard events arrives in the cells of the ring, so
+that the samples of the free-running sequence fall on the peak of the pulse. These two tables are not ATLAS data: they are measured on the
+output of Lorenzetti itself, the free-running hits of 200 blocks of its hard minimum-bias production `a3_hard_v1` (10 000 events with a jet
+or a photon of high transverse momentum, the selection of the ATLAS sample 800831), with the time convention of the ATLAS simulation
+(`CaloHitMaker.cxx`). The blocks are listed in `geometry/scripts/atlas_conditions_run4/inputs/a3_hard_v1_phase_blocks.txt`; the recipe
+`freerunning/production/` makes them again, and `phase_by_ring.py` gives these tables from them (method in its header). The LAr rings are
+those of the LAr tables above.
+
 ## Numbers of the electronics and of the beam (no table)
 
 | Quantity | Value | Source |
