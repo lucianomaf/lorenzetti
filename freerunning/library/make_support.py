@@ -1,7 +1,8 @@
 """The support/ folder of the free-running library. Two steps:
 
   events  before the blocks: reads the EventNumber of every block and its hard-event marking, gives each kept event its global index and
-          writes support/samples.json (name, first index and number of events of each sample), support/productions.json,
+          writes support/samples.json (name, first index and number of events of each sample; in the hard sample also the fraction of
+          hard events per interaction, from the marking), support/productions.json,
           support/manifest.root (tree "manifest": global_index, sample, production, block, event_in_block, seed, hard_bits; hard_bits is -1
           in the hard sample, whose events are not marked) and the list of block jobs (blocks.csv: output name, FRHITS, marking, first
           global index, number of kept events)
@@ -29,7 +30,7 @@ def events(listing, lib, blocks_out):
     sup = os.path.join(lib, "support")
     os.makedirs(sup, exist_ok=True)
     samples, prods, man = [], [], {k: [] for k in ("global_index", "sample", "production", "block", "event_in_block", "seed", "hard_bits")}
-    jobs, idx = [], 0
+    jobs, idx, marked, marked_hard = [], 0, 0, 0
     for sample, prod, block, seed, frhits, marking in rows:
         if not samples or samples[-1]["name"] != sample:
             assert sample not in [s["name"] for s in samples], f"sample {sample} not contiguous in the list"
@@ -38,6 +39,9 @@ def events(listing, lib, blocks_out):
             prods.append(prod)
         evn, _ = c.read_block(frhits, [])
         mk = None if marking == "-" else c.read_marking(marking)
+        if mk is not None:
+            marked += len(mk)
+            marked_hard += sum(1 for b in mk.values() if b)
         keep = c.kept_events(evn, mk)
         for i in keep:
             e = int(evn[i])
@@ -47,6 +51,12 @@ def events(listing, lib, blocks_out):
             idx += 1
         jobs.append((f"{prod}_{block}.channels.root", frhits, marking, idx - len(keep), len(keep)))
         samples[-1]["n_events"] += len(keep)
+    # the fraction of hard events per interaction, for the mixing in the generator: the events with any bit of the marking over the marked
+    # inclusive events
+    if marked:
+        for smp in samples:
+            if smp["name"] == "hard":
+                smp.update(hard_fraction=marked_hard / marked, marked_events=marked, marked_hard_events=marked_hard)
     c.dump_json(samples, os.path.join(sup, "samples.json"))
     c.dump_json(prods, os.path.join(sup, "productions.json"))
     types = {"global_index": np.int32, "sample": np.int32, "production": np.int32, "block": np.int32, "event_in_block": np.int32,

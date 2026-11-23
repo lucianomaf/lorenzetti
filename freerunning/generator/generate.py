@@ -5,7 +5,8 @@ conditions of geometry/data/atlas_conditions_run4/. The options follow those of 
 
 Method (README.md of this folder):
 - Bunch crossings: the HL-LHC filling scheme (hllhc_bunch_train_ip1.csv), from --first-slot; a Poisson number of interactions of mean --mu
-  in each colliding bunch crossing; each interaction is a hard event with probability HARD_FRACTION, an inclusive one otherwise.
+  in each colliding bunch crossing; each interaction is a hard event with the probability of --hard-fraction (default: the fraction of the marking, in the
+  samples.json of the library), an inclusive one otherwise.
 - Events: in the kept orbits each event of a sample is used once per pass, in an order shuffled from the seed (a new shuffle in each pass);
   pass p uses the symmetry copy copy_order[p] (the event as it is in the first pass, then rotated by k x 2 pi / 64 and reflected between the
   sides), the same copy in the whole detector; --reuse off stops when a sample runs out. The warm-up before the kept samples and the few
@@ -32,7 +33,8 @@ from cells import CLUSTER_DETA, CLUSTER_DPHI, TOWER_LAST, Cells  # noqa: E402
 from library import Library  # noqa: E402
 
 VERSION = "0.1.0"
-HARD_FRACTION = 0.00338  # hard events per interaction: the fraction the hard filter keeps in the inclusive production (F61)
+HARD_FRACTION_V1 = 0.00338  # hard events per interaction in the marking of the production a3_inclusivo_v1, for libraries whose
+# samples.json does not carry the fraction (made before it did)
 N_COPIES = 128
 PHOTOSTAT_WINDOW = 62.5  # ns, TileHitVecToCntTool PhotostatWindow
 TS, NBC = cnd.TS, cnd.NBC
@@ -61,6 +63,8 @@ def parse(argv=None):
                    "reflected copies; off: stop with an error")
     a.add_argument("--tile-tail", choices=("on", "off"), default="off", help="long tail of the Tile pulse (AC coupling); default off")
     a.add_argument("--tile-tail-tau", type=float, default=50.0, help="time constant of the Tile tail, in microseconds (default 50)")
+    a.add_argument("--hard-fraction", type=float, help="hard events per interaction (default: the fraction of the marking, in the "
+                   "samples.json of the library)")
     a.add_argument("--no-hits", action="store_true", help="do not write the hits tree")
     a.add_argument("--library", required=True, help="the library folder (per_channel/ and support/)")
     a.add_argument("--support", help="the support folder (default: <library>/support)")
@@ -95,7 +99,7 @@ def interactions(A, lib, colliding, W, K, P):
     kept_bc = np.arange(W, W + K)
     n = rk.poisson(A.mu, K) * colliding[W:W + K]
     bc = np.repeat(kept_bc, n)
-    hard = rk.random(len(bc)) < HARD_FRACTION
+    hard = rk.random(len(bc)) < A.hard_fraction
     passes = {}
     for s_i, s in enumerate(samples):
         b = bc[hard == bool(s_i)]
@@ -119,7 +123,7 @@ def interactions(A, lib, colliding, W, K, P):
     idx = np.r_[np.arange(0, W), np.arange(W + K, W + K + P)]
     n = rw.poisson(A.mu, len(idx)) * colliding[idx]
     b = np.repeat(idx, n)
-    hard = rw.random(len(b)) < HARD_FRACTION
+    hard = rw.random(len(b)) < A.hard_fraction
     ev = np.where(hard, samples[1]["first_index"] + rw.integers(samples[1]["n_events"], size=len(b)),
                   samples[0]["first_index"] + rw.integers(samples[0]["n_events"], size=len(b)))
     out_bc.append(b), out_ev.append(ev), out_cp.append(rw.integers(N_COPIES, size=len(b)))
@@ -156,6 +160,8 @@ def main(argv=None):
                 print(f"{d['name']}  {d['id']}")
         return 0
     lib = Library(A.library, support)
+    if A.hard_fraction is None:
+        A.hard_fraction = lib.sample("hard").get("hard_fraction", HARD_FRACTION_V1)
     cond = cnd.Conditions()
     rsel = np.random.default_rng([A.seed, 4])
     if A.cell is not None:
@@ -298,7 +304,7 @@ def write(A, label, info, setup, chan, r, sat, a_n, hit_rows, slots, colliding, 
     f = ROOT.TFile(A.output, "RECREATE")
     par = dict(version=VERSION, commit=git_commit(), command=" ".join(sys.argv), selection=label, seed=A.seed, mu=A.mu, orbits=A.orbits,
                first_slot=A.first_slot, filling_scheme="25ns_2760b_2748_2492_2574_288bpi_13inj_800ns_bs200ns (hllhc_bunch_train_ip1.csv)",
-               library=os.path.abspath(A.library), samples=lib.samples, hard_fraction=HARD_FRACTION, reuse=A.reuse, passes=passes,
+               library=os.path.abspath(A.library), samples=lib.samples, hard_fraction=A.hard_fraction, reuse=A.reuse, passes=passes,
                truth_unit=A.truth_unit, gains=A.gains, tile_tail=A.tile_tail, tile_tail_tau_us=A.tile_tail_tau if tail else None,
                conditions="geometry/data/atlas_conditions_run4", warmup_samples=W,
                tile_pulse=f"CR-RC^{cnd.TILE_N}, tau {cnd.TILE_TAU} ns", tile_noise="one Gaussian, sigma keeping the variance of the double Gaussian",

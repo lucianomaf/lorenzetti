@@ -25,6 +25,7 @@ python3 generate.py --library <library> --list-cells EMB2                       
 | `--gains hg,lg` | gains written (default both) |
 | `--reuse on\|off` | when a sample of the library runs out: rotated and reflected copies (default), or stop |
 | `--tile-tail on\|off`, `--tile-tail-tau` | long tail of the Tile pulse (AC coupling, zero area), off by default; time constant 50 us |
+| `--hard-fraction` | hard events per interaction (default: the fraction of the marking, written by the library in `samples.json`; 0.338%, the marking of `a3_inclusivo_v1`, for a library made before) |
 | `--no-hits` | do not write the hits tree |
 | `--library`, `--support`, `--output` | paths |
 
@@ -40,8 +41,8 @@ python3 generate.py --library <library> --list-cells EMB2                       
 ## Method
 
 - **Bunch crossings.** HL-LHC standard filling scheme (`hllhc_bunch_train_ip1.csv`), Poisson interactions of mean `--mu` in the colliding
-  bunch crossings; each interaction is hard with probability 0.338% (the fraction of the hard filter in the inclusive production),
-  inclusive otherwise.
+  bunch crossings; each interaction is hard with the probability of `--hard-fraction` (by default the fraction of hard events in the
+  marking of the inclusive production, from the library), inclusive otherwise.
 - **Events.** In the kept orbits each event of a sample is used once per pass, in an order shuffled from the seed, a new shuffle in each
   pass; pass p uses copy `copy_order[p]`: the event as it is first, then the 127 copies (rotation by k x 2 pi / 64, k = 0..63, and
   reflection between the sides) in an order from the seed, the same copy in the whole detector. Rotation: exact in Tile, EMB, EMEC and the

@@ -13,7 +13,12 @@ FRHITS files (`simu_trf.py --free-running-hits --free-running-atlas-format`), on
 - **hard**: the same Pythia 8 minimum bias, with only the events that pass the hard filter sent to Geant4. Every event enters.
 
 The input list has one block per line, `sample,production,block,seed,FRHITS,marking` (marking `-` in the hard sample), with the
-inclusive sample first. The order of the lines is the order of the global event index.
+inclusive sample first. The order of the lines is the order of the global event index. `make_list.py` writes it from the folders of the productions
+(`../production/README.md`), which hold `frhits/` and, for an inclusive production, `hard/` with the markings:
+
+```bash
+python3 make_list.py list.csv inclusive:<folder>/a3_inclusivo_v1:100000 inclusive:<folder>/a3_inclusivo_v2:102000 hard:<folder>/a3_hard_v1:200000
+```
 
 ## Layout
 
@@ -21,7 +26,7 @@ inclusive sample first. The order of the lines is the order of the global event 
 |---|---|
 | `per_channel/<subdetector>_<NNN>.root` | pieces of `tile`, `emb`, `emec`, `hec`, `fcal`, each a contiguous range of whole channels: tree `channels` (`channel`, `start`, `n`) and tree `hits` (`event`, `energy`, `time`), sorted by channel, event and time |
 | `support/per_channel_index.json` | per subdetector, for each piece: file, first and last channel, number of channels and of hits |
-| `support/samples.json` | name, first global index and number of events of each sample |
+| `support/samples.json` | name, first global index and number of events of each sample; in the hard sample also `hard_fraction`, the events with any bit of the marking over the marked inclusive events, which the generator uses as the fraction of hard interactions |
 | `support/productions.json`, `support/manifest.root` | per global index: production, block, event number in the block, Pythia seed of the block, hard-event bits (-1 in the hard sample) |
 | `support/tile_cells.csv` | per PMT: identifier, section, side, module, tower, sampling, PMT, eta, phi |
 | `support/lar_cells.csv` | per cell: identifier, subdetector, layer, ring, eta, phi; `layer` and `ring` are the keys of the LAr tables of `geometry/data/atlas_conditions_run4/` |

@@ -58,7 +58,7 @@ def test_channel_alone_equals_channel_in_a_tower():
 
 def test_each_event_once_per_pass_and_a_new_order():
     class A:
-        seed, mu, reuse = 5, 0.2, "on"
+        seed, mu, reuse, hard_fraction = 5, 0.2, "on", 0.00338
     lib = g.Library(LIB)
     cond = cnd.Conditions()
     K = 3 * cnd.NBC
