@@ -59,6 +59,7 @@ Here is an overview of the repository structure:
 ├── 📂 reconstruction/   # Algorithms for signal processing and object reconstruction.
 ├── 📂 docs/             # Documentation, guides, and Jupyter notebook tutorials.
 ├── 📂 examples/         # Scripts and configuration examples for large-scale productions.
+├── 📂 freerunning/      # Free-running sequences for the HL-LHC: minimum-bias productions, library and generator.
 ├── 📂 ci_tests/         # Continuous Integration checks and validation workflows.
 ├── 📄 CMakeLists.txt    # Main CMake configuration file.
 ├── 📄 Makefile          # Shortcut commands for building and testing.
@@ -266,6 +267,18 @@ The EMEC charge collection reads three files of `geometry/data`. Two are in the 
 | EMEC field map, `ec.fieldzv03` | 24 MB | `/cvmfs/atlas.cern.ch/repo/sw/software/23.0/atlas/offline/ReleaseData/v20/LArG4EC/ec.fieldzv03` | `--atlas-emec-field-map`, default `geometry/data/ec.fieldzv03` |
 
 Copy it to `geometry/data`, or give its path with `--atlas-emec-field-map`.
+
+## 📈 Free-running sequences for the HL-LHC
+
+Digitised samples at 40 MHz of selected calorimeter channels with the pile-up of Run 4, built from minimum-bias events of the v2
+detector and public ATLAS conditions. Four READMEs cover it, in the order of the chain:
+
+| Step | README |
+| :--- | :--- |
+| Minimum-bias productions (inclusive and high-pT, the selection of `generator/filters/src/HardFilter.cxx`) | `freerunning/production/README.md` |
+| Library: the hits reorganised by channel | `freerunning/library/README.md` |
+| Generator of the sequences, with the smallest end-to-end run | `freerunning/generator/README.md` |
+| ATLAS Run 4 conditions (`geometry/data/atlas_conditions_run4/`) rebuilt from public sources | `geometry/scripts/atlas_conditions_run4/README.md` |
 
 ## 🤝 Contribution
 

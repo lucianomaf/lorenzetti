@@ -49,3 +49,6 @@ doc/source/cxx/
 doc/mock_site_packages/
 doc/get-pip.pydoc/venv*/
 doc/source/guides/*.ipynb
+
+# external file of the v2 detector (README.md, EMEC charge collection)
+geometry/data/ec.fieldzv03
