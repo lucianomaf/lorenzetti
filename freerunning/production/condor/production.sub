@@ -1,0 +1,27 @@
+# Example submit file for lxplus (see ../README.md): one job per line of the blocks file ("block events seed").
+# Submit from this folder: condor_submit production.sub mode=inclusive production=a3_inclusivo_v1 blocks=v1_blocks.txt
+# Fill in the paths of the environment line (<storage>: the EOS folder of the image, the package and the output).
+executable              = block_job.sh
+arguments               = "$(mode) $(production) $(block) $(nev) $(seed) 4 110"
+environment             = "PROD_IMAGE=<storage>/lorenzetti_800d38bf.sif PROD_PACKAGE=<storage>/lzt_build.tgz PROD_HOME=/home/<user> PROD_REPO=lorenzetti PROD_OUT=<storage>/minbias PROD_CODE=<this checkout>/freerunning/production"
+transfer_output_files   = ""
+output                  = logs/$(production)_$(block).$(ClusterId).out
+error                   = logs/$(production)_$(block).$(ClusterId).err
+log                     = logs/$(production).$(ClusterId).log
+request_cpus            = 4
+request_memory          = 10 GB
+request_disk            = 4 GB
+MY.SendCredential       = True
+max_retries             = 3
+success_exit_code       = 0
+# release what the system held; what the user held (HoldReasonCode 1) stays
+periodic_release        = (HoldReasonCode =!= 1) && (NumJobStarts < 4) && ((time() - EnteredCurrentStatus) > 600)
+
+# Site-specific example (our lxplus setup in November 2026), not part of the recipe: low priority, at most 60 jobs at a time, the 8 h
+# flavour (the 2 h one cut slow blocks) and two groups of machines left out (jobs hung there).
+priority                = -10
+max_materialize         = 60
++JobFlavour             = "workday"
++MaxRuntime             = 28800
+requirements            = (Machine =!= "b9p34p0016.cern.ch") && !regexp("^b9p34p10", Machine)
+queue block, nev, seed from $(blocks)

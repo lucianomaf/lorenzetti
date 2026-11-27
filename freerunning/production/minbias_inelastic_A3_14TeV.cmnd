@@ -1,0 +1,55 @@
+! Inelastic minimum bias, pp at 14 TeV, ATLAS A3 tune (NNPDF2.3 LO). The card of the free-running productions (freerunning/production/).
+! One interaction per event: gen_minbias.py --pileup-per-bunch-crossing 1 --bc-id-start 0 --bc-id-end 0
+!
+! Source of the A3: athena, Generators/Pythia8_i/share/common/Pythia8_A3_NNPDF23LO_Common.py
+! (included by Pythia8_A3_NNPDF23LO_EvtGen_Common.py, the version ATLAS uses for the pile-up).
+! Differences from ATLAS:
+!  - PDF from the internal table of Pythia (PDF:pSet = 13 = NNPDF2.3 QCD+QED LO, alpha_s = 0.130),
+!    the same set ATLAS loads through LHAPDF6 (NNPDF23_lo_as_0130_qed);
+!  - no EvtGen (changes only the fragmentation of b hadrons, rare in minimum bias);
+!  - A3 was tuned with Pythia 8.186; here it runs with 8.313.
+
+! 1) Output
+Init:showChangedSettings = on
+Init:showChangedParticleData = off
+Next:numberCount = 1000
+Next:numberShowInfo = 1
+Next:numberShowProcess = 0
+Next:numberShowEvent = 0
+
+! 2) Tune: it must come before the parameters, because reading it resets values
+Tune:ee = 7
+Tune:pp = 14
+
+! 3) Beams
+Beams:idA = 2212
+Beams:idB = 2212
+Beams:eCM = 14000.
+
+! 4) Process: inelastic only (without the elastic part of SoftQCD:all)
+SoftQCD:inelastic = on
+
+! 5) A3 parameters
+PDF:pSet = 13
+MultipartonInteractions:bProfile = 2
+MultipartonInteractions:pT0Ref = 2.45
+MultipartonInteractions:ecmPow = 0.21
+MultipartonInteractions:coreRadius = 0.55
+MultipartonInteractions:coreFraction = 0.9
+SigmaDiffractive:PomFlux = 4
+SigmaDiffractive:PomFluxEpsilon = 0.07
+SigmaDiffractive:PomFluxAlphaPrime = 0.25
+SigmaElastic:rho = 0.0
+SigmaDiffractive:mode = 0
+SigmaTotal:sigmaAXB = 0
+SigmaDiffractive:OwnbMinDD = 5
+ColourReconnection:range = 1.8
+
+! 6) ATLAS base (Pythia8_Base_Fragment.py): particles with c*tau0 > 10 mm
+!    (K0S, Lambda, ...) leave Pythia stable and decay in Geant4
+Main:timesAllowErrors = 500
+ParticleDecays:limitTau0 = on
+ParticleDecays:tau0Max = 10.0
+
+! 7) Seed: overwritten by the -s option of gen_minbias.py (Pythia8Gen.cxx)
+Random:setSeed = on
