@@ -10,7 +10,8 @@ Method (README.md of this folder):
 - Events: in the kept orbits each event of a sample is used once per pass, in an order shuffled from the seed (a new shuffle in each pass);
   pass p uses the symmetry copy copy_order[p] (the event as it is in the first pass, then rotated by k x 2 pi / 64 and reflected between the
   sides), the same copy in the whole detector; --reuse off stops when a sample runs out. The warm-up before the kept samples and the few
-  bunch crossings after them draw events with replacement, each with a random copy, from a random stream of their own.
+  bunch crossings after them draw events with replacement, each with a random copy among those the kept samples use, from a random stream
+  of their own.
 - Signal: each hit adds counts x pulse(25 (n - m) + phase - t) to sample n (m its bunch crossing, t its time, phase the sampling phase of the
   ring, the pulse with its peak at 0). Tile: photoelectron statistics as Athena (TileHitVecToCntTool, type 2), per channel and bunch crossing.
 - Noise, pedestal, rounding (floor(x + 0.5)) and saturation per gain; truth a[n]: each hit in the sample of the peak of its pulse.
@@ -33,7 +34,7 @@ import cxx  # noqa: E402
 from cells import CLUSTER_DETA, CLUSTER_DPHI, TOWER_LAST, Cells  # noqa: E402
 from library import Library  # noqa: E402
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 HARD_FRACTION_V1 = 0.00338  # hard events per interaction in the marking of the production a3_inclusivo_v1, for libraries whose
 # samples.json does not carry the fraction (made before it did)
 N_COPIES = 128
@@ -121,7 +122,8 @@ def interactions(A, lib, colliding, W, K, P):
         passes[s["name"]] = int(p[-1]) + 1 if len(b) else 0
         del q, p, ev
     del bc, hard
-    # warm-up and after: with replacement, random copy
+    # warm-up and after: with replacement, a random copy among those of the kept samples (no copy is read for them alone)
+    used = order[:max(1, *passes.values())]
     rw = np.random.default_rng([A.seed, 1])
     idx = np.r_[np.arange(0, W), np.arange(W + K, W + K + P)].astype(np.int32)
     n = rw.poisson(A.mu, len(idx)) * colliding[idx]
@@ -129,7 +131,7 @@ def interactions(A, lib, colliding, W, K, P):
     hard = rw.random(len(b)) < A.hard_fraction
     ev = np.where(hard, samples[1]["first_index"] + rw.integers(samples[1]["n_events"], size=len(b)),
                   samples[0]["first_index"] + rw.integers(samples[0]["n_events"], size=len(b))).astype(np.int32)
-    out_bc.append(b), out_ev.append(ev), out_cp.append(rw.integers(N_COPIES, size=len(b)).astype(np.int16))
+    out_bc.append(b), out_ev.append(ev), out_cp.append(used[rw.integers(len(used), size=len(b))].astype(np.int16))
     bc, ev, cp = np.concatenate(out_bc), np.concatenate(out_ev), np.concatenate(out_cp)
     del out_bc, out_ev, out_cp, b, hard
     o = np.lexsort((ev, cp))
@@ -142,9 +144,12 @@ def photostat_scale(rng, pe):
     out = np.ones_like(pe)
     big = pe > 20
     out[big] = np.maximum(0.0, rng.normal(pe[big], np.sqrt(pe[big]))) / pe[big]
-    for i in np.flatnonzero((pe > 0) & ~big):
-        k = rng.poisson(pe[i])
-        out[i] = (np.maximum(0.0, rng.normal(1.0, 1.0, k)).sum() / 1.08332 / k) if k > 0 else 0.0
+    # below 20: all the Poisson numbers, then all the single-photoelectron amplitudes, in the order of the bunch crossings
+    small = np.flatnonzero((pe > 0) & ~big)
+    k = rng.poisson(pe[small])
+    amp = np.maximum(0.0, rng.normal(1.0, 1.0, int(k.sum())))
+    tot = np.bincount(np.repeat(np.arange(len(small)), k), weights=amp, minlength=len(small))
+    out[small] = np.where(k > 0, tot / 1.08332 / np.maximum(k, 1), 0.0)
     return out
 
 
@@ -385,7 +390,8 @@ def write(A, label, info, setup, chan, r, sat, a_n, hit_rows, slots, colliding, 
         cols = [np.ascontiguousarray(np.concatenate([r[i] for r in hit_rows]) if hit_rows
                                      else np.zeros(0, np.float32 if i in (2, 3) else np.int32)) for i in range(7)]
         hit_rows.clear()
-        cxx.load().lzt_write_hits(len(cols[0]), *cols)
+        n_hits = len(cols[0])  # cppyy does not take an empty array as a pointer: one dummy element when there are no hits
+        cxx.load().lzt_write_hits(n_hits, *(c if n_hits else np.zeros(1, c.dtype) for c in cols))
     f.Close()
 
 

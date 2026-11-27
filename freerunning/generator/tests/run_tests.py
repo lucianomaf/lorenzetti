@@ -84,6 +84,36 @@ def test_each_event_once_per_pass_and_a_new_order():
         raise AssertionError("--reuse off did not stop when the events ran out")
 
 
+def test_warmup_uses_the_copies_of_the_kept_samples():
+    class A:
+        seed, mu, reuse, hard_fraction = 5, 0.2, "on", 0.00338
+    lib = g.Library(LIB)
+    cond = cnd.Conditions()
+    K = 3 * cnd.NBC
+    col = np.r_[np.ones(2000, bool), np.tile(cond.train, 3), np.ones(10, bool)]
+    bc, ev, cp, passes = g.interactions(A, lib, col, 2000, K, 10)
+    kept = (bc >= 2000) & (bc < 2000 + K)
+    assert (~kept).sum() > 100, "the test needs interactions in the warm-up"
+    assert set(np.unique(cp[~kept])) <= set(np.unique(cp[kept])), "the warm-up uses a copy the kept samples do not"
+
+
+def test_photostatistics():
+    rng = np.random.default_rng(1)
+    m1 = 1.08332  # mean of max(0, N(1, 1)): Phi(1) + phi(1)
+    var1 = (2 * 0.8413447 + 0.2419707) - m1 * m1  # its variance: second moment 2 Phi(1) + phi(1)
+    for pe in (0.5, 5.0, 15.0, 50.0):
+        s = g.photostat_scale(rng, np.full(200_000, pe))
+        if pe <= 20:  # Poisson k, then the mean of k single-photoelectron amplitudes over m1 (0 when k = 0)
+            k = np.arange(1, 400)
+            pk = np.exp(-pe + k * math.log(pe) - np.array([math.lgamma(x + 1) for x in k]))
+            p0 = math.exp(-pe)
+            mean, var = 1 - p0, float(np.sum(pk * var1 / m1 ** 2 / k)) + p0 * (1 - p0)
+        else:  # Gaussian of width sqrt(pe)
+            mean, var = 1.0, 1 / pe
+        assert abs(s.mean() - mean) < 0.01, f"photostatistics mean {s.mean():.4f} against {mean:.4f} at {pe} photoelectrons"
+        assert abs(s.var() / var - 1) < 0.05, f"photostatistics variance {s.var():.5f} against {var:.5f} at {pe} photoelectrons"
+
+
 def test_copies():
     cells = Cells(os.path.join(LIB, "support"))
     for x, d in list(cells.tile.items())[:200]:

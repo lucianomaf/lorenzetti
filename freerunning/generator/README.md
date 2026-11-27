@@ -48,11 +48,11 @@ python3 generate.py --library <library> --list-cells EMB2                       
   reflection between the sides) in an order from the seed, the same copy in the whole detector. Rotation: exact in Tile, EMB, EMEC and the
   HEC up to |eta| 2.5; k / 2 cells in the HEC rings of 32 cells; none in the FCal. Reflection: by the identifier, every subdetector. The
   warm-up (the longest pulse; 10 tau with the Tile tail) and the bunch crossings after the kept ones draw events with replacement, with a
-  random copy, from a stream of their own.
+  random copy among those the kept samples use (no copy is read for the warm-up alone), from a stream of their own.
 - **Signal.** Each hit adds counts x pulse(25 (n - m) + phase - t) to sample n; pulse peak 1 at t = 0; LAr: the pulse of the ring, linear
   interpolation on 0.5 ns; Tile: CR-RC^4, tau = 10 ns; phase of the ring, continuous. Tile photoelectron statistics as Athena
   (TileHitVecToCntTool, type 2: Gaussian above 20 photoelectrons, Poisson with the single-photoelectron spectrum below), per channel and
-  bunch crossing, energy within +-62.5 ns, on the amplitude only.
+  bunch crossing, energy within +-62.5 ns, on the amplitude only; the draws of all the bunch crossings of a channel are made together.
 - **Scale.** LAr: counts = E_visible / fsampl / (adc2mev_hg_mc x ramp_r4 / ramp_hg_mc). Tile: counts = E_visible x sampling fraction / (MeV
   per count of the Run 4 simulation x 0.525), low gain 40 times fewer.
 - **Noise and digitisation.** LAr: white Gaussian through an AR(4) filter that reproduces the correlation of the ring at lags 1-4, sigma of
