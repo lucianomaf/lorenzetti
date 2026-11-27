@@ -5,7 +5,7 @@ Per channel and gain: counts per MeV of visible energy, pedestal, top of the ADC
   the medium-gain rows of the pulse and noise-correlation tables; noise: white Gaussian through an autoregressive filter of order 4 that
   reproduces the correlation of the ring at lags 1 to 4 (Yule-Walker), with the sigma of the front end; 15-bit ADC, pedestal 8192.
 - Tile: counts_hg = E_visible x sampling fraction / (MeV per count of the Run 4 simulation x 0.525), low gain 40 times fewer counts;
-  pulse CR-RC^4, tau = 10 ns, optionally with a first-order AC coupling (long tail); noise: one Gaussian, the sigma that keeps the variance
+  pulse CR-RC^n (n and tau from generate.py, default n = 4, tau = 10 ns), optionally with a first-order AC coupling (long tail); noise: one Gaussian, the sigma that keeps the variance
   of the double Gaussian of the table; photoelectrons per MeV of visible energy for the photoelectron statistics; 12-bit ADC, pedestal 90.
 """
 import csv
@@ -24,7 +24,9 @@ LAR_PEDESTAL, LAR_TOP = 8192.0, 32767
 TILE_PEDESTAL, TILE_TOP = 90.0, 4095
 TILE_FENICS_SCALE = (26.25 / 12.5) * (1023.0 / 4095.0)  # MeV per count of the FENICS high gain over that of the present electronics
 TILE_GAIN_RATIO = 40.0
-TILE_N, TILE_TAU = 4, 10.0  # CR-RC^4, tau in ns
+TILE_N, TILE_TAU = 4, 10.0  # default CR-RC^n: n = 4, tau = 10 ns
+TILE_N_MAX, TILE_TAU_MIN = 100, 1.0  # limits of --crrc-n and --crrc-tau, as in the generator of ATLAS (calo-freerunning-minbias 2.22.0)
+TILE_PULSE_END = 1e-6  # the pulse ends after its peak where it falls below this fraction of the peak
 GAINS = ("hg", "lg")
 
 
@@ -34,29 +36,38 @@ def rows(name):
 
 
 def tile_pulse(t, n=TILE_N, tau=TILE_TAU):
-    """CR-RC^n with its peak, 1, at t = 0 (ns)"""
+    """CR-RC^n, (x)^n exp(n (1 - x)) with x = (t + n tau) / (n tau), with its peak, 1, at t = 0 (ns)"""
     x = (np.asarray(t, float) + n * tau) / (n * tau)
     out = np.zeros_like(x)
     m = x > 0
-    out[m] = x[m] ** n * np.exp(n * (1 - x[m]))
+    out[m] = np.exp(n * (np.log(x[m]) + 1 - x[m]))
     return out
 
 
-def tile_pulse_end(eps=1e-6):
-    t = np.arange(0, 2000, 0.5)
-    return float(t[np.argmax(tile_pulse(t) < eps)])
+def tile_pulse_end(n=TILE_N, tau=TILE_TAU, eps=TILE_PULSE_END):
+    """the first point of the 0.5 ns grid after the peak (t = 0) where the CR-RC^n is below eps: x^n exp(n (1 - x)) = eps solved for x > 1
+    by bisection, rounded up to the grid"""
+    lo, hi = 1.0, 2.0
+    while n * (math.log(hi) + 1 - hi) > math.log(eps):
+        hi *= 2
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if n * (math.log(mid) + 1 - mid) > math.log(eps) else (lo, mid)
+    return 0.5 * math.ceil((hi - 1) * n * tau / 0.5)
 
 
 class TileTail:
-    """the CR-RC^4 pulse after a first-order AC coupling of time constant tau (ns): h(t) - u(t), u(t) = (1/tau) int h(t') e^{-(t-t')/tau}
-    dt', zero total area. u is tabulated on 0.5 ns up to T1 = 1 us after the peak; beyond, u(t) = u(T1) e^{-(t - T1)/tau} exactly, since h is
-    zero there."""
+    """the CR-RC^n pulse after a first-order AC coupling of time constant tau (ns): h(t) - u(t), u(t) = (1/tau) int h(t') e^{-(t-t')/tau}
+    dt', zero total area. u is tabulated on 0.5 ns up to T1 after the peak (1 us, or the end of a longer pulse); beyond, u(t) = u(T1)
+    e^{-(t - T1)/tau}, with h below 1e-6 of its peak there."""
 
-    def __init__(self, tau, t1=1000.0, dt=0.5):
+    def __init__(self, tau, n=TILE_N, tau_pulse=TILE_TAU, dt=0.5):
+        self.n, self.tau_pulse = n, float(tau_pulse)
+        t1 = max(1000.0, tile_pulse_end(n, tau_pulse))
         self.tau, self.t1, self.dt = float(tau), t1, dt
-        t0 = -TILE_N * TILE_TAU
+        t0 = -n * self.tau_pulse
         self.grid = np.arange(t0, t1 + dt / 2, dt)
-        h = tile_pulse(self.grid)
+        h = tile_pulse(self.grid, n, self.tau_pulse)
         a = math.exp(-dt / self.tau)
         u = np.zeros_like(h)
         for i in range(1, len(h)):  # exact for a piecewise-linear h
@@ -67,7 +78,7 @@ class TileTail:
     def short(self, t):
         """h - u on the tabulated range (zero outside it)"""
         t = np.asarray(t, float)
-        out = tile_pulse(t) - np.interp(t, self.grid, self.u, left=0.0, right=0.0)
+        out = tile_pulse(t, self.n, self.tau_pulse) - np.interp(t, self.grid, self.u, left=0.0, right=0.0)
         out[t > self.t1] = 0.0
         return out
 

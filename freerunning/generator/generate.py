@@ -13,7 +13,8 @@ Method (README.md of this folder):
   bunch crossings after them draw events with replacement, each with a random copy among those the kept samples use, from a random stream
   of their own.
 - Signal: each hit adds counts x pulse(25 (n - m) + phase - t) to sample n (m its bunch crossing, t its time, phase the sampling phase of the
-  ring, the pulse with its peak at 0). Tile: photoelectron statistics as Athena (TileHitVecToCntTool, type 2), per channel and bunch crossing.
+  ring, the pulse with its peak at 0). Tile: the CR-RC^n of --crrc-n and --crrc-tau, with one orbit of warm-up and one after the kept
+  samples whatever n and tau, so a family shares its deposits; photoelectron statistics as Athena (TileHitVecToCntTool, type 2), per channel and bunch crossing.
 - Noise, pedestal, rounding (floor(x + 0.5)) and saturation per gain; truth a[n]: each hit in the sample of the peak of its pulse.
 - The same seed gives the same samples for a channel whatever the selection: the interactions and events come from one stream for the whole
   detector, the noise and the photoelectron statistics of a channel from the seed and its identifier.
@@ -34,10 +35,12 @@ import cxx  # noqa: E402
 from cells import CLUSTER_DETA, CLUSTER_DPHI, TOWER_LAST, Cells  # noqa: E402
 from library import Library  # noqa: E402
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 N_COPIES = 128
 PHOTOSTAT_WINDOW = 62.5  # ns, TileHitVecToCntTool PhotostatWindow
 TS, NBC = cnd.TS, cnd.NBC
+TILE_ORBIT_NS = NBC * TS  # with Tile channels: one orbit of warm-up and one after the kept samples, whatever the CR-RC^n, so the members
+# of the family of --crrc-n and --crrc-tau with the same seed share every deposit (as the generator of ATLAS, calo-freerunning-minbias 2.22.0)
 
 
 def parse(argv=None):
@@ -61,6 +64,10 @@ def parse(argv=None):
     a.add_argument("--gains", default="hg,lg", help="the gains written, hg and lg (default both)")
     a.add_argument("--reuse", choices=("on", "off"), default="on", help="on (default): when a sample runs out, go on with rotated and "
                    "reflected copies; off: stop with an error")
+    a.add_argument("--crrc-n", type=int, default=cnd.TILE_N, help=f"order n of the CR-RC^n pulse of the Tile channels, h(t) = (t / n tau)^n "
+                   f"exp(n (1 - t / n tau)), 1 to {cnd.TILE_N_MAX} (default {cnd.TILE_N})")
+    a.add_argument("--crrc-tau", type=float, default=cnd.TILE_TAU, help=f"time constant tau of the CR-RC^n of the Tile channels, in ns, at "
+                   f"least {cnd.TILE_TAU_MIN:g} (default {cnd.TILE_TAU:g})")
     a.add_argument("--tile-tail", choices=("on", "off"), default="off", help="long tail of the Tile pulse (AC coupling); default off")
     a.add_argument("--tile-tail-tau", type=float, default=50.0, help="time constant of the Tile tail, in microseconds (default 50)")
     a.add_argument("--hard-fraction", type=float, help="hard events per interaction (default: the fraction of the marking, in the "
@@ -81,6 +88,10 @@ def parse(argv=None):
         a.error("--gains takes hg and lg")
     if A.tower is not None and not 0 <= A.tower <= TOWER_LAST:
         a.error(f"--tower takes 0 to {TOWER_LAST}")
+    if not (1 <= A.crrc_n <= cnd.TILE_N_MAX) or not A.crrc_tau >= cnd.TILE_TAU_MIN:
+        a.error(f"--crrc-n is 1 to {cnd.TILE_N_MAX} and --crrc-tau at least {cnd.TILE_TAU_MIN:g} ns")
+    if A.crrc_n * A.crrc_tau + 25.0 > TILE_ORBIT_NS or cnd.tile_pulse_end(A.crrc_n, A.crrc_tau) + 25.0 > TILE_ORBIT_NS:
+        a.error("the CR-RC^n of --crrc-n and --crrc-tau is longer than the orbit of warm-up and the orbit after the kept samples")
     return A
 
 
@@ -202,17 +213,19 @@ def main(argv=None):
     if not chan:
         raise SystemExit("ERROR: the selection has no channel")
     info = [cells.get(x) for x in chan]
-    tail = cnd.TileTail(A.tile_tail_tau * 1000.0) if A.tile_tail == "on" else None
+    tail = cnd.TileTail(A.tile_tail_tau * 1000.0, A.crrc_n, A.crrc_tau) if A.tile_tail == "on" else None
     setup = []
     for d in info:
         g = {}
         for gain in ("hg", "lg"):
             g[gain] = cond.lar(d["layer"], d["ring"], gain) if d["det"] == "lar" else cond.tile(d["ring"], gain)
         setup.append(g)
-    # lengths: warm-up W covers the longest pulse after its peak; P after the kept samples covers the longest part before the peak
-    tile_end = cnd.tile_pulse_end()
-    ends = [float(s["hg"]["pulse_t"][-1]) if d["det"] == "lar" else tile_end for d, s in zip(info, setup)]
-    starts = [float(min(s["hg"]["pulse_t"][0], s["lg"]["pulse_t"][0])) if d["det"] == "lar" else -cnd.TILE_N * cnd.TILE_TAU
+    # lengths: warm-up W covers the longest pulse after its peak; P after the kept samples covers the longest part before the peak; with Tile
+    # channels both are one orbit, whatever the CR-RC^n (TILE_ORBIT_NS)
+    tile_end = cnd.tile_pulse_end(A.crrc_n, A.crrc_tau)
+    tile_start = -A.crrc_n * A.crrc_tau
+    ends = [float(s["hg"]["pulse_t"][-1]) if d["det"] == "lar" else TILE_ORBIT_NS - 25.0 for d, s in zip(info, setup)]
+    starts = [float(min(s["hg"]["pulse_t"][0], s["lg"]["pulse_t"][0])) if d["det"] == "lar" else -(TILE_ORBIT_NS - 25.0)
               for d, s in zip(info, setup)]
     W = int(math.ceil((max(ends) + 25.0) / TS)) + 1
     if tail is not None and any(d["det"] == "tile" for d in info):
@@ -284,9 +297,9 @@ def main(argv=None):
         tau0 = phase - ht
         amps = {gain: hA * s[gain]["counts_per_visible_mev"] for gain in A.gains}
         if d["det"] == "tile":  # one pulse for both gains: the evaluation is shared, the sums are those of each gain alone
-            t_lo = -cnd.TILE_N * cnd.TILE_TAU
             t_hi = tail.t1 if tail is not None else tile_end
-            ys = pulse_sum(hb, tau0, [amps[g] for g in A.gains], tail.short if tail is not None else cnd.tile_pulse, t_lo, t_hi, Ntot)
+            fn = tail.short if tail is not None else (lambda t: cnd.tile_pulse(t, A.crrc_n, A.crrc_tau))
+            ys = pulse_sum(hb, tau0, [amps[g] for g in A.gains], fn, tile_start, t_hi, Ntot)
             ys = dict(zip(A.gains, ys))
         for gi, gain in enumerate(A.gains):
             p = s[gain]
@@ -332,7 +345,9 @@ def write(A, label, info, setup, chan, r, sat, a_n, hit_rows, slots, colliding, 
                library=os.path.abspath(A.library), samples=lib.samples, hard_fraction=A.hard_fraction, reuse=A.reuse, passes=passes,
                truth_unit=A.truth_unit, gains=A.gains, tile_tail=A.tile_tail, tile_tail_tau_us=A.tile_tail_tau if tail else None,
                conditions="geometry/data/atlas_conditions_run4", warmup_samples=W,
-               tile_pulse=f"CR-RC^{cnd.TILE_N}, tau {cnd.TILE_TAU} ns", tile_noise="one Gaussian, sigma keeping the variance of the double Gaussian",
+               tile_pulse=f"CR-RC^{A.crrc_n}, tau {A.crrc_tau:g} ns: h(t) = (t / n tau)^n exp(n (1 - t / n tau)), peak 1 at n tau = "
+               f"{A.crrc_n * A.crrc_tau:g} ns after its start, until it falls below {cnd.TILE_PULSE_END:g} of its peak",
+               crrc_n=int(A.crrc_n), crrc_tau_ns=float(A.crrc_tau), tile_noise="one Gaussian, sigma keeping the variance of the double Gaussian",
                lar_noise="AR(4) from the correlation of the ring at lags 1-4", photostatistics="TileHitVecToCntTool type 2, per channel and bunch crossing")
     js = json.dumps(par, indent=1)
     ROOT.TNamed("parameters_json", js).Write()

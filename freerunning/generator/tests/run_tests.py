@@ -171,8 +171,8 @@ def test_noiseless_samples_are_the_pulse_of_the_hits():
     keep = g.photostat_scale
     g.photostat_scale = lambda rng, pe: np.ones_like(pe)
     try:
-        for cell in ("LBA14 A8", "EMB2 0.5"):
-            fn = run("nonoise", "--cell", cell, "--seed", "9", "--mu", "0.3")
+        for cell, n_t, tau_t in (("LBA14 A8", cnd.TILE_N, cnd.TILE_TAU), ("LBA14 A8", 7, 7.31), ("EMB2 0.5", cnd.TILE_N, cnd.TILE_TAU)):
+            fn = run("nonoise", "--cell", cell, "--seed", "9", "--mu", "0.3", "--crrc-n", str(n_t), "--crrc-tau", str(tau_t))
             r = read(fn)["r_hg"]
             h = read(fn, "hits", ("channel", "visible_energy_mev", "time_ns", "origin_bc"))
             cond = cnd.Conditions()
@@ -180,7 +180,8 @@ def test_noiseless_samples_are_the_pulse_of_the_hits():
             for k, x in enumerate(channels(fn)):
                 d = cells.get(x)
                 p = cond.lar(d["layer"], d["ring"], "hg") if d["det"] == "lar" else cond.tile(d["ring"], "hg")
-                fn_p = (lambda t: np.interp(t, p["pulse_t"], p["pulse_w"], left=0, right=0)) if d["det"] == "lar" else cnd.tile_pulse
+                fn_p = (lambda t: np.interp(t, p["pulse_t"], p["pulse_w"], left=0, right=0)) if d["det"] == "lar" else \
+                    (lambda t: cnd.tile_pulse(t, n_t, tau_t))
                 m = h["channel"] == k
                 y = np.zeros(len(r))
                 for e, t, b in zip(h["visible_energy_mev"][m], h["time_ns"][m], h["origin_bc"][m]):
@@ -190,7 +191,7 @@ def test_noiseless_samples_are_the_pulse_of_the_hits():
                 # the samples where the warm-up no longer reaches
                 s = slice(40, len(r) - 40)
                 dev = float(np.max(np.abs(r[s, k] - p["pedestal"] - y[s])))
-                assert dev <= 0.5 + 1e-6, f"{cell}: noiseless samples differ from the pulse of the hits by {dev:.3f} (rounding: 0.5)"
+                assert dev <= 0.5 + 1e-6, f"{cell} (CR-RC^{n_t}, tau {tau_t}): noiseless samples differ from the pulse of the hits by {dev:.3f} (rounding: 0.5)"
                 assert np.max(y[s]) > 1, f"{cell}: no signal in the test"
     finally:
         for name, f in sig.items():
@@ -220,12 +221,51 @@ def test_noise():
 
 
 def test_tail_has_zero_area():
-    t = cnd.TileTail(50_000.0)
-    grid = np.arange(-40, t.t1, 0.5)
-    area = np.trapezoid(t.short(grid), grid) if hasattr(np, "trapezoid") else np.trapz(t.short(grid), grid)
-    beyond = -t.u1 * t.tau  # the integral of -u(T1) exp(-(t - T1)/tau) beyond T1
-    peak = np.trapezoid(cnd.tile_pulse(grid), grid) if hasattr(np, "trapezoid") else np.trapz(cnd.tile_pulse(grid), grid)
-    assert abs(area + beyond) < 1e-3 * peak, f"tail area {area + beyond} against the pulse area {peak}"
+    trap = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
+    for n, tau in ((cnd.TILE_N, cnd.TILE_TAU), (7, 7.31), (40, 30.0)):
+        t = cnd.TileTail(50_000.0, n, tau)
+        grid = np.arange(-n * tau, t.t1, 0.5)
+        area = trap(t.short(grid), grid)
+        beyond = -t.u1 * t.tau  # the integral of -u(T1) exp(-(t - T1)/tau) beyond T1
+        peak = trap(cnd.tile_pulse(grid, n, tau), grid)
+        assert abs(area + beyond) < 1e-3 * peak, f"CR-RC^{n}, tau {tau}: tail area {area + beyond} against the pulse area {peak}"
+
+
+def test_crrc_pulse():
+    for n, tau in ((1, 1.0), (cnd.TILE_N, cnd.TILE_TAU), (7, 7.31), (cnd.TILE_N_MAX, 3.0)):
+        t = np.arange(-n * tau - 50, n * tau * 6, 0.01)
+        h = cnd.tile_pulse(t, n, tau)
+        assert abs(h.max() - 1) < 1e-6 and abs(t[np.argmax(h)]) < 0.011, f"CR-RC^{n}, tau {tau}: peak {h.max()} at {t[np.argmax(h)]}"
+        assert np.all(h[t <= -n * tau] == 0), f"CR-RC^{n}, tau {tau}: signal before its start"
+        x = (t + n * tau) / (n * tau)
+        m = (x > 0) & (x < 5)
+        m[m] = x[m] ** n > 1e-290  # the direct form loses precision where x^n is subnormal
+        assert np.allclose(h[m], x[m] ** n * np.exp(n * (1 - x[m])), rtol=1e-9, atol=0), f"CR-RC^{n}, tau {tau}: formula"
+        e = cnd.tile_pulse_end(n, tau)
+        assert cnd.tile_pulse(np.array([e]), n, tau)[0] < cnd.TILE_PULSE_END <= cnd.tile_pulse(np.array([e - 0.5]), n, tau)[0], \
+            f"CR-RC^{n}, tau {tau}: end {e}"
+
+
+def test_crrc_family_shares_the_deposits():
+    a = run("crrc_a", "--cell", "LBA14 A8", "--seed", "5", "--mu", "0.3")
+    b = run("crrc_b", "--cell", "LBA14 A8", "--seed", "5", "--mu", "0.3", "--crrc-n", "7", "--crrc-tau", "7.31")
+    cols = ("channel", "sample", "visible_energy_mev", "time_ns", "origin_bc", "event", "copy")
+    ha, hb = read(a, "hits", cols), read(b, "hits", cols)
+    assert all(np.array_equal(ha[k], hb[k]) for k in cols) and len(ha["sample"]), "the hits differ between members of the family"
+    ra, rb = read(a), read(b)
+    assert np.array_equal(ra["a"], rb["a"]), "the truth differs between members of the family"
+    assert not np.array_equal(ra["r_hg"], rb["r_hg"]), "the samples do not change with the pulse"
+    import ROOT
+    import json
+    p = json.loads(ROOT.TFile.Open(b).Get("parameters_json").GetTitle())
+    assert p["crrc_n"] == 7 and p["crrc_tau_ns"] == 7.31 and p["warmup_samples"] == cnd.NBC + 1, "parameters of the CR-RC^n"
+    for bad in (("--crrc-n", "0"), ("--crrc-n", "101"), ("--crrc-tau", "0.5"), ("--crrc-n", "100", "--crrc-tau", "900")):
+        try:
+            run("crrc_bad", "--cell", "LBA14 A8", *bad)
+        except SystemExit as e:
+            assert e.code == 2, f"{bad}: exit {e.code}"
+        else:
+            raise AssertionError(f"{bad} accepted")
 
 
 def test_saturation():

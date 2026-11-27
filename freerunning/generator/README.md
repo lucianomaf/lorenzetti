@@ -52,6 +52,7 @@ library, with about 100 inclusive and 100 hard events: with 10 events a sample r
 | `--truth-unit adc\|visible_mev\|total_mev` | unit of the truth `a` (default: counts of the high gain) |
 | `--gains hg,lg` | gains written (default both) |
 | `--reuse on\|off` | when a sample of the library runs out: rotated and reflected copies (default), or stop |
+| `--crrc-n` (4), `--crrc-tau` (10) | the CR-RC^n pulse of the Tile channels, h(t) = (t / n tau)^n exp(n (1 - t / n tau)): order n, 1 to 100, and time constant tau in ns, at least 1 |
 | `--tile-tail on\|off`, `--tile-tail-tau` | long tail of the Tile pulse (AC coupling, zero area), off by default; time constant 50 us |
 | `--hard-fraction` | hard events per interaction (default: the fraction measured by the marking, which the library writes in `samples.json`) |
 | `--no-hits` | do not write the hits tree |
@@ -85,11 +86,15 @@ library, with about 100 inclusive and 100 hard events: with 10 events a sample r
   each pass. Pass p uses copy `copy_order[p]`: the event as it is first, then the 127 copies (rotation by k x 2 pi / 64, k = 0..63, and
   reflection between the sides) in an order from the seed, the same copy in the whole detector. Rotation is exact in Tile, EMB, EMEC and
   the HEC up to |eta| 2.5; the HEC rings of 32 cells rotate by k / 2 cells; the FCal does not rotate. Reflection goes by the identifier, in
-  every subdetector. The warm-up (the longest pulse; 10 tau with the Tile tail) and the bunch crossings after the kept ones draw events with
+  every subdetector. The warm-up (the longest pulse; one orbit with Tile channels; 10 tau with the Tile tail) and the bunch crossings after the kept ones draw events with
   replacement, from a stream of their own. Each takes a random copy among those the kept samples use, so no copy is read for the warm-up
   alone.
 - **Signal.** Each hit adds counts x pulse(25 (n - m) + phase - t) to sample n, with the pulse peak 1 at t = 0. LAr: the pulse of the ring,
-  linearly interpolated on 0.5 ns. Tile: CR-RC^4, tau = 10 ns. The phase is that of the ring, continuous. Tile photoelectron statistics as
+  linearly interpolated on 0.5 ns. Tile: the CR-RC^n of `--crrc-n` and `--crrc-tau` (default n = 4, tau = 10 ns), the family of the
+  generator of ATLAS (`calo-freerunning-minbias` 2.22.0), shifted to its peak and cut where it falls below 1e-6 of it. With Tile channels the
+  warm-up and the bunch crossings after the kept samples are one orbit each, whatever n and tau (a longer pulse is refused), so the members
+  of the family with the same seed share every deposit, the truth and the noise, and differ only by the pulse. The phase is that of the
+  ring, continuous. Tile photoelectron statistics as
   in Athena (TileHitVecToCntTool, type 2): Gaussian above 20 photoelectrons, Poisson with the single-photoelectron spectrum below. It acts
   per channel and bunch crossing, on the energy within +-62.5 ns, on the amplitude only; the draws for all the bunch crossings of a channel
   are made together.
@@ -109,5 +114,6 @@ library, with about 100 inclusive and 100 hard events: with 10 events a sample r
 
 `python3 tests/run_tests.py <small library> <work folder>`, in the Lorenzetti image (no pytest). They check: the seed; a channel alone
 against the same channel in a tower; one use per pass and a new order in the next one; `--reuse off`; the copies of every ring; the truth
-against the hits; the noiseless samples against the pulse of the hits; the noise (pedestal, sigma, LAr correlation); the zero area of the
+against the hits; the noiseless samples against the pulse of the hits (also with a CR-RC^7); the CR-RC^n (peak, start, formula, end) and the family
+sharing its deposits, with the limits of `--crrc-n` and `--crrc-tau`; the noise (pedestal, sigma, LAr correlation); the zero area of the
 Tile tail; saturation.
