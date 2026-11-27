@@ -25,6 +25,7 @@ EventTape::EventTape():
 EventTape::~EventTape()
 {
   delete m_p_isMain     ; 
+  delete m_p_hard       ;
   delete m_p_pdg_id     ;
   delete m_p_bc_id      ;
   delete m_p_seed_id    ;
@@ -59,6 +60,7 @@ StatusCode EventTape::initialize()
   m_store = new SG::StoreGate(m_outputFile);
  
   m_p_isMain     = new std::vector<int>();
+  m_p_hard       = new std::vector<int>();
   m_p_pdg_id     = new std::vector<int>(); 
   m_p_bc_id      = new std::vector<int>(); 
   m_p_seed_id    = new std::vector<int>(); 
@@ -82,8 +84,10 @@ StatusCode EventTape::initialize()
   m_tree->Branch("EventNumber" , &m_eventNumber , "eventNumber/I" );
   m_tree->Branch("avg_mu"      , &m_avg_mu, "avg_mu/F");
   m_tree->Branch("tot_mu"      , &m_tot_mu, "tot_mu/F");
+  m_tree->Branch("n_tried"     , &m_ntried, "n_tried/I");
 
   m_tree->Branch("p_isMain"    , &m_p_isMain     );
+  m_tree->Branch("p_hard"      , &m_p_hard       );
   m_tree->Branch("p_pdg_id"    , &m_p_pdg_id     ); 
   m_tree->Branch("p_bc_id"     , &m_p_bc_id      ); 
   m_tree->Branch("p_seed_id"   , &m_p_seed_id    ); 
@@ -191,6 +195,7 @@ void EventTape::clear()
 {
   // Clear the ntuple vectors
   m_p_isMain->clear();
+  m_p_hard->clear();
   m_p_seed_id->clear();
   m_p_pdg_id->clear(); 
   m_p_bc_id->clear();
@@ -214,6 +219,7 @@ void EventTape::dump( Event &event )
   m_avg_mu      = event.avgmu();
   m_eventNumber = event.eventNumber();
   m_tot_mu      = event.totmu();
+  m_ntried      = event.ntried();
 
   m_store->hist1("avgmu")->Fill( m_avg_mu  );
 
@@ -224,6 +230,7 @@ void EventTape::dump( Event &event )
   {  
     // All cluster is a seed and should be pdg id equal zero
     m_p_isMain->push_back( 1 );
+    m_p_hard->push_back( 0 );
     m_p_bc_id->push_back( 0 ); 
     m_p_seed_id->push_back( seed_id );
     m_p_pdg_id->push_back( 0 ); // Indicate to g4kernel that this is a seed
@@ -248,6 +255,7 @@ void EventTape::dump( Event &event )
     for ( const auto& part : *seed ){
       // Obtain substruct data
       m_p_isMain->push_back( part.isMain );
+      m_p_hard->push_back( part.hard );
       m_p_bc_id->push_back( part.bc_id ); 
       m_p_seed_id->push_back( seed_id );
       m_p_pdg_id->push_back( part.pdg_id );
