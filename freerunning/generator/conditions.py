@@ -14,6 +14,8 @@ import os
 
 import numpy as np
 
+import cxx
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "..", "..", "geometry", "data", "atlas_conditions_run4")
 
@@ -137,6 +139,6 @@ def lar_noise(rng, n, sigma, rho, burn=200):
     e = rng.normal(0.0, math.sqrt(var), n + burn)
     y = np.zeros(n + burn)
     a1, a2, a3, a4 = (float(x) for x in a)
-    for i in range(4, n + burn):
-        y[i] = a1 * y[i - 1] + a2 * y[i - 2] + a3 * y[i - 3] + a4 * y[i - 4] + e[i]
+    # y[i] = a1 y[i-1] + a2 y[i-2] + a3 y[i-3] + a4 y[i-4] + e[i] from i = 4, in C++ (the same operations as the loop)
+    cxx.load().lzt_ar4(e, n + burn, a1, a2, a3, a4, y)
     return sigma * y[burn:]

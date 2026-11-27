@@ -29,6 +29,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import conditions as cnd  # noqa: E402
+import cxx  # noqa: E402
 from cells import CLUSTER_DETA, CLUSTER_DPHI, TOWER_LAST, Cells  # noqa: E402
 from library import Library  # noqa: E402
 
@@ -96,7 +97,7 @@ def interactions(A, lib, colliding, W, K, P):
     out_bc, out_ev, out_cp = [], [], []
     # kept: one stream for the whole detector
     rk = np.random.default_rng([A.seed, 0])
-    kept_bc = np.arange(W, W + K)
+    kept_bc = np.arange(W, W + K, dtype=np.int32)
     n = rk.poisson(A.mu, K) * colliding[W:W + K]
     bc = np.repeat(kept_bc, n)
     hard = rk.random(len(bc)) < A.hard_fraction
@@ -104,30 +105,33 @@ def interactions(A, lib, colliding, W, K, P):
     for s_i, s in enumerate(samples):
         b = bc[hard == bool(s_i)]
         N = s["n_events"]
-        q = np.arange(len(b))
+        q = np.arange(len(b), dtype=np.int32)
         p = q // N
         if len(b) > N and A.reuse == "off":
             raise SystemExit(f"ERROR: the sequence needs {len(b)} {s['name']} events and the library has {N}; use --reuse on, fewer orbits "
                              "or a lower mu")
         if len(b) and p[-1] >= N_COPIES:
             raise SystemExit(f"ERROR: the sequence needs more than {N_COPIES} passes over the {s['name']} events")
-        ev = np.empty(len(b), np.int64)
+        ev = np.empty(len(b), np.int32)
         for pp in np.unique(p):
             m = p == pp
             perm = np.random.default_rng([A.seed, 10, s_i, int(pp)]).permutation(N)
             ev[m] = s["first_index"] + perm[q[m] - pp * N]
-        out_bc.append(b), out_ev.append(ev), out_cp.append(order[p])
+        out_bc.append(b), out_ev.append(ev), out_cp.append(order[p].astype(np.int16))
         passes[s["name"]] = int(p[-1]) + 1 if len(b) else 0
+        del q, p, ev
+    del bc, hard
     # warm-up and after: with replacement, random copy
     rw = np.random.default_rng([A.seed, 1])
-    idx = np.r_[np.arange(0, W), np.arange(W + K, W + K + P)]
+    idx = np.r_[np.arange(0, W), np.arange(W + K, W + K + P)].astype(np.int32)
     n = rw.poisson(A.mu, len(idx)) * colliding[idx]
     b = np.repeat(idx, n)
     hard = rw.random(len(b)) < A.hard_fraction
     ev = np.where(hard, samples[1]["first_index"] + rw.integers(samples[1]["n_events"], size=len(b)),
-                  samples[0]["first_index"] + rw.integers(samples[0]["n_events"], size=len(b)))
-    out_bc.append(b), out_ev.append(ev), out_cp.append(rw.integers(N_COPIES, size=len(b)))
-    bc, ev, cp = np.concatenate(out_bc), np.concatenate(out_ev), np.concatenate(out_cp).astype(np.int64)
+                  samples[0]["first_index"] + rw.integers(samples[0]["n_events"], size=len(b))).astype(np.int32)
+    out_bc.append(b), out_ev.append(ev), out_cp.append(rw.integers(N_COPIES, size=len(b)).astype(np.int16))
+    bc, ev, cp = np.concatenate(out_bc), np.concatenate(out_ev), np.concatenate(out_cp)
+    del out_bc, out_ev, out_cp, b, hard
     o = np.lexsort((ev, cp))
     return bc[o], ev[o], cp[o], passes
 
@@ -146,6 +150,23 @@ def photostat_scale(rng, pe):
 
 def channel_rng(seed, stream, x, gain=0):
     return np.random.default_rng([seed, stream, gain, int(x) >> 32, int(x) & 0xFFFFFFFF])
+
+
+def pulse_sum(hb, tau0, amps, fn, t_lo, t_hi, Ntot):
+    """for each amplitude vector of amps, y[n] = sum over the hits of amp x fn(25 (n - m) + tau0), m the bunch crossing hb of the hit,
+    fn zero outside [t_lo, t_hi]; fn is evaluated once for all of amps"""
+    ys = [np.zeros(Ntot) for _ in amps]
+    if not len(hb):
+        return ys
+    for jj in range(int(math.floor((t_lo - tau0.max()) / TS)), int(math.ceil((t_hi - tau0.min()) / TS)) + 1):
+        tt = TS * jj + tau0
+        m = (tt >= t_lo) & (tt <= t_hi)
+        idx = hb[m] + jj
+        k = (idx >= 0) & (idx < Ntot)
+        f = fn(tt[m])
+        for y, amp in zip(ys, amps):
+            y += np.bincount(idx[k], weights=(amp[m] * f)[k], minlength=Ntot)
+    return ys
 
 
 def main(argv=None):
@@ -198,12 +219,13 @@ def main(argv=None):
     ibc, iev, icp, passes = interactions(A, lib, colliding, W, K, P)
     copies = np.unique(icp)
     cut = np.searchsorted(icp, np.r_[copies, N_COPIES])
-    # the hits of every source channel
-    need = {}
-    for d in info:
+    # the hits of every source channel, and the last channel of the selection that uses each (its hits are dropped after it)
+    need, last = {}, {}
+    for c_i, d in enumerate(info):
         for c in copies:
             src = cells.source(d["id"], int(c))
             need.setdefault(d["sub"], set()).add(src)
+            last[src] = c_i
     hits = {}
     for sub, chs in need.items():
         hits.update(lib.hits(sub, chs))
@@ -229,6 +251,10 @@ def main(argv=None):
             ie = lo[ih] + (np.arange(int(cnt.sum())) - np.repeat(np.cumsum(cnt) - cnt, cnt))
             hb.append(e_bc[ie]), hE.append(en[ih].astype(float)), ht.append(tm[ih].astype(float)), hev.append(ev[ih])
             hcp.append(np.full(len(ih), int(cp)))
+        for cp in copies:
+            src = cells.source(d["id"], int(cp))
+            if last.get(src) == c:
+                hits.pop(src, None)
         if hb:
             hb, hE, ht, hev, hcp = (np.concatenate(x) for x in (hb, hE, ht, hev, hcp))
         else:
@@ -247,37 +273,30 @@ def main(argv=None):
         unit = {"adc": hE * s["hg"]["counts_per_visible_mev"], "visible_mev": hE, "total_mev": hE * s["hg"]["visible_to_total"]}[A.truth_unit]
         a_n[:, c] = np.bincount(n_h[ok], weights=unit[ok], minlength=K)
         if not A.no_hits:
-            hit_rows.append((np.full(int(ok.sum()), c), n_h[ok], hE[ok], ht[ok], hb[ok] - W, hev[ok], hcp[ok]))
+            hit_rows.append((np.full(int(ok.sum()), c, np.int32), n_h[ok].astype(np.int32), hE[ok].astype(np.float32),
+                             ht[ok].astype(np.float32), (hb[ok] - W).astype(np.int32), hev[ok].astype(np.int32), hcp[ok].astype(np.int32)))
         tau0 = phase - ht
+        amps = {gain: hA * s[gain]["counts_per_visible_mev"] for gain in A.gains}
+        if d["det"] == "tile":  # one pulse for both gains: the evaluation is shared, the sums are those of each gain alone
+            t_lo = -cnd.TILE_N * cnd.TILE_TAU
+            t_hi = tail.t1 if tail is not None else tile_end
+            ys = pulse_sum(hb, tau0, [amps[g] for g in A.gains], tail.short if tail is not None else cnd.tile_pulse, t_lo, t_hi, Ntot)
+            ys = dict(zip(A.gains, ys))
         for gi, gain in enumerate(A.gains):
             p = s[gain]
-            amp = hA * p["counts_per_visible_mev"]
-            y = np.zeros(Ntot)
+            amp = amps[gain]
             if d["det"] == "lar":
                 t_p, w_p = p["pulse_t"], p["pulse_w"]
-                t_lo, t_hi, fn = float(t_p[0]), float(t_p[-1]), (lambda t: np.interp(t, t_p, w_p, left=0.0, right=0.0))
+                y = pulse_sum(hb, tau0, [amp], lambda t: np.interp(t, t_p, w_p, left=0.0, right=0.0), float(t_p[0]), float(t_p[-1]), Ntot)[0]
             else:
-                t_lo = -cnd.TILE_N * cnd.TILE_TAU
-                t_hi = tail.t1 if tail is not None else tile_end
-                fn = tail.short if tail is not None else cnd.tile_pulse
-            if len(hb):
-                for jj in range(int(math.floor((t_lo - tau0.max()) / TS)), int(math.ceil((t_hi - tau0.min()) / TS)) + 1):
-                    tt = TS * jj + tau0
-                    m = (tt >= t_lo) & (tt <= t_hi)
-                    idx = hb[m] + jj
-                    k = (idx >= 0) & (idx < Ntot)
-                    y += np.bincount(idx[k], weights=(amp[m] * fn(tt[m]))[k], minlength=Ntot)
-                if tail is not None and d["det"] == "tile":  # beyond T1: -u(T1) exp(-(t - T1)/tau), summed recursively
+                y = ys.pop(gain)
+                if tail is not None and len(hb):  # beyond T1: -u(T1) exp(-(t - T1)/tau), summed recursively
                     j1 = np.floor((tail.t1 - tau0) / TS).astype(np.int64) + 1
                     idx = hb + j1
                     k = idx < Ntot
                     inj = np.bincount(idx[k], weights=(-amp * tail.u1 * np.exp(-(TS * j1 + tau0 - tail.t1) / tail.tau))[k],
                                       minlength=Ntot)
-                    f = math.exp(-TS / tail.tau)
-                    acc = 0.0
-                    for i in range(Ntot):
-                        acc = acc * f + inj[i]
-                        y[i] += acc
+                    cxx.load().lzt_exp_sum(inj, Ntot, math.exp(-TS / tail.tau), y)  # acc = acc f + inj[i]; y[i] += acc
             rn = channel_rng(A.seed, 2, d["id"], gi + 1 if gain == "lg" else 0)
             noise = cnd.lar_noise(rn, K, p["sigma"], p["rho"]) if d["det"] == "lar" else rn.normal(0.0, p["sigma"], K)
             q = np.floor(p["pedestal"] + y[W:W + K] + noise + 0.5)
@@ -363,17 +382,10 @@ def write(A, label, info, setup, chan, r, sat, a_n, hit_rows, slots, colliding, 
         ts.Fill()
     ts.Write()
     if not A.no_hits:
-        th = ROOT.TTree("hits", "the hits of the kept samples")
-        hv = dict(channel=array("i", [0]), sample=array("i", [0]), visible_energy_mev=array("f", [0]), time_ns=array("f", [0]),
-                  origin_bc=array("i", [0]), event=array("i", [0]), copy=array("i", [0]))
-        for k, v in hv.items():
-            th.Branch(k, v, f"{k}/{'F' if v.typecode == 'f' else 'I'}")
-        for rows in hit_rows:
-            for vals in zip(*rows):
-                for (k, v), x in zip(hv.items(), vals):
-                    v[0] = x
-                th.Fill()
-        th.Write()
+        cols = [np.ascontiguousarray(np.concatenate([r[i] for r in hit_rows]) if hit_rows
+                                     else np.zeros(0, np.float32 if i in (2, 3) else np.int32)) for i in range(7)]
+        hit_rows.clear()
+        cxx.load().lzt_write_hits(len(cols[0]), *cols)
     f.Close()
 
 

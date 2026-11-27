@@ -4,6 +4,8 @@ import os
 
 import numpy as np
 
+import cxx
+
 
 class Library:
     def __init__(self, folder, support=None):
@@ -25,10 +27,10 @@ class Library:
             self._tables[(sub, j)] = (f, d["channel"], d["start"], d["n"])
         return self._tables[(sub, j)]
 
-    def hits(self, sub, channels, gap=200_000):
-        """{channel: (event int32, energy float32, time float32)} of the channels of a subdetector; neighbouring entry ranges of a piece are
-        read together (gaps under <gap> entries)"""
-        import ROOT
+    def hits(self, sub, channels):
+        """{channel: (event int32, energy float32, time float32)} of the channels of a subdetector; only the entries of those channels are
+        read (one C++ pass over the piece, entries in increasing order)"""
+        ROOT = cxx.load()
         out = {int(c): (np.zeros(0, np.int32), np.zeros(0, np.float32), np.zeros(0, np.float32)) for c in channels}
         want = np.array(sorted(out), dtype=np.uint64)
         for j, info in enumerate(self.index[sub]):
@@ -39,22 +41,16 @@ class Library:
             k = np.searchsorted(ch, sel)
             ok = (k < len(ch)) & (ch[np.minimum(k, len(ch) - 1)] == sel)
             k, sel = k[ok], sel[ok]
+            k, sel = k[n[k] > 0], sel[n[k] > 0]
             if not len(k):
                 continue
-            a, b = st[k], st[k] + n[k]
-            order = np.argsort(a)
-            groups, cur = [], [order[0]]
-            for i in order[1:]:
-                if a[i] - b[cur[-1]] < gap:
-                    cur.append(i)
-                else:
-                    groups.append(cur)
-                    cur = [i]
-            groups.append(cur)
-            for g in groups:
-                lo, hi = int(a[g].min()), int(b[g].max())
-                d = ROOT.RDataFrame("hits", f).Range(lo, hi).AsNumpy(["event", "energy", "time"])
-                for i in g:
-                    s, e = int(a[i]) - lo, int(b[i]) - lo
-                    out[int(sel[i])] = (d["event"][s:e], d["energy"][s:e], d["time"][s:e])
+            o = np.argsort(st[k])
+            k, sel = k[o], sel[o]
+            lo, hi = st[k].astype(np.int64), (st[k] + n[k]).astype(np.int64)
+            s = ROOT.lzt_read_ranges(f, ROOT.std.vector["Long64_t"](lo.tolist()), ROOT.std.vector["Long64_t"](hi.tolist()))
+            ev, en, tm = np.array(s.ev, np.int32), np.array(s.e, np.float32), np.array(s.t, np.float32)
+            off = np.r_[0, np.cumsum(hi - lo)]
+            for i in range(len(k)):
+                out[int(sel[i])] = (ev[off[i]:off[i + 1]], en[off[i]:off[i + 1]], tm[off[i]:off[i + 1]])
         return out
+
